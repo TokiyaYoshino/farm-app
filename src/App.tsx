@@ -1,4 +1,5 @@
-import { useState, useEffect, CSSProperties } from "react";
+import { useState, useEffect } from "react";
+import type { CSSProperties } from "react";
 
 const WORK_TEMPLATES = ["収穫", "水やり", "消毒", "施肥", "剪定", "その他"];
 
