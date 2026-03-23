@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
-  import.meta.env?.VITE_SUPABASE_URL ?? "",
-  import.meta.env?.VITE_SUPABASE_ANON_KEY ?? ""
+  import.meta.env.VITE_SUPABASE_URL as string,
+  import.meta.env.VITE_SUPABASE_ANON_KEY as string
 );
 
 const WORK_TEMPLATES = ["収穫", "水やり", "消毒", "施肥", "剪定", "その他"];
