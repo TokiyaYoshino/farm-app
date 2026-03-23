@@ -183,14 +183,7 @@ export default function App() {
     <div style={S.wrap}>
       <div style={S.header}>
         🌾 農作業レポート
-        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ fontSize:11, opacity:0.8 }}>{currentUser?.name}</span>
-          <select style={{ fontSize:11, borderRadius:5, border:"none", background:"rgba(255,255,255,0.2)", color:"#fff", padding:"3px 6px", cursor:"pointer" }}
-            value={currentUser?.id}
-            onChange={e => { const u = users.find(u => u.id === Number(e.target.value)); if(u) { setCurrentUser(u); setTab("home"); } }}>
-            {users.map(u => <option key={u.id} value={u.id} style={{ color:"#333" }}>{u.name}</option>)}
-          </select>
-        </div>
+
       </div>
 
       {/* HOME */}
