@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const supabase = createClient(
+  import.meta.env?.VITE_SUPABASE_URL ?? "",
+  import.meta.env?.VITE_SUPABASE_ANON_KEY ?? ""
+);
 
 const WORK_TEMPLATES = ["収穫", "水やり", "消毒", "施肥", "剪定", "その他"];
 
@@ -23,75 +29,53 @@ const WMO_MAP: Record<number, string> = {
 
 type Role = "admin" | "worker" | "viewer";
 
-interface User {
-  id: number;
-  name: string;
-  role: Role;
-}
-
-interface Crop {
-  id: number;
-  name: string;
-  field: string;
-  start_date: string;
-}
-
+interface User { id: number; name: string; role: Role; }
 interface Report {
-  id: number;
-  user_id: number;
-  crop_id: number;
-  date: string;
-  work_type: string;
-  quantity: string | number;
-  work_time: string | number;
-  note: string;
-  image_url: string;
-  weather: string;
-  weather_icon: string;
-  temp: string | number;
+  id: number; user_id: number; crop_id: number; date: string;
+  work_type: string; quantity: string; work_time: string; note: string;
+  image_url: string; weather: string; weather_icon: string; temp: string;
 }
+interface WeatherInfo { label: string; icon: string; temp: number | string; }
 
-interface WeatherInfo {
-  label: string;
-  icon: string;
-  temp: number | string;
-}
-
-const roleLabel: Record<Role, string> = { admin:"管理者", worker:"作業者", viewer:"閲覧者" };
-const roleColor: Record<Role, string> = { admin:"#e74c3c", worker:"#27ae60", viewer:"#3498db" };
-
-const INIT_USERS: User[] = [
-  { id:1, name:"管理者 太郎", role:"admin" },
-  { id:2, name:"作業者 花子", role:"worker" },
-  { id:3, name:"作業者 次郎", role:"worker" },
-];
-
-const CROPS: Crop[] = [
+const CROPS = [
   { id:1, name:"ほうれん草", field:"A圃場", start_date:"2026-03-01" },
   { id:2, name:"にんにく",   field:"B圃場", start_date:"2026-02-15" },
   { id:3, name:"たまねぎ",   field:"C圃場", start_date:"2026-02-20" },
   { id:4, name:"ぶどう",     field:"D圃場", start_date:"2026-03-10" },
 ];
 
-const INIT_REPORTS: Report[] = [
-  { id:1, user_id:2, crop_id:1, date:"2026-03-22", work_type:"収穫",  quantity:15, work_time:2, note:"順調", image_url:"", weather:"晴れ", weather_icon:"🌤️", temp:14 },
-  { id:2, user_id:3, crop_id:3, date:"2026-03-22", work_type:"水やり", quantity:"", work_time:1, note:"",    image_url:"", weather:"曇り", weather_icon:"☁️", temp:12 },
-];
+const roleLabel: Record<Role, string> = { admin:"管理者", worker:"作業者", viewer:"閲覧者" };
+const roleColor: Record<Role, string> = { admin:"#e74c3c", worker:"#27ae60", viewer:"#3498db" };
 
 export default function App() {
-  const [tab, setTab]               = useState("home");
-  const [users, setUsers]           = useState<User[]>(INIT_USERS);
-  const [reports, setReports]       = useState<Report[]>(INIT_REPORTS);
-  const [currentUser, setCurrentUser] = useState<User>(INIT_USERS[0]);
-  const [toast, setToast]           = useState("");
+  const [tab, setTab]             = useState("home");
+  const [users, setUsers]         = useState<User[]>([]);
+  const [reports, setReports]     = useState<Report[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [toast, setToast]         = useState("");
+  const [loading, setLoading]     = useState(true);
 
-  const [wxLoading, setWxLoading]   = useState(true);
-  const [wxAuto, setWxAuto]         = useState<WeatherInfo | null>(null);
-  const [wxManual, setWxManual]     = useState<WeatherInfo>({ label:"晴れ", icon:"🌤️", temp:"" });
+  const [wxLoading, setWxLoading] = useState(true);
+  const [wxAuto, setWxAuto]       = useState<WeatherInfo | null>(null);
+  const [wxManual, setWxManual]   = useState<WeatherInfo>({ label:"晴れ", icon:"🌤️", temp:"" });
 
-  const [rForm, setRForm] = useState({ user_id:2, crop_id:1, date:"2026-03-23", work_type:"収穫", quantity:"", work_time:"", note:"" });
+  const [rForm, setRForm] = useState({ user_id:0, crop_id:1, date: new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", note:"" });
   const [uForm, setUForm] = useState({ name:"", role:"worker" as Role });
 
+  // Supabaseからデータ取得
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      const { data: u } = await supabase.from("users").select("*").order("id");
+      const { data: r } = await supabase.from("reports").select("*").order("date", { ascending: false });
+      if (u) { setUsers(u as User[]); setCurrentUser(u[0] as User); setRForm(f => ({ ...f, user_id: u[0]?.id || 0 })); }
+      if (r) setReports(r as Report[]);
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
+
+  // 天気取得
   useEffect(() => {
     let cancelled = false;
     const tryFetch = async (attempt: number) => {
@@ -103,10 +87,7 @@ export default function App() {
         const opt  = WEATHER_OPTIONS.find(o => o.label === lbl) || WEATHER_OPTIONS[3];
         if (!cancelled) setWxAuto({ label:opt.label, icon:opt.icon, temp:Math.round(cw.temperature) });
       } catch {
-        if (attempt < 2) {
-          setTimeout(() => { if (!cancelled) tryFetch(attempt + 1); }, 1500);
-          return;
-        }
+        if (attempt < 2) { setTimeout(() => { if (!cancelled) tryFetch(attempt + 1); }, 1500); return; }
         if (!cancelled) setWxAuto(null);
       }
       if (!cancelled) setWxLoading(false);
@@ -117,31 +98,37 @@ export default function App() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
 
-  const addReport = () => {
-    if (!rForm.date || !rForm.work_type) return;
+  const addReport = async () => {
+    if (!rForm.date || !rForm.work_type || !currentUser) return;
     const w = wxAuto || (wxManual.temp ? wxManual : null);
-    const newReport: Report = {
+    const newReport = {
       ...rForm,
-      id: Date.now(),
       image_url: "",
       weather:      w?.label || "",
       weather_icon: w?.icon  || "",
-      temp:         w?.temp  ?? "",
+      temp:         w?.temp ? String(w.temp) : "",
     };
-    setReports(p => [...p, newReport]);
+    const { data, error } = await supabase.from("reports").insert([newReport]).select();
+    if (error) return showToast("❌ 登録に失敗しました");
+    if (data) setReports(p => [data[0] as Report, ...p]);
     showToast("✅ 作業報告を登録しました");
     setTab("home");
   };
 
-  const addUser = () => {
+  const addUser = async () => {
     if (!uForm.name.trim()) return;
-    setUsers(p => [...p, { ...uForm, id:Date.now() }]);
+    const { data, error } = await supabase.from("users").insert([uForm]).select();
+    if (error) return showToast("❌ 追加に失敗しました");
+    if (data) setUsers(p => [...p, data[0] as User]);
     setUForm({ name:"", role:"worker" });
     showToast("✅ ユーザーを追加しました");
   };
 
-  const deleteUser = (id: number) => {
+  const deleteUser = async (id: number) => {
+    const { error } = await supabase.from("users").delete().eq("id", id);
+    if (error) return showToast("❌ 削除に失敗しました");
     setUsers(p => p.filter(u => u.id !== id));
+    showToast("🗑️ ユーザーを削除しました");
   };
 
   const userName = (id: number) => users.find(u => u.id === id)?.name || "不明";
@@ -155,7 +142,6 @@ export default function App() {
   });
 
   const css = (obj: CSSProperties): CSSProperties => obj;
-
   const S = {
     wrap:    css({ minHeight:"100vh", background:"#f5f7f0", fontFamily:"'Hiragino Sans',sans-serif", paddingBottom:72 }),
     header:  css({ background:"#2d6a2d", color:"#fff", padding:"14px 16px", fontSize:17, fontWeight:"bold", display:"flex", alignItems:"center", gap:8 }),
@@ -173,50 +159,35 @@ export default function App() {
     tmpRow:  css({ display:"flex", flexWrap:"wrap", gap:8, marginBottom:12 }),
     nav:     css({ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"1px solid #e0e0e0", display:"flex", zIndex:100 }),
     toast:   css({ position:"fixed", bottom:80, left:"50%", transform:"translateX(-50%)", background:"#333", color:"#fff", padding:"10px 20px", borderRadius:20, fontSize:14, zIndex:999, whiteSpace:"nowrap" }),
+    center:  css({ display:"flex", justifyContent:"center", alignItems:"center", height:"80vh", fontSize:16, color:"#888" }),
   };
 
-  const tmpBtn = (active: boolean): CSSProperties => ({
-    padding:"8px 14px", borderRadius:20,
-    border:"2px solid "+(active?"#2d6a2d":"#ddd"),
-    background:active?"#2d6a2d":"#fff",
-    color:active?"#fff":"#555",
-    fontSize:13, cursor:"pointer", fontWeight:active?"bold":"normal",
-  });
-
-  const navBtn = (active: boolean): CSSProperties => ({
-    flex:1, padding:"10px 0 6px", border:"none", background:"none", cursor:"pointer",
-    display:"flex", flexDirection:"column", alignItems:"center", gap:2,
-    color:active?"#2d6a2d":"#aaa", fontSize:10, fontWeight:active?"bold":"normal",
-  });
-
-  const tagStyle = (role: Role): CSSProperties => ({
-    background:roleColor[role]+"22", color:roleColor[role],
-    borderRadius:5, padding:"2px 8px", fontSize:12, fontWeight:"bold",
-  });
-
-  const navItems = [
-    { key:"home",   icon:"🏠", label:"ホーム" },
-    { key:"report", icon:"✏️", label:"報告" },
-    { key:"crops",  icon:"🌱", label:"作物" },
-    ...(currentUser.role === "admin" ? [{ key:"users", icon:"👥", label:"ユーザー" }] : []),
-  ];
+  const tmpBtn  = (a: boolean): CSSProperties => ({ padding:"8px 14px", borderRadius:20, border:"2px solid "+(a?"#2d6a2d":"#ddd"), background:a?"#2d6a2d":"#fff", color:a?"#fff":"#555", fontSize:13, cursor:"pointer", fontWeight:a?"bold":"normal" });
+  const navBtn  = (a: boolean): CSSProperties => ({ flex:1, padding:"10px 0 6px", border:"none", background:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:2, color:a?"#2d6a2d":"#aaa", fontSize:10, fontWeight:a?"bold":"normal" });
+  const tagStyle = (role: Role): CSSProperties => ({ background:roleColor[role]+"22", color:roleColor[role], borderRadius:5, padding:"2px 8px", fontSize:12, fontWeight:"bold" });
 
   const WxBadges = ({ wx }: { wx: WeatherInfo }) => (
     <><span style={S.wxBadge}>{wx.icon} {wx.label}</span><span style={S.wxBadge}>🌡️ {wx.temp}°C</span></>
   );
 
+  const navItems = [
+    { key:"home",   icon:"🏠", label:"ホーム" },
+    { key:"report", icon:"✏️", label:"報告" },
+    { key:"crops",  icon:"🌱", label:"作物" },
+    ...(currentUser?.role === "admin" ? [{ key:"users", icon:"👥", label:"ユーザー" }] : []),
+  ];
+
+  if (loading) return <div style={S.center}>🌾 読み込み中...</div>;
+
   return (
     <div style={S.wrap}>
-      {/* Header */}
       <div style={S.header}>
         🌾 農作業レポート
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ fontSize:11, opacity:0.8 }}>{currentUser.name}</span>
-          <select
-            style={{ fontSize:11, borderRadius:5, border:"none", background:"rgba(255,255,255,0.2)", color:"#fff", padding:"3px 6px", cursor:"pointer" }}
-            value={currentUser.id}
-            onChange={e => { const u = users.find(u => u.id === Number(e.target.value)); if(u) { setCurrentUser(u); setTab("home"); } }}
-          >
+          <span style={{ fontSize:11, opacity:0.8 }}>{currentUser?.name}</span>
+          <select style={{ fontSize:11, borderRadius:5, border:"none", background:"rgba(255,255,255,0.2)", color:"#fff", padding:"3px 6px", cursor:"pointer" }}
+            value={currentUser?.id}
+            onChange={e => { const u = users.find(u => u.id === Number(e.target.value)); if(u) { setCurrentUser(u); setTab("home"); } }}>
             {users.map(u => <option key={u.id} value={u.id} style={{ color:"#333" }}>{u.name}</option>)}
           </select>
         </div>
@@ -227,14 +198,10 @@ export default function App() {
         <div style={S.page}>
           <div style={S.wxBox}>
             <div style={{ fontSize:11, color:"#555", marginBottom:6 }}>📍 京都府亀岡市 / 現在の天気</div>
-            {wxLoading
-              ? <span style={{ fontSize:13, color:"#777" }}>🔄 取得中...</span>
-              : wxAuto
-                ? <WxBadges wx={wxAuto} />
-                : <span style={{ fontSize:13, color:"#e07020" }}>⚠️ 取得できませんでした（報告時に手動入力）</span>
-            }
+            {wxLoading ? <span style={{ fontSize:13, color:"#777" }}>🔄 取得中...</span>
+              : wxAuto ? <WxBadges wx={wxAuto} />
+              : <span style={{ fontSize:13, color:"#e07020" }}>⚠️ 取得できませんでした</span>}
           </div>
-
           <div style={S.sec}>📊 作物サマリー</div>
           {cropStats.map(c => (
             <div key={c.id} style={S.card}>
@@ -246,9 +213,8 @@ export default function App() {
               {c.last && <div style={{ fontSize:12, color:"#999", marginTop:4 }}>最終: {c.last.date} {c.last.work_type}</div>}
             </div>
           ))}
-
           <div style={S.sec}>📋 最新の作業報告</div>
-          {[...reports].sort((a,b) => b.date.localeCompare(a.date)).slice(0,5).map(r => (
+          {reports.slice(0,5).map(r => (
             <div key={r.id} style={S.card}>
               <div style={S.row}>
                 <span style={{ fontWeight:"bold" }}>{cropName(r.crop_id)}</span>
@@ -259,7 +225,7 @@ export default function App() {
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
                 <span style={{ fontSize:12, color:"#aaa" }}>{userName(r.user_id)}</span>
-                {r.weather && <span style={{ fontSize:12, color:"#777" }}>{r.weather_icon} {r.weather}{r.temp !== "" ? ` / ${r.temp}°C` : ""}</span>}
+                {r.weather && <span style={{ fontSize:12, color:"#777" }}>{r.weather_icon} {r.weather}{r.temp ? ` / ${r.temp}°C` : ""}</span>}
               </div>
               {r.note && <div style={{ fontSize:12, color:"#777", marginTop:4 }}>📝 {r.note}</div>}
             </div>
@@ -273,42 +239,26 @@ export default function App() {
           <div style={S.sec}>✏️ 作業報告を登録</div>
           <div style={{ ...S.wxBox, marginBottom:14 }}>
             <div style={{ fontSize:12, color:"#444", marginBottom:6 }}>📍 京都府亀岡市の天気（自動入力）</div>
-            {wxLoading
-              ? <span style={{ fontSize:13, color:"#777" }}>🔄 取得中...</span>
-              : wxAuto
-                ? <WxBadges wx={wxAuto} />
-                : (
-                  <div>
-                    <div style={{ fontSize:12, color:"#e07020", marginBottom:6 }}>⚠️ 自動取得できませんでした。手動で入力してください。</div>
-                    <div style={{ display:"flex", gap:8 }}>
-                      <select
-                        style={{ ...S.select, marginBottom:0, flex:2 }}
-                        value={wxManual.label}
-                        onChange={e => {
-                          const o = WEATHER_OPTIONS.find(x => x.label === e.target.value) || WEATHER_OPTIONS[0];
-                          setWxManual(f => ({ ...f, label:o.label, icon:o.icon }));
-                        }}
-                      >
-                        {WEATHER_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.icon} {o.label}</option>)}
-                      </select>
-                      <input
-                        type="number" placeholder="気温°C"
-                        style={{ ...S.input, marginBottom:0, flex:1 }}
-                        value={wxManual.temp}
-                        onChange={e => setWxManual(f => ({ ...f, temp:e.target.value }))}
-                      />
-                    </div>
+            {wxLoading ? <span style={{ fontSize:13, color:"#777" }}>🔄 取得中...</span>
+              : wxAuto ? <WxBadges wx={wxAuto} />
+              : (
+                <div>
+                  <div style={{ fontSize:12, color:"#e07020", marginBottom:6 }}>⚠️ 手動で入力してください</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <select style={{ ...S.select, marginBottom:0, flex:2 }} value={wxManual.label}
+                      onChange={e => { const o = WEATHER_OPTIONS.find(x => x.label === e.target.value) || WEATHER_OPTIONS[0]; setWxManual(f => ({ ...f, label:o.label, icon:o.icon })); }}>
+                      {WEATHER_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.icon} {o.label}</option>)}
+                    </select>
+                    <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1 }}
+                      value={wxManual.temp} onChange={e => setWxManual(f => ({ ...f, temp:e.target.value }))} />
                   </div>
-                )
-            }
+                </div>
+              )}
           </div>
-
           <div style={S.card}>
             <div style={S.lbl}>作業の種類</div>
             <div style={S.tmpRow}>
-              {WORK_TEMPLATES.map(t => (
-                <button key={t} style={tmpBtn(rForm.work_type === t)} onClick={() => setRForm(f => ({ ...f, work_type:t }))}>{t}</button>
-              ))}
+              {WORK_TEMPLATES.map(t => <button key={t} style={tmpBtn(rForm.work_type === t)} onClick={() => setRForm(f => ({ ...f, work_type:t }))}>{t}</button>)}
             </div>
             <div style={S.lbl}>日付</div>
             <input type="date" style={S.input} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
@@ -351,8 +301,8 @@ export default function App() {
         </div>
       )}
 
-      {/* USERS (admin only) */}
-      {tab === "users" && currentUser.role === "admin" && (
+      {/* USERS */}
+      {tab === "users" && currentUser?.role === "admin" && (
         <div style={S.page}>
           <div style={S.sec}>👤 ユーザーを追加</div>
           <div style={S.card}>
@@ -378,16 +328,13 @@ export default function App() {
         </div>
       )}
 
-      {/* Bottom Nav */}
       <nav style={S.nav}>
         {navItems.map(n => (
           <button key={n.key} style={navBtn(tab === n.key)} onClick={() => setTab(n.key)}>
-            <span style={{ fontSize:22 }}>{n.icon}</span>
-            {n.label}
+            <span style={{ fontSize:22 }}>{n.icon}</span>{n.label}
           </button>
         ))}
       </nav>
-
       {toast && <div style={S.toast}>{toast}</div>}
     </div>
   );
