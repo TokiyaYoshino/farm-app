@@ -141,7 +141,6 @@ export default function App() {
   };
 
   const deleteUser = (id: number) => {
-    if (id === currentUser.id) return showToast("⚠️ 自分自身は削除できません");
     setUsers(p => p.filter(u => u.id !== id));
   };
 
@@ -372,7 +371,7 @@ export default function App() {
             <div key={u.id} style={S.card}>
               <div style={S.row}>
                 <div><span style={{ fontWeight:"bold", marginRight:8 }}>{u.name}</span><span style={tagStyle(u.role)}>{roleLabel[u.role]}</span></div>
-                {u.id !== currentUser.id && <button style={S.btnSm} onClick={() => deleteUser(u.id)}>削除</button>}
+                <button style={S.btnSm} onClick={() => deleteUser(u.id)}>削除</button>
               </div>
             </div>
           ))}
