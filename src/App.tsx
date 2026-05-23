@@ -10,6 +10,19 @@ import {
   Wind, Camera, X, Navigation, Search, Save,
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
 } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+
+const makePin = (color: string) => L.divIcon({
+  className: "",
+  html: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.3 21.7 0 14 0z" fill="${color}" stroke="white" stroke-width="2.5"/>
+    <circle cx="14" cy="14" r="5" fill="white"/>
+  </svg>`,
+  iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -36],
+});
+const PIN_BLUE  = makePin("#1565c0");
+const PIN_GREEN = makePin("#2d6a2d");
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
@@ -128,9 +141,6 @@ export default function App() {
   const [locSaving, setLocSaving]         = useState(false);
   // GPS・マップ
   const [userPos, setUserPos]             = useState<[number, number] | null>(null);
-  const mapDivRef                         = useRef<HTMLDivElement>(null);
-  const yahooMapRef                       = useRef<any>(null);
-  const [mapStatus, setMapStatus]         = useState<"loading"|"ok"|"error">("loading");
   // 作業セッション
   const [workSession, setWorkSession]     = useState<Session | null>(null);
   const [workElapsed, setWorkElapsed]     = useState(0);
@@ -233,56 +243,6 @@ export default function App() {
   }, [weatherCoords]);
 
 
-  useEffect(() => {
-    if (tab !== "map") return;
-    let cancelled = false;
-    setMapStatus("loading");
-
-    const boot = () => {
-      if (cancelled) return;
-      const Y    = (window as any).Y;
-      const node = mapDivRef.current;
-      if (!Y || !node) { setMapStatus("error"); return; }
-      try {
-        node.innerHTML = "";
-        const center = weatherCoords ?? { lat:35.0167, lng:135.5833 };
-        const map    = new Y.Map(node);
-        map.drawMap(new Y.LatLng(center.lat, center.lng), 15, Y.LayerSetId.NORMAL);
-        yahooMapRef.current = map;
-        setMapStatus("ok");
-        if (userPos) map.addFeature(new Y.Marker(new Y.LatLng(userPos[0], userPos[1])));
-        fields.filter(f => f.lat && f.lng).forEach(f => {
-          const m = new Y.Marker(new Y.LatLng(f.lat!, f.lng!));
-          m.addEventListener("click", () =>
-            map.openInfoWindow(new Y.LatLng(f.lat!, f.lng!),
-              new Y.InfoWindow({ content:`<b>${f.name}</b>` })));
-          map.addFeature(m);
-        });
-      } catch (e) { console.error(e); setMapStatus("error"); }
-    };
-
-    // ver/id/hash → appid=id&ver=ver&hash=hash の形式に変換
-    const decoded = atob(import.meta.env.VITE_YAHOO_MAP_TOKEN as string);
-    const p       = Object.fromEntries(new URLSearchParams(decoded));
-    const qs      = p.id
-      ? `appid=${p.id}&ver=${p.ver}&hash=${p.hash}`
-      : decoded;
-    const scriptId = "yahoo-maps-sdk";
-
-    if ((window as any).Y) { setTimeout(boot, 80); return () => { cancelled = true; }; }
-
-    let s = document.getElementById(scriptId) as HTMLScriptElement | null;
-    if (!s) {
-      s = document.createElement("script");
-      s.id      = scriptId;
-      s.src     = `https://map.yahooapis.jp/js/V1/jsapi?${qs}`;
-      s.charset = "utf-8";
-      s.onerror = () => { console.error("Yahoo Maps SDK failed:", s!.src); setMapStatus("error"); };
-      document.head.appendChild(s);
-    }
-    s.addEventListener("load", () => setTimeout(boot, 80), { once:true });
-    return () => { cancelled = true; };
-  }, [tab, weatherCoords, userPos, fields]);
 
   const showToast = (msg: string, type: "ok"|"err" = "ok") => {
     setToast({ msg, type });
@@ -659,18 +619,28 @@ export default function App() {
       {/* ───── MAP ───── */}
       {tab === "map" && (
         <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 60px)" }}>
-          {/* Yahoo Maps コンテナ */}
-          <div style={{ position:"relative", flex:1, minHeight:0 }}>
-            <div ref={mapDivRef} style={{ width:"100%", height:"100%" }} />
-            {mapStatus !== "ok" && (
-              <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"#eef2ee", gap:10 }}>
-                {mapStatus === "loading"
-                  ? <><RefreshCw size={22} color={C.textMuted} strokeWidth={1.5} /><span style={{ fontSize:13, color:C.textMuted }}>マップ読み込み中...</span></>
-                  : <><AlertCircle size={22} color="#c0392b" strokeWidth={1.5} /><span style={{ fontSize:13, color:"#c0392b" }}>マップを表示できませんでした</span><span style={{ fontSize:11, color:C.textMuted }}>コンソールで詳細を確認してください</span></>
-                }
-              </div>
+          {/* Leaflet マップ */}
+          <MapContainer
+            center={userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]}
+            zoom={15}
+            style={{ flex:1, width:"100%", minHeight:0 }}
+            zoomControl={false}
+          >
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            />
+            {userPos && (
+              <Marker position={userPos} icon={PIN_BLUE}>
+                <Popup><b>現在地</b></Popup>
+              </Marker>
             )}
-          </div>
+            {fields.filter(f => f.lat && f.lng).map(f => (
+              <Marker key={f.id} position={[f.lat!, f.lng!]} icon={PIN_GREEN}>
+                <Popup><b>{f.name}</b></Popup>
+              </Marker>
+            ))}
+          </MapContainer>
 
           {/* 作業セッションバー */}
           <div style={{ background:"#fff", borderTop:`1px solid ${C.border}`, padding:"12px 16px", paddingBottom:"max(12px, env(safe-area-inset-bottom))" }}>
