@@ -323,16 +323,28 @@ export default function App() {
     const rec = new SR();
     rec.lang = "ja-JP";
     rec.continuous = true;
-    rec.interimResults = false;
+    rec.interimResults = true;
     rec.onresult = (e: any) => {
-      const text: string = Array.from(e.results as any[]).slice(e.resultIndex).map((r: any) => r[0].transcript).join("");
-      setVoiceTranscript(p => (p ? p + "　" + text : text));
+      // 確定済みの結果（isFinal）だけを処理
+      let finalText = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          finalText += e.results[i][0].transcript;
+        }
+      }
+      if (!finalText) return;
+      setVoiceTranscript(p => (p ? p + "　" + finalText : finalText));
       for (const [kw, wt] of Object.entries(VOICE_WORK_MAP)) {
-        if (text.includes(kw)) { setRForm(f => ({ ...f, work_type: wt })); break; }
+        if (finalText.includes(kw)) { setRForm(f => ({ ...f, work_type: wt })); break; }
       }
     };
-    rec.onerror = () => setIsListening(false);
-    rec.onend   = () => setIsListening(false);
+    rec.onerror = (e: any) => { console.error("SpeechRecognition error:", e.error); setIsListening(false); };
+    rec.onend   = () => {
+      // continuous モードで予期せず停止した場合は再起動
+      if (recognitionRef.current === rec) {
+        try { rec.start(); } catch { setIsListening(false); }
+      }
+    };
     rec.start();
     recognitionRef.current = rec;
     setIsListening(true);
