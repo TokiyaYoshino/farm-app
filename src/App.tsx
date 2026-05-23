@@ -618,12 +618,12 @@ export default function App() {
 
       {/* ───── MAP ───── */}
       {tab === "map" && (
-        <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 60px)" }}>
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:60, display:"flex", flexDirection:"column" }}>
           {/* Leaflet マップ */}
           <MapContainer
             center={userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]}
             zoom={15}
-            style={{ flex:1, width:"100%", minHeight:0 }}
+            style={{ flex:1, width:"100%", height:"100%" }}
             zoomControl={false}
           >
             <TileLayer
@@ -643,7 +643,7 @@ export default function App() {
           </MapContainer>
 
           {/* 作業セッションバー */}
-          <div style={{ background:"#fff", borderTop:`1px solid ${C.border}`, padding:"12px 16px", paddingBottom:"max(12px, env(safe-area-inset-bottom))" }}>
+          <div style={{ background:"#fff", borderTop:`1px solid ${C.border}`, padding:"12px 16px", flexShrink:0 }}>
             {workSession && (
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
