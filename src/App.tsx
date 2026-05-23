@@ -149,6 +149,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      try {
       setLoading(true);
       const [{ data: u, error: uErr }, { data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }] = await Promise.all([
         supabase.from("users").select("*").order("id"),
@@ -179,6 +180,10 @@ export default function App() {
       if (fd) { setFields(fd as Field[]); setRForm(f => ({ ...f, field: (fd[0] as Field)?.name || "" })); }
       if (r)  setReports(r as Report[]);
       setLoading(false);
+      } catch (e) {
+        console.error("Startup error:", e);
+        setLoading(false);
+      }
     })();
   }, []);
 
