@@ -6,7 +6,7 @@ import {
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
   Snowflake, CloudLightning, MapPin, RefreshCw, AlertCircle,
   PackageCheck, RotateCcw, CalendarDays, Clock, Wheat,
-  UserCircle, Trash2, PlusCircle, ClipboardList, ChevronRight,
+  UserCircle, Trash2, PlusCircle, ClipboardList,
   Wind, Camera, X, Navigation, Search, Save,
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
 } from "lucide-react";
@@ -514,10 +514,6 @@ export default function App() {
     border:`1px solid ${roleColor[role]}30`,
   });
 
-  const statChip = css({
-    background:C.primary3, color:C.primary, borderRadius:8, padding:"4px 10px",
-    fontSize:12, fontWeight:600, display:"inline-flex", alignItems:"center", gap:4,
-  });
 
   // ─── 天気バッジ ───────────────────────────────────────
   const WxBadges = ({ wx }: { wx: WeatherInfo }) => (
