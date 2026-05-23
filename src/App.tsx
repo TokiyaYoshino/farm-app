@@ -131,6 +131,7 @@ export default function App() {
   const [uForm, setUForm]                 = useState({ name:"", role:"worker" as Role });
   const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10) });
   const [fForm, setFForm]                 = useState({ name:"" });
+  const [cropSubTab, setCropSubTab]       = useState<"register"|"list">("list");
   const [imageFile, setImageFile]         = useState<File | null>(null);
   const [imagePreview, setImagePreview]   = useState("");
   const [imgUploading, setImgUploading]   = useState(false);
@@ -368,6 +369,7 @@ export default function App() {
   };
 
   const deleteUser = async (id: number) => {
+    if (!window.confirm("このユーザーを削除しますか？")) return;
     const { error } = await supabase.from("users").delete().eq("id", id);
     if (error) { console.error("deleteUser error:", error); return showToast(error.message, "err"); }
     setUsers(p => p.filter(u => u.id !== id));
@@ -416,6 +418,7 @@ export default function App() {
   };
 
   const deleteCrop = async (id: number) => {
+    if (!window.confirm("この作物を削除しますか？")) return;
     const { error } = await supabase.from("crops").delete().eq("id", id);
     if (error) { console.error("deleteCrop error:", error); return showToast(error.message, "err"); }
     setCrops(p => p.filter(c => c.id !== id));
@@ -432,6 +435,7 @@ export default function App() {
   };
 
   const deleteField = async (id: number) => {
+    if (!window.confirm("この圃場を削除しますか？")) return;
     const { error } = await supabase.from("fields").delete().eq("id", id);
     if (error) { console.error("deleteField error:", error); return showToast(error.message, "err"); }
     setFields(p => p.filter(f => f.id !== id));
@@ -454,9 +458,9 @@ export default function App() {
   // ─── スタイル ─────────────────────────────────────────
   const S = {
     wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:80 }),
-    header:  css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", boxShadow:"0 2px 8px rgba(45,106,45,0.25)" }),
-    headerTitle: css({ fontSize:17, fontWeight:700, letterSpacing:0.5, display:"flex", alignItems:"center", gap:8 }),
-    headerSub: css({ fontSize:11, color:"rgba(255,255,255,0.75)", marginTop:2 }),
+    header:  css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", padding:"8px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", boxShadow:"0 2px 8px rgba(45,106,45,0.25)" }),
+    headerTitle: css({ fontSize:15, fontWeight:700, letterSpacing:0.3, display:"flex", alignItems:"center", gap:6 }),
+    headerSub: css({ display:"none" }),
     page:    css({ padding:"16px 16px 0" }),
     sec:     css({ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:10, marginTop:16, display:"flex", alignItems:"center", gap:6, textTransform:"uppercase" as const, letterSpacing:0.5 }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
@@ -464,11 +468,11 @@ export default function App() {
     input:   css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text, transition:"border 0.15s" }),
     select:  css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text }),
     btn:     css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", border:"none", borderRadius:10, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 2px 8px rgba(45,106,45,0.3)" }),
-    btnSm:   css({ background:C.dangerBg, color:C.danger, border:`1.5px solid ${C.danger}22`, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }),
+    btnSm:   css({ background:C.dangerBg, color:C.danger, border:`1.5px solid ${C.danger}22`, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap" as const, minWidth:48, flexShrink:0 }),
     row:     css({ display:"flex", justifyContent:"space-between", alignItems:"center" }),
     wxBox:   css({ background:`linear-gradient(135deg, #f0faf0 0%, #daf0da 100%)`, borderRadius:14, padding:"14px 16px", marginBottom:14, border:`1px solid ${C.primary4}` }),
     wxGrid:  css({ display:"flex", flexWrap:"wrap" as const, gap:8, marginTop:8 }),
-    wxBadge: css({ background:"rgba(255,255,255,0.85)", backdropFilter:"blur(4px)", borderRadius:10, padding:"7px 12px", display:"inline-flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600, color:C.text, border:`1px solid ${C.border}` }),
+    wxBadge: css({ background:"rgba(255,255,255,0.85)", backdropFilter:"blur(4px)", borderRadius:8, padding:"5px 8px", display:"inline-flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600, color:C.text, border:`1px solid ${C.border}`, whiteSpace:"nowrap" as const }),
 
     nav:     css({ position:"fixed" as const, bottom:0, left:0, right:0, background:C.navBg, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:100, boxShadow:"0 -2px 12px rgba(0,0,0,0.06)" }),
     center:  css({ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", flexDirection:"column" as const, gap:12, fontSize:15, color:C.textMuted }),
@@ -488,7 +492,7 @@ export default function App() {
   const tagStyle = (role: Role): CSSProperties => ({
     background: roleColor[role]+"18", color: roleColor[role],
     borderRadius:6, padding:"2px 9px", fontSize:11, fontWeight:700,
-    border:`1px solid ${roleColor[role]}30`,
+    border:`1px solid ${roleColor[role]}30`, whiteSpace:"nowrap",
   });
 
 
@@ -521,18 +525,15 @@ export default function App() {
     <div style={S.wrap}>
       {/* ヘッダー */}
       <div style={S.header}>
-        <div>
-          <div style={S.headerTitle}>
-            <Wheat size={20} strokeWidth={1.8} />
-            農作業レポート
-          </div>
-          <div style={S.headerSub}>Farm Management System</div>
+        <div style={S.headerTitle}>
+          <Wheat size={17} strokeWidth={1.8} />
+          農作業レポート
         </div>
         {currentUser && (
-          <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"5px 12px 5px 8px", border:"none", cursor:"pointer", color:"#fff" }}>
-            <UserCircle size={16} strokeWidth={1.8} />
-            <span style={{ fontSize:13, fontWeight:600 }}>{currentUser.name}</span>
-            <span style={{ fontSize:10, opacity:0.7, marginLeft:1 }}>▼</span>
+          <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 10px 4px 7px", border:"none", cursor:"pointer", color:"#fff", flexShrink:0 }}>
+            <UserCircle size={14} strokeWidth={1.8} />
+            <span style={{ fontSize:12, fontWeight:600, whiteSpace:"nowrap" as const }}>{currentUser.name}</span>
+            <span style={{ fontSize:9, opacity:0.7 }}>▼</span>
           </button>
         )}
       </div>
@@ -571,15 +572,15 @@ export default function App() {
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                 <div style={{ background:C.bg, borderRadius:9, padding:"8px 10px" }}>
                   <div style={{ fontSize:10, color:C.textMuted, marginBottom:2, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={10} strokeWidth={2} />作付け日</div>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{c.start_date || "—"}</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap" }}>{c.start_date || "—"}</div>
                 </div>
                 <div style={{ background:C.bg, borderRadius:9, padding:"8px 10px" }}>
                   <div style={{ fontSize:10, color:C.textMuted, marginBottom:2, display:"flex", alignItems:"center", gap:3 }}><PackageCheck size={10} strokeWidth={2} />累計収穫量</div>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{c.tot > 0 ? `${c.tot} kg` : "—"}</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap" }}>{c.tot > 0 ? `${c.tot} kg` : "—"}</div>
                 </div>
                 <div style={{ background:C.bg, borderRadius:9, padding:"8px 10px" }}>
                   <div style={{ fontSize:10, color:C.textMuted, marginBottom:2, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={10} strokeWidth={2} />最終作業日</div>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{c.last?.date || "—"}</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap" }}>{c.last?.date || "—"}</div>
                 </div>
                 <div style={{ background:C.bg, borderRadius:9, padding:"8px 10px" }}>
                   <div style={{ fontSize:10, color:C.textMuted, marginBottom:2, display:"flex", alignItems:"center", gap:3 }}><RotateCcw size={10} strokeWidth={2} />作業回数</div>
@@ -754,20 +755,15 @@ export default function App() {
               {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
 
-            <div style={{ display:"flex", gap:12 }}>
-              <div style={{ flex:1 }}>
-                <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物</div>
-                <select style={S.select} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
-                  {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場</div>
-                <select style={S.select} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
-                  {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
-                </select>
-              </div>
-            </div>
+            <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物</div>
+            <select style={S.select} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
+              {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+
+            <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場</div>
+            <select style={S.select} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
+              {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+            </select>
 
             <div style={{ display:"flex", gap:12 }}>
               <div style={{ flex:1 }}>
@@ -824,64 +820,81 @@ export default function App() {
       {/* ───── CROPS ───── */}
       {tab === "crops" && (
         <div style={S.page}>
-          <div style={S.sec}><Sprout size={14} strokeWidth={2} />作物を追加</div>
-          <div style={S.card}>
-            <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
-            <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
-            <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
-            <input type="date" style={S.input} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
-            <button style={S.btn} onClick={addCrop}><PlusCircle size={16} strokeWidth={2} />作物を追加</button>
+          {/* サブタブ */}
+          <div style={{ display:"flex", background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
+            {(["list","register"] as const).map(k => (
+              <button key={k} onClick={() => setCropSubTab(k)} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: cropSubTab === k ? C.card : "transparent", color: cropSubTab === k ? C.primary : C.textMuted, boxShadow: cropSubTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+                {k === "list" ? "一覧" : "登録"}
+              </button>
+            ))}
           </div>
-          <div style={S.sec}><Leaf size={14} strokeWidth={2} />登録作物</div>
-          {crops.map(c => (
-            <div key={c.id} style={S.card}>
-              <div style={S.row}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ background:C.primary3, borderRadius:10, padding:8 }}>
-                    <Leaf size={18} color={C.primary} strokeWidth={1.8} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
-                    <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
-                      <CalendarDays size={11} strokeWidth={2} />作付け: {c.start_date}
+
+          {cropSubTab === "register" && <>
+            <div style={S.sec}><Sprout size={14} strokeWidth={2} />作物を追加</div>
+            <div style={S.card}>
+              <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
+              <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
+              <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
+              <input type="date" style={{ ...S.input, width:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
+              <button style={S.btn} onClick={addCrop}><PlusCircle size={16} strokeWidth={2} />作物を追加</button>
+            </div>
+            <div style={S.sec}><MapPin size={14} strokeWidth={2} />圃場を追加</div>
+            <div style={S.card}>
+              <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
+              <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
+              <button style={S.btn} onClick={addField}><PlusCircle size={16} strokeWidth={2} />圃場を追加</button>
+            </div>
+          </>}
+
+          {cropSubTab === "list" && <>
+            <div style={S.sec}><Leaf size={14} strokeWidth={2} />登録作物</div>
+            {crops.length === 0 && <div style={{ fontSize:13, color:C.textMuted, textAlign:"center", padding:"20px 0" }}>作物が登録されていません</div>}
+            {crops.map(c => (
+              <div key={c.id} style={S.card}>
+                <div style={S.row}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+                    <div style={{ background:C.primary3, borderRadius:10, padding:8, flexShrink:0 }}>
+                      <Leaf size={18} color={C.primary} strokeWidth={1.8} />
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
+                      <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2, whiteSpace:"nowrap" }}>
+                        <CalendarDays size={11} strokeWidth={2} />{c.start_date}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <button style={S.btnSm} onClick={() => deleteCrop(c.id)}>
-                  <Trash2 size={12} strokeWidth={2} />削除
-                </button>
-              </div>
-            </div>
-          ))}
-          <div style={S.sec}><MapPin size={14} strokeWidth={2} />圃場管理</div>
-          <div style={S.card}>
-            <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
-            <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
-            <button style={S.btn} onClick={addField}><PlusCircle size={16} strokeWidth={2} />圃場を追加</button>
-          </div>
-          {fields.map(f => (
-            <div key={f.id} style={S.card}>
-              <div style={S.row}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ background: f.lat ? C.primary3 : C.bg, borderRadius:9, padding:7 }}>
-                    <MapPin size={16} color={f.lat ? C.primary : C.textMuted} strokeWidth={1.8} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{f.name}</div>
-                    <div style={{ fontSize:11, color:C.textMuted }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
-                  </div>
-                </div>
-                <div style={{ display:"flex", gap:6 }}>
-                  <button style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }} onClick={() => setFieldLocation(f.id)}>
-                    <Navigation size={12} strokeWidth={2} />現在地
-                  </button>
-                  <button style={S.btnSm} onClick={() => deleteField(f.id)}>
+                  <button style={S.btnSm} onClick={() => deleteCrop(c.id)}>
                     <Trash2 size={12} strokeWidth={2} />削除
                   </button>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+            <div style={S.sec}><MapPin size={14} strokeWidth={2} />登録圃場</div>
+            {fields.length === 0 && <div style={{ fontSize:13, color:C.textMuted, textAlign:"center", padding:"20px 0" }}>圃場が登録されていません</div>}
+            {fields.map(f => (
+              <div key={f.id} style={S.card}>
+                <div style={S.row}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+                    <div style={{ background: f.lat ? C.primary3 : C.bg, borderRadius:9, padding:7, flexShrink:0 }}>
+                      <MapPin size={16} color={f.lat ? C.primary : C.textMuted} strokeWidth={1.8} />
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{f.name}</div>
+                      <div style={{ fontSize:11, color:C.textMuted, whiteSpace:"nowrap" }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                    <button style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }} onClick={() => setFieldLocation(f.id)}>
+                      <Navigation size={12} strokeWidth={2} />現在地
+                    </button>
+                    <button style={S.btnSm} onClick={() => deleteField(f.id)}>
+                      <Trash2 size={12} strokeWidth={2} />削除
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>}
         </div>
       )}
 
@@ -950,8 +963,8 @@ export default function App() {
                   <div style={{ background:C.primary3, borderRadius:9, padding:7 }}>
                     <UserCircle size={16} color={C.primary} strokeWidth={1.8} />
                   </div>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{u.name}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap" }}>
+                    <span style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" }}>{u.name}</span>
                     <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
                   </div>
                 </div>
