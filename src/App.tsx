@@ -153,7 +153,10 @@ export default function App() {
   const [invForm, setInvForm]             = useState({ name:"", role:"worker" as Role, email:"", login_id:"" });
   const [invitedPass, setInvitedPass]     = useState("");
   const [acctForm, setAcctForm]           = useState({ login_id:"", password:"", confirmPass:"" });
-  const [acctSaving, setAcctSaving]       = useState(false);   // 作成後の仮パスワード表示用
+  const [acctSaving, setAcctSaving]       = useState(false);
+  const [setAuthTarget, setSetAuthTarget] = useState<User | null>(null);
+  const [setAuthForm, setSetAuthFormState]= useState({ login_id:"", password:"", confirmPass:"" });
+  const [setAuthBusy, setSetAuthBusy]     = useState(false);   // 作成後の仮パスワード表示用
   // GPS・マップ
   const [userPos, setUserPos]             = useState<[number, number] | null>(null);
   // 作業セッション
@@ -312,6 +315,29 @@ export default function App() {
       setInvForm({ name:"", role:"worker", email:"", login_id:"" });
       showToast(`${name} を作成しました`);
     } catch (e: unknown) { showToast((e as Error).message, "err"); }
+  };
+
+  // ─── 他ユーザーのログイン設定（管理者のみ）──────────────────
+  const saveUserAuth = async () => {
+    if (!setAuthTarget) return;
+    const { login_id, password, confirmPass } = setAuthForm;
+    if (!login_id.trim() || !password.trim()) { showToast("IDとパスワードを入力してください", "err"); return; }
+    if (password !== confirmPass) { showToast("パスワードが一致しません", "err"); return; }
+    if (password.length < 6) { showToast("パスワードは6文字以上にしてください", "err"); return; }
+    setSetAuthBusy(true);
+    try {
+      const r = await fetch("/api/set-user-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: setAuthTarget.id, login_id: login_id.trim(), password }),
+      });
+      const d = await r.json();
+      if (!r.ok) { showToast(d.error ?? "設定に失敗しました", "err"); return; }
+      setUsers(p => p.map(u => u.id === setAuthTarget.id ? { ...u, login_id: login_id.trim(), auth_id: d.auth_id } : u));
+      setSetAuthTarget(null);
+      setSetAuthFormState({ login_id:"", password:"", confirmPass:"" });
+      showToast(`${setAuthTarget.name} のログイン情報を設定しました`);
+    } finally { setSetAuthBusy(false); }
   };
 
   // ─── アカウント設定（ID・パスワード変更）────────────────────
@@ -1233,12 +1259,22 @@ export default function App() {
                       <span style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" }}>{u.name}</span>
                       <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
                     </div>
-                    {u.login_id && <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>ID: {u.login_id}</div>}
+                    <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>
+                      {u.login_id ? `ID: ${u.login_id}` : <span style={{ color:"#e07020" }}>ログイン未設定</span>}
+                    </div>
                   </div>
                 </div>
-                <button style={S.btnSm} onClick={() => deleteUser(u.id)}>
-                  <Trash2 size={12} strokeWidth={2} />削除
-                </button>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button
+                    style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }}
+                    onClick={() => { setSetAuthTarget(u); setSetAuthFormState({ login_id: u.login_id || "", password:"", confirmPass:"" }); }}
+                  >
+                    <KeyRound size={12} strokeWidth={2} />{u.auth_id ? "変更" : "設定"}
+                  </button>
+                  <button style={S.btnSm} onClick={() => deleteUser(u.id)}>
+                    <Trash2 size={12} strokeWidth={2} />削除
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -1255,6 +1291,28 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {/* ログイン設定モーダル */}
+      {setAuthTarget && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end" }} onClick={() => setSetAuthTarget(null)}>
+          <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", padding:"20px 16px 36px" }} onClick={e => e.stopPropagation()}>
+            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"0 auto 16px" }} />
+            <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:16, display:"flex", alignItems:"center", gap:6 }}>
+              <KeyRound size={15} color={C.primary} strokeWidth={2} />
+              {setAuthTarget.name} のログイン設定
+            </div>
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />ユーザーID</div>
+            <input style={S.input} placeholder="例: worker-001" value={setAuthForm.login_id} onChange={e => setSetAuthFormState(f => ({ ...f, login_id:e.target.value }))} />
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />パスワード（6文字以上）</div>
+            <input type="password" style={S.input} placeholder="パスワード" value={setAuthForm.password} onChange={e => setSetAuthFormState(f => ({ ...f, password:e.target.value }))} />
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />パスワード確認</div>
+            <input type="password" style={S.input} placeholder="もう一度入力" value={setAuthForm.confirmPass} onChange={e => setSetAuthFormState(f => ({ ...f, confirmPass:e.target.value }))} />
+            <button style={{ ...S.btn, opacity:setAuthBusy?0.7:1 }} disabled={setAuthBusy} onClick={saveUserAuth}>
+              {setAuthBusy ? <><RefreshCw size={16} strokeWidth={2} />設定中...</> : <><Save size={16} strokeWidth={2} />ログイン情報を設定する</>}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ユーザー切り替えモーダル */}
       {showUserPicker && (
