@@ -315,23 +315,30 @@ export default function App() {
 
   const toggleVoice = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return showToast("このブラウザは音声入力非対応です", "err");
+    if (!SR) return showToast("このブラウザは音声入力非対応です（Chrome推奨）", "err");
+
+    // 停止
     if (isListening) {
-      recognitionRef.current?.stop();
+      const r = recognitionRef.current;
+      recognitionRef.current = null;
       setIsListening(false);
+      try { r?.stop(); } catch { /* ignore */ }
       return;
     }
+
+    // 開始
     const rec = new SR();
-    rec.lang = "ja-JP";
-    rec.continuous = true;
+    rec.lang           = "ja-JP";
+    rec.continuous     = true;
     rec.interimResults = true;
+    recognitionRef.current = rec;   // start() より先にセット
+
+    rec.onstart = () => { setIsListening(true); };
+
     rec.onresult = (e: any) => {
-      // 確定済みの結果（isFinal）だけを処理
       let finalText = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          finalText += e.results[i][0].transcript;
-        }
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
       }
       if (!finalText) return;
       setVoiceTranscript(p => (p ? p + "　" + finalText : finalText));
@@ -339,16 +346,36 @@ export default function App() {
         if (finalText.includes(kw)) { setRForm(f => ({ ...f, work_type: wt })); break; }
       }
     };
-    rec.onerror = (e: any) => { console.error("SpeechRecognition error:", e.error); setIsListening(false); };
-    rec.onend   = () => {
-      // continuous モードで予期せず停止した場合は再起動
+
+    rec.onerror = (e: any) => {
+      console.error("SpeechRecognition error:", e.error);
+      const msg = e.error === "not-allowed"    ? "マイクの使用が許可されていません。ブラウザの設定を確認してください"
+                : e.error === "audio-capture"  ? "マイクが見つかりません"
+                : e.error === "network"        ? "音声認識にはネットワークが必要です"
+                : `音声入力エラー: ${e.error}`;
+      showToast(msg, "err");
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+
+    rec.onend = () => {
+      // 外部からの停止（recognitionRef=null）でなければ自動再起動
       if (recognitionRef.current === rec) {
-        try { rec.start(); } catch { setIsListening(false); }
+        setTimeout(() => {
+          if (recognitionRef.current !== rec) return;
+          try { rec.start(); }
+          catch { recognitionRef.current = null; setIsListening(false); }
+        }, 200);
       }
     };
-    rec.start();
-    recognitionRef.current = rec;
-    setIsListening(true);
+
+    try {
+      rec.start();
+    } catch (e) {
+      console.error("rec.start() failed:", e);
+      showToast("音声入力を開始できませんでした", "err");
+      recognitionRef.current = null;
+    }
   };
 
   const setFieldLocation = async (fieldId: number) => {
