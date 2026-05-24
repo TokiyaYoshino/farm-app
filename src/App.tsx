@@ -257,7 +257,8 @@ export default function App() {
         const lbl  = WMO_MAP[cw.weathercode as number] || "曇り";
         const opt  = WEATHER_OPTIONS.find(o => o.label === lbl) || WEATHER_OPTIONS[3];
         const times: string[] = data.hourly?.time ?? [];
-        const idx = times.indexOf(cw.time);
+        const cwHour = cw.time.substring(0, 13) + ":00";
+        const idx = times.indexOf(cwHour);
         const humidity = idx >= 0 ? Math.round(data.hourly.relative_humidity_2m[idx]) : undefined;
         const rainVal  = idx >= 0 ? (data.hourly.rain[idx] as number) : 0;
         if (!cancelled) setWxAuto({
