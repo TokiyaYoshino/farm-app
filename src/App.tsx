@@ -359,12 +359,15 @@ export default function App() {
     const r = data?.[0] as Report | undefined;
     if (r) {
       const lines = [
-        `📋 作業報告が届きました`,
-        `👤 ${currentUser?.name}`,
-        `🌿 ${cropName(r.crop_id)}　📍 ${r.field || "未設定"}`,
-        `🔧 ${r.work_type}${r.quantity ? `　📦 ${r.quantity}kg` : ""}${r.work_time ? `　⏱️ ${r.work_time}h` : ""}`,
-        r.date,
-        ...(r.note ? [`📝 ${r.note}`] : []),
+        `【作業報告】`,
+        `作業者: ${currentUser?.name}`,
+        `作物: ${cropName(r.crop_id)}`,
+        `圃場: ${r.field || "未設定"}`,
+        `作業: ${r.work_type}`,
+        ...(r.quantity  ? [`収穫量: ${r.quantity}kg`] : []),
+        ...(r.work_time ? [`作業時間: ${r.work_time}h`] : []),
+        `日付: ${r.date}`,
+        ...(r.note ? [`メモ: ${r.note}`] : []),
       ];
       fetch("/api/notify-line", {
         method: "POST",
