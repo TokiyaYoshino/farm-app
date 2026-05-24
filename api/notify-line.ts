@@ -8,6 +8,8 @@ export default async function handler(req: any, res: any) {
   const groupId = process.env.LINE_GROUP_ID;
   if (!token || !groupId) return res.status(500).json({ error: "missing env" });
 
+  console.log("LINE message:", message);
+
   const r = await fetch("https://api.line.me/v2/bot/message/push", {
     method:  "POST",
     headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
