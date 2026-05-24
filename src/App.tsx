@@ -1229,8 +1229,8 @@ export default function App() {
             <input style={S.input} placeholder="例: 山田 三郎" value={invForm.name} onChange={e => setInvForm(f => ({ ...f, name:e.target.value }))} />
             <div style={S.lbl}><Users size={13} strokeWidth={2} />役割</div>
             <select style={S.select} value={invForm.role} onChange={e => setInvForm(f => ({ ...f, role:e.target.value as Role }))}>
+              <option value="admin">管理者</option>
               <option value="worker">作業者</option>
-              <option value="viewer">閲覧者</option>
             </select>
             <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />ユーザーID *</div>
             <input style={S.input} placeholder="例: worker-001" value={invForm.login_id} onChange={e => setInvForm(f => ({ ...f, login_id:e.target.value }))} />
