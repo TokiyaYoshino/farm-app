@@ -458,6 +458,14 @@ export default function App() {
   };
 
 
+  const deleteReport = async (id: number) => {
+    if (!window.confirm("この報告を削除しますか？")) return;
+    const { error } = await supabase.from("reports").delete().eq("id", id);
+    if (error) return showToast(error.message, "err");
+    setReports(p => p.filter(r => r.id !== id));
+    showToast("報告を削除しました");
+  };
+
   const deleteUser = async (id: number) => {
     if (!window.confirm("このユーザーを削除しますか？")) return;
     const { error } = await supabase.from("users").delete().eq("id", id);
@@ -596,12 +604,18 @@ export default function App() {
     </div>
   );
 
+  // ─── 権限ヘルパー（取得できない場合は worker として扱う）────
+  const isAdmin = (currentUser?.role ?? "worker") === "admin";
+
+  // worker が管理タブを直接開いていたらホームへ
+  if (!isAdmin && tab === "users") setTab("home");
+
   const navItems = [
     { key:"home",   Icon:Home,    label:"ホーム" },
     { key:"map",    Icon:MapIcon, label:"マップ" },
     { key:"report", Icon:PenLine, label:"報告" },
     { key:"crops",  Icon:Sprout,  label:"作物" },
-    { key:"users",  Icon:Users,   label:"管理" },
+    ...(isAdmin ? [{ key:"users", Icon:Users, label:"管理" }] : []),
   ];
 
   // ─── Auth ゲート ─────────────────────────────────────────
@@ -773,7 +787,15 @@ export default function App() {
               </div>
               <div style={{ ...S.row, marginTop:8 }}>
                 <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2}/>{userName(r.user_id)}</span>
-                {r.weather && <span style={{ fontSize:11, color:C.textSub }}>{r.weather}{r.temp ? ` · ${r.temp}°C` : ""}</span>}
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  {r.weather && <span style={{ fontSize:11, color:C.textSub }}>{r.weather}{r.temp ? ` · ${r.temp}°C` : ""}</span>}
+                  {/* 自分の報告 or 管理者のみ削除ボタン */}
+                  {(isAdmin || r.user_id === currentUser?.id) && (
+                    <button style={S.btnSm} onClick={() => deleteReport(r.id)}>
+                      <Trash2 size={11} strokeWidth={2} />削除
+                    </button>
+                  )}
+                </div>
               </div>
               {r.note && (
                 <div style={{ fontSize:12, color:C.textSub, marginTop:8, padding:"7px 10px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}` }}>
@@ -979,16 +1001,18 @@ export default function App() {
       {/* ───── CROPS ───── */}
       {tab === "crops" && (
         <div style={S.page}>
-          {/* サブタブ */}
-          <div style={{ display:"flex", background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
-            {(["list","register"] as const).map(k => (
-              <button key={k} onClick={() => setCropSubTab(k)} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: cropSubTab === k ? C.card : "transparent", color: cropSubTab === k ? C.primary : C.textMuted, boxShadow: cropSubTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-                {k === "list" ? "一覧" : "登録"}
-              </button>
-            ))}
-          </div>
+          {/* サブタブ（管理者のみ登録タブを表示） */}
+          {isAdmin && (
+            <div style={{ display:"flex", background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
+              {(["list","register"] as const).map(k => (
+                <button key={k} onClick={() => setCropSubTab(k)} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: cropSubTab === k ? C.card : "transparent", color: cropSubTab === k ? C.primary : C.textMuted, boxShadow: cropSubTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+                  {k === "list" ? "一覧" : "登録"}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {cropSubTab === "register" && <>
+          {isAdmin && cropSubTab === "register" && <>
             <div style={S.sec}><Sprout size={14} strokeWidth={2} />作物を追加</div>
             <div style={S.card}>
               <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
@@ -1022,9 +1046,11 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  <button style={S.btnSm} onClick={() => deleteCrop(c.id)}>
-                    <Trash2 size={12} strokeWidth={2} />削除
-                  </button>
+                  {isAdmin && (
+                    <button style={S.btnSm} onClick={() => deleteCrop(c.id)}>
+                      <Trash2 size={12} strokeWidth={2} />削除
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -1042,14 +1068,16 @@ export default function App() {
                       <div style={{ fontSize:11, color:C.textMuted, whiteSpace:"nowrap" }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
                     </div>
                   </div>
-                  <div style={{ display:"flex", gap:6, flexShrink:0 }}>
-                    <button style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }} onClick={() => setFieldLocation(f.id)}>
-                      <Navigation size={12} strokeWidth={2} />現在地
-                    </button>
-                    <button style={S.btnSm} onClick={() => deleteField(f.id)}>
-                      <Trash2 size={12} strokeWidth={2} />削除
-                    </button>
-                  </div>
+                  {isAdmin && (
+                    <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                      <button style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }} onClick={() => setFieldLocation(f.id)}>
+                        <Navigation size={12} strokeWidth={2} />現在地
+                      </button>
+                      <button style={S.btnSm} onClick={() => deleteField(f.id)}>
+                        <Trash2 size={12} strokeWidth={2} />削除
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
