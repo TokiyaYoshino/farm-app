@@ -74,6 +74,7 @@ interface Report {
   id: number; user_id: number; crop_id: number; field: string; date: string;
   work_type: string; quantity: string; work_time: string; note: string;
   image_url: string; weather: string; weather_icon: string; temp: string;
+  humidity: string; rain: string;
 }
 interface WeatherInfo {
   label: string;
@@ -396,7 +397,9 @@ export default function App() {
       ...rForm, image_url: imageUrl,
       weather:      w?.label || "",
       weather_icon: "",
-      temp:         w?.temp ? String(w.temp) : "",
+      temp:         w?.temp     ? String(w.temp)     : "",
+      humidity:     w?.humidity !== undefined ? String(w.humidity) : "",
+      rain:         w?.rain     !== undefined ? String(w.rain)     : "",
     }]).select();
     setImgUploading(false);
     if (error) return showToast("登録に失敗しました", "err");
@@ -418,6 +421,7 @@ export default function App() {
         ...(r.quantity  ? [`収穫量: ${r.quantity}kg`] : []),
         ...(r.work_time ? [`作業時間: ${r.work_time}h`] : []),
         `日付: ${r.date}`,
+        ...(r.weather ? [`天気: ${r.weather}${r.temp ? ` / ${r.temp}°C` : ""}${r.humidity ? ` / 湿度${r.humidity}%` : ""}${r.rain ? ` / 雨量${r.rain}mm` : ""}`] : []),
         ...(r.note ? [`メモ: ${r.note}`] : []),
       ];
       fetch("/api/notify-line", {
@@ -864,7 +868,13 @@ export default function App() {
               <div style={{ ...S.row, marginTop:8 }}>
                 <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2}/>{userName(r.user_id)}</span>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  {r.weather && <span style={{ fontSize:11, color:C.textSub }}>{r.weather}{r.temp ? ` · ${r.temp}°C` : ""}</span>}
+                  {r.weather && (
+                    <span style={{ fontSize:11, color:C.textSub, display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" as const }}>
+                      <span>{r.weather}{r.temp ? ` ${r.temp}°C` : ""}</span>
+                      {r.humidity && <span style={{ display:"flex", alignItems:"center", gap:2 }}><Droplets size={10} color="#1976d2" strokeWidth={2}/>{r.humidity}%</span>}
+                      {r.rain     && <span style={{ display:"flex", alignItems:"center", gap:2 }}><CloudRain size={10} color="#0288d1" strokeWidth={2}/>{r.rain}mm</span>}
+                    </span>
+                  )}
                   {/* 自分の報告 or 管理者のみ削除ボタン */}
                   {(isAdmin || r.user_id === currentUser?.id) && (
                     <button style={S.btnSm} onClick={() => deleteReport(r.id)}>
