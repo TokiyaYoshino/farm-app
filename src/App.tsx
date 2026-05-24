@@ -251,17 +251,19 @@ export default function App() {
     const { lat, lng } = weatherCoords;
     const tryFetch = async (attempt: number) => {
       try {
-        const res  = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&current=relative_humidity_2m,rain&timezone=Asia%2FTokyo`);
+        const res  = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&hourly=relative_humidity_2m,rain&timezone=Asia%2FTokyo&forecast_days=1`);
         const data = await res.json();
         const cw   = data.current_weather;
-        const cur  = data.current;
         const lbl  = WMO_MAP[cw.weathercode as number] || "曇り";
         const opt  = WEATHER_OPTIONS.find(o => o.label === lbl) || WEATHER_OPTIONS[3];
-        const rain = cur?.rain ?? 0;
+        const times: string[] = data.hourly?.time ?? [];
+        const idx = times.indexOf(cw.time);
+        const humidity = idx >= 0 ? Math.round(data.hourly.relative_humidity_2m[idx]) : undefined;
+        const rainVal  = idx >= 0 ? (data.hourly.rain[idx] as number) : 0;
         if (!cancelled) setWxAuto({
           label: opt.label, Icon: opt.icon, temp: Math.round(cw.temperature),
-          humidity: Math.round(cur?.relative_humidity_2m ?? 0),
-          rain: rain > 0 ? rain : undefined,
+          humidity,
+          rain: rainVal > 0 ? rainVal : undefined,
         });
       } catch {
         if (attempt < 2) { setTimeout(() => { if (!cancelled) tryFetch(attempt + 1); }, 1500); return; }
