@@ -150,8 +150,7 @@ export default function App() {
   const [locSearching, setLocSearching]   = useState(false);
   const [locPreview, setLocPreview]       = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [locSaving, setLocSaving]         = useState(false);
-  const [invForm, setInvForm]             = useState({ name:"", role:"worker" as Role, email:"", login_id:"" });
-  const [invitedPass, setInvitedPass]     = useState("");
+  const [invForm, setInvForm]             = useState({ name:"", role:"worker" as Role, password:"", login_id:"" });
   const [acctForm, setAcctForm]           = useState({ login_id:"", password:"", confirmPass:"" });
   const [acctSaving, setAcctSaving]       = useState(false);
   const [setAuthTarget, setSetAuthTarget] = useState<User | null>(null);
@@ -299,21 +298,23 @@ export default function App() {
 
   // ─── ユーザー招待（管理者のみ） ───────────────────────────
   const inviteUser = async () => {
-    const { name, role, email, login_id } = invForm;
-    if (!name.trim() || !email.trim() || !login_id.trim()) return;
-    const tempPass = Math.random().toString(36).slice(-6) + "Aa1!";
+    const { name, role, login_id, password } = invForm;
+    if (!name.trim() || !login_id.trim() || !password.trim()) {
+      showToast("名前・ユーザーID・パスワードを入力してください", "err"); return;
+    }
+    if (password.length < 6) { showToast("パスワードは6文字以上にしてください", "err"); return; }
     try {
-      const { data: authData, error: ae } = await supabase.auth.signUp({ email, password: tempPass });
-      if (ae) { showToast(ae.message, "err"); return; }
-      const { error: de } = await supabase.from("users").insert({
-        name, role, email, login_id, auth_id: authData.user?.id,
-      }).select();
-      if (de) { showToast(de.message, "err"); return; }
+      const r = await fetch("/api/set-user-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, role, login_id, password }),
+      });
+      const d = await r.json();
+      if (!r.ok) { showToast(d.error ?? "作成に失敗しました", "err"); return; }
       const { data: fresh } = await supabase.from("users").select("*").order("id");
       if (fresh) setUsers(fresh as User[]);
-      setInvitedPass(tempPass);
-      setInvForm({ name:"", role:"worker", email:"", login_id:"" });
-      showToast(`${name} を作成しました`);
+      setInvForm({ name:"", role:"worker", password:"", login_id:"" });
+      showToast(`${name} のアカウントを作成しました`);
     } catch (e: unknown) { showToast((e as Error).message, "err"); }
   };
 
@@ -1222,28 +1223,20 @@ export default function App() {
             </button>
           </div>
 
-          <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />ユーザーを招待</div>
+          <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />アカウントを作成</div>
           <div style={S.card}>
             <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />名前 *</div>
             <input style={S.input} placeholder="例: 山田 三郎" value={invForm.name} onChange={e => setInvForm(f => ({ ...f, name:e.target.value }))} />
-            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />ユーザーID *（ログイン時に使用）</div>
-            <input style={S.input} placeholder="例: kishu-001" value={invForm.login_id} onChange={e => setInvForm(f => ({ ...f, login_id:e.target.value }))} />
-            <div style={S.lbl}><Users size={13} strokeWidth={2} />メールアドレス *</div>
-            <input style={S.input} type="email" placeholder="例: yamada@example.com" value={invForm.email} onChange={e => setInvForm(f => ({ ...f, email:e.target.value }))} />
             <div style={S.lbl}><Users size={13} strokeWidth={2} />役割</div>
             <select style={S.select} value={invForm.role} onChange={e => setInvForm(f => ({ ...f, role:e.target.value as Role }))}>
               <option value="worker">作業者</option>
               <option value="viewer">閲覧者</option>
             </select>
-            <button style={S.btn} onClick={inviteUser}><PlusCircle size={16} strokeWidth={2} />ユーザーを作成</button>
-            {invitedPass && (
-              <div style={{ marginTop:12, background:"#fff8e1", border:"1px solid #f9a825", borderRadius:10, padding:"10px 14px" }}>
-                <div style={{ fontSize:12, color:"#e65100", fontWeight:700, marginBottom:4 }}>⚠️ 初期パスワード（一度だけ表示）</div>
-                <div style={{ fontSize:16, fontWeight:700, color:C.text, letterSpacing:2, fontFamily:"monospace" }}>{invitedPass}</div>
-                <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>このパスワードをユーザーに伝えてください。メール確認後にログインできます。</div>
-                <button style={{ marginTop:8, fontSize:12, color:C.textMuted, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }} onClick={() => setInvitedPass("")}>閉じる</button>
-              </div>
-            )}
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />ユーザーID *</div>
+            <input style={S.input} placeholder="例: worker-001" value={invForm.login_id} onChange={e => setInvForm(f => ({ ...f, login_id:e.target.value }))} />
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />パスワード *（6文字以上）</div>
+            <input type="password" style={S.input} placeholder="パスワードを設定" value={invForm.password} onChange={e => setInvForm(f => ({ ...f, password:e.target.value }))} />
+            <button style={S.btn} onClick={inviteUser}><PlusCircle size={16} strokeWidth={2} />アカウントを作成する</button>
           </div>
 
           <div style={S.sec}><Users size={14} strokeWidth={2} />登録済みユーザー</div>
