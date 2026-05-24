@@ -354,6 +354,24 @@ export default function App() {
     setImagePreview("");
     showToast("作業報告を登録しました");
     setTab("home");
+
+    // LINE グループに通知（失敗しても報告登録には影響させない）
+    const r = data?.[0] as Report | undefined;
+    if (r) {
+      const lines = [
+        `📋 作業報告が届きました`,
+        `👤 ${currentUser?.name}`,
+        `🌿 ${cropName(r.crop_id)}　📍 ${r.field || "未設定"}`,
+        `🔧 ${r.work_type}${r.quantity ? `　📦 ${r.quantity}kg` : ""}${r.work_time ? `　⏱️ ${r.work_time}h` : ""}`,
+        r.date,
+        ...(r.note ? [`📝 ${r.note}`] : []),
+      ];
+      fetch("/api/notify-line", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: lines.join("\n") }),
+      }).catch(e => console.error("LINE notify error:", e));
+    }
   };
 
   const fmtElapsed = (s: number) => {
