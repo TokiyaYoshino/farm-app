@@ -448,8 +448,11 @@ export default function App() {
     const mins = Math.round(workElapsed / 60);
     const ended = new Date().toISOString();
     await supabase.from("sessions").update({ ended_at: ended, duration_minutes: mins, voice_memo: voiceTranscript }).eq("id", workSession.id);
-    recognitionRef.current?.stop();
+    // recognitionRef を先に null にしてから stop（onend の再起動を防ぐ）
+    const r = recognitionRef.current;
+    recognitionRef.current = null;
     setIsListening(false);
+    try { r?.stop(); } catch { /* ignore */ }
     setWorkSession(null);
     setRForm(f => ({ ...f, work_time: mins > 0 ? String(mins) : "", note: voiceTranscript ? (f.note ? f.note + "\n" + voiceTranscript : voiceTranscript) : f.note }));
     showToast(`作業終了 ${fmtElapsed(workElapsed)} → 報告フォームに反映しました`);
@@ -491,10 +494,12 @@ export default function App() {
     };
 
     rec.onerror = (e: any) => {
+      // no-speech（無音）と aborted（手動停止）は正常動作なので無視
+      if (e.error === "no-speech" || e.error === "aborted") return;
       console.error("SpeechRecognition error:", e.error);
-      const msg = e.error === "not-allowed"    ? "マイクの使用が許可されていません。ブラウザの設定を確認してください"
-                : e.error === "audio-capture"  ? "マイクが見つかりません"
-                : e.error === "network"        ? "音声認識にはネットワークが必要です"
+      const msg = e.error === "not-allowed"   ? "マイクの使用が許可されていません"
+                : e.error === "audio-capture" ? "マイクが見つかりません"
+                : e.error === "network"       ? "音声認識にはネットワークが必要です"
                 : `音声入力エラー: ${e.error}`;
       showToast(msg, "err");
       recognitionRef.current = null;
@@ -502,14 +507,13 @@ export default function App() {
     };
 
     rec.onend = () => {
-      // 外部からの停止（recognitionRef=null）でなければ自動再起動
-      if (recognitionRef.current === rec) {
-        setTimeout(() => {
-          if (recognitionRef.current !== rec) return;
-          try { rec.start(); }
-          catch { recognitionRef.current = null; setIsListening(false); }
-        }, 200);
-      }
+      // recognitionRef が null（手動停止 or 致命的エラー）なら再起動しない
+      if (recognitionRef.current !== rec) return;
+      setTimeout(() => {
+        if (recognitionRef.current !== rec) return;
+        try { rec.start(); }
+        catch { recognitionRef.current = null; setIsListening(false); }
+      }, 300);
     };
 
     try {
