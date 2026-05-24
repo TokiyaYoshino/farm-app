@@ -9,6 +9,7 @@ import {
   UserCircle, Trash2, PlusCircle, ClipboardList,
   Wind, Camera, X, Navigation, Search, Save,
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
+  LogIn, LogOut, KeyRound, Eye, EyeOff,
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -64,7 +65,7 @@ const WMO_MAP: Record<number, string> = {
 
 // ─── 型 ─────────────────────────────────────────────────
 type Role = "admin" | "worker" | "viewer";
-interface User   { id: number; name: string; role: Role; }
+interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; }
 interface Crop   { id: number; name: string; start_date: string; }
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
@@ -115,6 +116,16 @@ const globalStyle = `
 const css = (o: CSSProperties): CSSProperties => o;
 
 export default function App() {
+  // ─── Auth state ──────────────────────────────────────────
+  const [authSession, setAuthSession]     = useState<any>(null);
+  const [authLoading, setAuthLoading]     = useState(true);
+  const [loginId, setLoginId]             = useState("");
+  const [loginPass, setLoginPass]         = useState("");
+  const [showPass, setShowPass]           = useState(false);
+  const [loginError, setLoginError]       = useState("");
+  const [loginBusy, setLoginBusy]         = useState(false);
+
+  // ─── App state ───────────────────────────────────────────
   const [tab, setTab]                     = useState("home");
   const [users, setUsers]                 = useState<User[]>([]);
   const [crops, setCrops]                 = useState<Crop[]>([]);
@@ -128,7 +139,6 @@ export default function App() {
   const [wxAuto, setWxAuto]               = useState<WeatherInfo | null>(null);
   const [wxManual, setWxManual]           = useState<WeatherInfo>({ label:"晴れ", Icon:Sun, temp:"" });
   const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", note:"" });
-  const [uForm, setUForm]                 = useState({ name:"", role:"worker" as Role });
   const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10) });
   const [fForm, setFForm]                 = useState({ name:"" });
   const [cropSubTab, setCropSubTab]       = useState<"register"|"list">("list");
@@ -140,6 +150,8 @@ export default function App() {
   const [locSearching, setLocSearching]   = useState(false);
   const [locPreview, setLocPreview]       = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [locSaving, setLocSaving]         = useState(false);
+  const [invForm, setInvForm]             = useState({ name:"", role:"worker" as Role, email:"", login_id:"" });
+  const [invitedPass, setInvitedPass]     = useState("");   // 作成後の仮パスワード表示用
   // GPS・マップ
   const [userPos, setUserPos]             = useState<[number, number] | null>(null);
   // 作業セッション
@@ -151,6 +163,18 @@ export default function App() {
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const recognitionRef                    = useRef<any>(null);
 
+  // ─── Auth セッション監視 ──────────────────────────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAuthSession(session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setAuthSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     const styleEl = document.createElement("style");
     styleEl.textContent = globalStyle;
@@ -159,6 +183,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!authSession) return;  // ログインしていなければフェッチしない
     (async () => {
       try {
       setLoading(true);
@@ -181,11 +206,13 @@ export default function App() {
       if (u && u.length > 0) {
         const userList = u as User[];
         setUsers(userList);
-        const defaultUser = userList.find(x => x.name === "吉野")
+        // auth_id でログイン中ユーザーを特定
+        const me = userList.find(x => x.auth_id === authSession?.user?.id)
+          || userList.find(x => x.name === "吉野")
           || userList.find(x => x.role === "admin")
           || userList[0];
-        setCurrentUser(defaultUser);
-        setRForm(f => ({ ...f, user_id: defaultUser?.id || 0 }));
+        setCurrentUser(me);
+        setRForm(f => ({ ...f, user_id: me?.id || 0 }));
       }
       if (c)  { setCrops(c as Crop[]); setRForm(f => ({ ...f, crop_id: (c[0] as Crop)?.id || 0 })); }
       if (fd) { setFields(fd as Field[]); setRForm(f => ({ ...f, field: (fd[0] as Field)?.name || "" })); }
@@ -196,7 +223,7 @@ export default function App() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [authSession]);
 
   // GPS取得
   useEffect(() => {
@@ -248,6 +275,50 @@ export default function App() {
   const showToast = (msg: string, type: "ok"|"err" = "ok") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), type === "err" ? 5000 : 2500);
+  };
+
+  // ─── ログイン ────────────────────────────────────────────
+  const handleLogin = async () => {
+    if (!loginId.trim() || !loginPass.trim()) return;
+    setLoginBusy(true);
+    setLoginError("");
+    try {
+      const { data: ud, error: ue } = await supabase
+        .from("users").select("email").eq("login_id", loginId.trim()).maybeSingle();
+      if (ue || !ud?.email) { setLoginError("ユーザーIDが見つかりません"); return; }
+      const { error: ae } = await supabase.auth.signInWithPassword({ email: ud.email, password: loginPass });
+      if (ae) { setLoginError("パスワードが正しくありません"); return; }
+    } catch { setLoginError("ログインに失敗しました"); }
+    finally   { setLoginBusy(false); }
+  };
+
+  // ─── ユーザー招待（管理者のみ） ───────────────────────────
+  const inviteUser = async () => {
+    const { name, role, email, login_id } = invForm;
+    if (!name.trim() || !email.trim() || !login_id.trim()) return;
+    const tempPass = Math.random().toString(36).slice(-6) + "Aa1!";
+    try {
+      const { data: authData, error: ae } = await supabase.auth.signUp({ email, password: tempPass });
+      if (ae) { showToast(ae.message, "err"); return; }
+      const { error: de } = await supabase.from("users").insert({
+        name, role, email, login_id, auth_id: authData.user?.id,
+      }).select();
+      if (de) { showToast(de.message, "err"); return; }
+      const { data: fresh } = await supabase.from("users").select("*").order("id");
+      if (fresh) setUsers(fresh as User[]);
+      setInvitedPass(tempPass);
+      setInvForm({ name:"", role:"worker", email:"", login_id:"" });
+      showToast(`${name} を作成しました`);
+    } catch (e: unknown) { showToast((e as Error).message, "err"); }
+  };
+
+  // ─── ログアウト ──────────────────────────────────────────
+  const handleLogout = async () => {
+    if (!window.confirm("ログアウトしますか？")) return;
+    await supabase.auth.signOut();
+    setAuthSession(null);
+    setUsers([]); setCrops([]); setFields([]); setReports([]);
+    setCurrentUser(null);
   };
 
   const uploadImage = async (file: File): Promise<string> => {
@@ -386,14 +457,6 @@ export default function App() {
     showToast("圃場の位置を現在地に設定しました");
   };
 
-  const addUser = async () => {
-    if (!uForm.name.trim()) return;
-    const { data, error } = await supabase.from("users").insert([uForm]).select();
-    if (error) { console.error("addUser error:", error); return showToast(error.message, "err"); }
-    if (data) setUsers(p => [...p, data[0] as User]);
-    setUForm({ name:"", role:"worker" });
-    showToast("ユーザーを追加しました");
-  };
 
   const deleteUser = async (id: number) => {
     if (!window.confirm("このユーザーを削除しますか？")) return;
@@ -541,6 +604,71 @@ export default function App() {
     { key:"users",  Icon:Users,   label:"管理" },
   ];
 
+  // ─── Auth ゲート ─────────────────────────────────────────
+  if (authLoading) return (
+    <div style={S.center}>
+      <Leaf size={36} color={C.primary} strokeWidth={1.5} />
+      <span>認証確認中...</span>
+    </div>
+  );
+
+  if (!authSession) return (
+    <div style={{ minHeight:"100vh", background:`linear-gradient(160deg, ${C.primary} 0%, #1b4d1b 100%)`, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:20, padding:"32px 24px", width:"100%", maxWidth:400, boxShadow:"0 8px 40px rgba(0,0,0,0.25)" }}>
+        <div style={{ textAlign:"center", marginBottom:28 }}>
+          <div style={{ background:C.primary3, borderRadius:16, width:60, height:60, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}>
+            <Wheat size={30} color={C.primary} strokeWidth={1.8} />
+          </div>
+          <div style={{ fontSize:20, fontWeight:700, color:C.text }}>農作業レポート</div>
+          <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>ログインしてください</div>
+        </div>
+
+        <div style={{ marginBottom:14 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:C.textSub, display:"flex", alignItems:"center", gap:4, marginBottom:6 }}>
+            <KeyRound size={13} strokeWidth={2} />ユーザーID
+          </label>
+          <input
+            style={{ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${loginError ? "#c0392b" : C.border}`, fontSize:15, background:"#fafcfa", color:C.text, boxSizing:"border-box" }}
+            placeholder="例: kishu-001"
+            value={loginId}
+            onChange={e => { setLoginId(e.target.value); setLoginError(""); }}
+            onKeyDown={e => e.key === "Enter" && handleLogin()}
+          />
+        </div>
+
+        <div style={{ marginBottom:20 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:C.textSub, display:"flex", alignItems:"center", gap:4, marginBottom:6 }}>
+            <KeyRound size={13} strokeWidth={2} />パスワード
+          </label>
+          <div style={{ position:"relative" }}>
+            <input
+              type={showPass ? "text" : "password"}
+              style={{ width:"100%", padding:"11px 44px 11px 14px", borderRadius:10, border:`1.5px solid ${loginError ? "#c0392b" : C.border}`, fontSize:15, background:"#fafcfa", color:C.text, boxSizing:"border-box" }}
+              placeholder="パスワード"
+              value={loginPass}
+              onChange={e => { setLoginPass(e.target.value); setLoginError(""); }}
+              onKeyDown={e => e.key === "Enter" && handleLogin()}
+            />
+            <button onClick={() => setShowPass(p => !p)} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}>
+              {showPass ? <EyeOff size={18} strokeWidth={2} /> : <Eye size={18} strokeWidth={2} />}
+            </button>
+          </div>
+        </div>
+
+        {loginError && <div style={{ color:"#c0392b", fontSize:13, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}><AlertCircle size={14} strokeWidth={2} />{loginError}</div>}
+
+        <button
+          onClick={handleLogin}
+          disabled={loginBusy}
+          style={{ width:"100%", padding:"13px 0", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, opacity:loginBusy?0.7:1, boxShadow:"0 3px 10px rgba(45,106,45,0.35)" }}
+        >
+          {loginBusy ? <RefreshCw size={16} strokeWidth={2} /> : <LogIn size={16} strokeWidth={2} />}
+          {loginBusy ? "ログイン中..." : "ログイン"}
+        </button>
+      </div>
+    </div>
+  );
+
   if (loading) return (
     <div style={S.center}>
       <Leaf size={36} color={C.primary} strokeWidth={1.5} />
@@ -556,13 +684,17 @@ export default function App() {
           <Wheat size={17} strokeWidth={1.8} />
           農作業レポート
         </div>
-        {currentUser && (
-          <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 10px 4px 7px", border:"none", cursor:"pointer", color:"#fff", flexShrink:0 }}>
-            <UserCircle size={14} strokeWidth={1.8} />
-            <span style={{ fontSize:12, fontWeight:600, whiteSpace:"nowrap" as const }}>{currentUser.name}</span>
-            <span style={{ fontSize:9, opacity:0.7 }}>▼</span>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          {currentUser && (
+            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 10px 4px 7px", border:"none", cursor:"pointer", color:"#fff", flexShrink:0 }}>
+              <UserCircle size={14} strokeWidth={1.8} />
+              <span style={{ fontSize:12, fontWeight:600, whiteSpace:"nowrap" as const }}>{currentUser.name}</span>
+            </button>
+          )}
+          <button onClick={handleLogout} style={{ display:"flex", alignItems:"center", padding:"4px 8px", background:"rgba(255,255,255,0.15)", border:"none", borderRadius:20, cursor:"pointer", color:"#fff" }}>
+            <LogOut size={15} strokeWidth={2} />
           </button>
-        )}
+        </div>
       </div>
 
       {/* ───── HOME ───── */}
@@ -970,16 +1102,28 @@ export default function App() {
             </button>
           </div>
 
-          <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />ユーザーを追加</div>
+          <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />ユーザーを招待</div>
           <div style={S.card}>
             <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />名前 *</div>
-            <input style={S.input} placeholder="例: 山田 三郎" value={uForm.name} onChange={e => setUForm(f => ({ ...f, name:e.target.value }))} />
+            <input style={S.input} placeholder="例: 山田 三郎" value={invForm.name} onChange={e => setInvForm(f => ({ ...f, name:e.target.value }))} />
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />ユーザーID *（ログイン時に使用）</div>
+            <input style={S.input} placeholder="例: kishu-001" value={invForm.login_id} onChange={e => setInvForm(f => ({ ...f, login_id:e.target.value }))} />
+            <div style={S.lbl}><Users size={13} strokeWidth={2} />メールアドレス *</div>
+            <input style={S.input} type="email" placeholder="例: yamada@example.com" value={invForm.email} onChange={e => setInvForm(f => ({ ...f, email:e.target.value }))} />
             <div style={S.lbl}><Users size={13} strokeWidth={2} />役割</div>
-            <select style={S.select} value={uForm.role} onChange={e => setUForm(f => ({ ...f, role:e.target.value as Role }))}>
+            <select style={S.select} value={invForm.role} onChange={e => setInvForm(f => ({ ...f, role:e.target.value as Role }))}>
               <option value="worker">作業者</option>
               <option value="viewer">閲覧者</option>
             </select>
-            <button style={S.btn} onClick={addUser}><PlusCircle size={16} strokeWidth={2} />ユーザーを追加</button>
+            <button style={S.btn} onClick={inviteUser}><PlusCircle size={16} strokeWidth={2} />ユーザーを作成</button>
+            {invitedPass && (
+              <div style={{ marginTop:12, background:"#fff8e1", border:"1px solid #f9a825", borderRadius:10, padding:"10px 14px" }}>
+                <div style={{ fontSize:12, color:"#e65100", fontWeight:700, marginBottom:4 }}>⚠️ 初期パスワード（一度だけ表示）</div>
+                <div style={{ fontSize:16, fontWeight:700, color:C.text, letterSpacing:2, fontFamily:"monospace" }}>{invitedPass}</div>
+                <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>このパスワードをユーザーに伝えてください。メール確認後にログインできます。</div>
+                <button style={{ marginTop:8, fontSize:12, color:C.textMuted, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }} onClick={() => setInvitedPass("")}>閉じる</button>
+              </div>
+            )}
           </div>
 
           <div style={S.sec}><Users size={14} strokeWidth={2} />登録済みユーザー</div>
@@ -990,9 +1134,12 @@ export default function App() {
                   <div style={{ background:C.primary3, borderRadius:9, padding:7 }}>
                     <UserCircle size={16} color={C.primary} strokeWidth={1.8} />
                   </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap" }}>
-                    <span style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" }}>{u.name}</span>
-                    <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap" }}>
+                      <span style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" }}>{u.name}</span>
+                      <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
+                    </div>
+                    {u.login_id && <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>ID: {u.login_id}</div>}
                   </div>
                 </div>
                 <button style={S.btnSm} onClick={() => deleteUser(u.id)}>
