@@ -151,7 +151,9 @@ export default function App() {
   const [locPreview, setLocPreview]       = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [locSaving, setLocSaving]         = useState(false);
   const [invForm, setInvForm]             = useState({ name:"", role:"worker" as Role, email:"", login_id:"" });
-  const [invitedPass, setInvitedPass]     = useState("");   // 作成後の仮パスワード表示用
+  const [invitedPass, setInvitedPass]     = useState("");
+  const [acctForm, setAcctForm]           = useState({ login_id:"", password:"", confirmPass:"" });
+  const [acctSaving, setAcctSaving]       = useState(false);   // 作成後の仮パスワード表示用
   // GPS・マップ
   const [userPos, setUserPos]             = useState<[number, number] | null>(null);
   // 作業セッション
@@ -310,6 +312,28 @@ export default function App() {
       setInvForm({ name:"", role:"worker", email:"", login_id:"" });
       showToast(`${name} を作成しました`);
     } catch (e: unknown) { showToast((e as Error).message, "err"); }
+  };
+
+  // ─── アカウント設定（ID・パスワード変更）────────────────────
+  const saveAccount = async () => {
+    const { login_id, password, confirmPass } = acctForm;
+    if (!login_id.trim() && !password.trim()) return;
+    if (password && password !== confirmPass) { showToast("パスワードが一致しません", "err"); return; }
+    if (password && password.length < 6) { showToast("パスワードは6文字以上にしてください", "err"); return; }
+    setAcctSaving(true);
+    try {
+      if (login_id.trim() && currentUser) {
+        const { error } = await supabase.from("users").update({ login_id: login_id.trim() }).eq("id", currentUser.id);
+        if (error) { showToast(error.message, "err"); return; }
+        setCurrentUser(u => u ? { ...u, login_id: login_id.trim() } : u);
+      }
+      if (password) {
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) { showToast(error.message, "err"); return; }
+      }
+      setAcctForm({ login_id:"", password:"", confirmPass:"" });
+      showToast("アカウント情報を更新しました");
+    } finally { setAcctSaving(false); }
   };
 
   // ─── ログアウト ──────────────────────────────────────────
@@ -1109,6 +1133,27 @@ export default function App() {
       {/* ───── USERS ───── */}
       {tab === "users" && (
         <div style={S.page}>
+          <div style={S.sec}><KeyRound size={14} strokeWidth={2} />アカウント設定</div>
+          <div style={S.card}>
+            <div style={{ fontSize:12, color:C.textMuted, marginBottom:12, display:"flex", alignItems:"center", gap:4 }}>
+              <UserCircle size={13} strokeWidth={2} />
+              現在のID: <b style={{ color:C.text }}>{currentUser?.login_id || "未設定"}</b>
+            </div>
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />新しいユーザーID（変更する場合）</div>
+            <input style={S.input} placeholder={currentUser?.login_id || "例: kishu"} value={acctForm.login_id} onChange={e => setAcctForm(f => ({ ...f, login_id:e.target.value }))} />
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />新しいパスワード（変更する場合）</div>
+            <input type="password" style={S.input} placeholder="6文字以上" value={acctForm.password} onChange={e => setAcctForm(f => ({ ...f, password:e.target.value }))} />
+            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />パスワード確認</div>
+            <input type="password" style={S.input} placeholder="もう一度入力" value={acctForm.confirmPass} onChange={e => setAcctForm(f => ({ ...f, confirmPass:e.target.value }))} />
+            <button
+              style={{ ...S.btn, opacity:acctSaving ? 0.7 : 1 }}
+              disabled={acctSaving}
+              onClick={saveAccount}
+            >
+              {acctSaving ? <><RefreshCw size={16} strokeWidth={2} />更新中...</> : <><Save size={16} strokeWidth={2} />変更を保存</>}
+            </button>
+          </div>
+
           <div style={S.sec}><Navigation size={14} strokeWidth={2} />農場の場所設定</div>
           <div style={S.card}>
             <div style={S.lbl}><MapPin size={13} strokeWidth={2} />場所を検索</div>
