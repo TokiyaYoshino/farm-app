@@ -653,7 +653,7 @@ export default function App() {
       showToast("圃場を削除しました");
     });
 
-  const addSchedule = async (date: string, title: string, note: string, crop: string): Promise<boolean> => {
+  const addSchedule = async (date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string): Promise<boolean> => {
     if (!currentUser) return false;
     try {
       const { data, error } = await supabase.from("schedules").insert([{
@@ -662,6 +662,8 @@ export default function App() {
         date,
         note: note || null,
         crop: crop || null,
+        assigned_user_id: assignedUserId || null,
+        work_type: workType || null,
       }]).select().single();
       if (error) throw error;
       setSchedules(p => [...p, data as Schedule]);

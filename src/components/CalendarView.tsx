@@ -9,6 +9,8 @@ import {
 export type Schedule = {
   id: string;
   user_id: number;
+  assigned_user_id?: number;
+  work_type?: string;
   title: string;
   date: string;
   note?: string;
@@ -21,14 +23,14 @@ type ReportRow = {
   work_type: string; quantity: string; work_time: string; note: string; field: string;
 };
 type CropRow = { id: number; name: string };
-type UserRow = { id: number; name: string };
+type UserRow = { id: number; name: string; role?: string };
 
 interface Props {
   reports: ReportRow[];
   schedules: Schedule[];
   crops: CropRow[];
   users: UserRow[];
-  onAddSchedule: (date: string, title: string, note: string, crop: string) => Promise<boolean>;
+  onAddSchedule: (date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string) => Promise<boolean>;
 }
 
 const C = {
@@ -40,6 +42,7 @@ const C = {
 };
 const css = (o: CSSProperties): CSSProperties => o;
 const DOW = ["日", "月", "火", "水", "木", "金", "土"];
+const WORK_TYPES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り", "剪定", "その他"];
 
 export default function CalendarView({ reports, schedules, crops, users, onAddSchedule }: Props) {
   const today = new Date().toISOString().slice(0, 10);
@@ -47,7 +50,7 @@ export default function CalendarView({ reports, schedules, crops, users, onAddSc
   const [viewMonth, setViewMonth]   = useState(() => new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showForm, setShowForm]     = useState(false);
-  const [form, setForm]             = useState({ title: "", note: "", crop: "" });
+  const [form, setForm]             = useState({ assignedUserId: 0, workType: "収穫", note: "", crop: "" });
   const [adding, setAdding]         = useState(false);
   const [addError, setAddError]     = useState("");
 
@@ -86,21 +89,30 @@ export default function CalendarView({ reports, schedules, crops, users, onAddSc
   const cropName = (id: number) => crops.find(c => c.id === id)?.name ?? "未設定";
   const userName = (id: number) => users.find(u => u.id === id)?.name ?? "未設定";
 
+  const resetForm = () => setForm({ assignedUserId: 0, workType: "収穫", note: "", crop: "" });
+
   const closePopup = () => {
     setSelectedDate(null);
     setShowForm(false);
-    setForm({ title: "", note: "", crop: "" });
+    resetForm();
     setAddError("");
   };
 
   const handleAdd = async () => {
-    if (!selectedDate || !form.title.trim()) return;
+    if (!selectedDate || !form.workType) return;
     setAdding(true);
     setAddError("");
-    const ok = await onAddSchedule(selectedDate, form.title.trim(), form.note.trim(), form.crop);
+    const ok = await onAddSchedule(
+      selectedDate,
+      form.workType,
+      form.note.trim(),
+      form.crop,
+      form.assignedUserId || null,
+      form.workType,
+    );
     setAdding(false);
     if (ok) {
-      setForm({ title: "", note: "", crop: "" });
+      resetForm();
       setShowForm(false);
     } else {
       setAddError("追加に失敗しました。もう一度お試しください。");
@@ -214,7 +226,7 @@ export default function CalendarView({ reports, schedules, crops, users, onAddSc
                 <span style={css({ fontWeight: 700, fontSize: 15, color: C.text })}>{selectedDate}</span>
               </div>
               <button
-                onClick={() => { setShowForm(f => !f); setForm({ title: "", note: "", crop: "" }); setAddError(""); }}
+                onClick={() => { setShowForm(f => !f); resetForm(); setAddError(""); }}
                 style={css({
                   display: "flex", alignItems: "center", gap: 5,
                   background: showForm ? C.bg : `linear-gradient(135deg,${C.blue},#1976d2)`,
@@ -232,14 +244,25 @@ export default function CalendarView({ reports, schedules, crops, users, onAddSc
             {showForm && (
               <div style={css({ background: C.blueBg, borderRadius: 12, padding: 14, marginBottom: 14, border: `1px solid ${C.blue4}` })}>
                 <div style={css({ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 10 })}>新しい予定</div>
-                <input
+                {/* 作業者 */}
+                <select
                   autoFocus
                   style={css({ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.blue4}`, fontSize: 14, marginBottom: 8, background: "#fff", color: C.text, boxSizing: "border-box" })}
-                  placeholder="タイトル *"
-                  value={form.title}
-                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  onKeyDown={e => e.key === "Enter" && handleAdd()}
-                />
+                  value={form.assignedUserId || ""}
+                  onChange={e => setForm(f => ({ ...f, assignedUserId: e.target.value ? Number(e.target.value) : 0 }))}
+                >
+                  <option value="">作業者（任意）</option>
+                  {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+                {/* 予定作業 */}
+                <select
+                  style={css({ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.blue4}`, fontSize: 14, marginBottom: 8, background: "#fff", color: C.text, boxSizing: "border-box" })}
+                  value={form.workType}
+                  onChange={e => setForm(f => ({ ...f, workType: e.target.value }))}
+                >
+                  {WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                {/* 作物 */}
                 <select
                   style={css({ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.blue4}`, fontSize: 14, marginBottom: 8, background: "#fff", color: C.text, boxSizing: "border-box" })}
                   value={form.crop}
@@ -248,6 +271,7 @@ export default function CalendarView({ reports, schedules, crops, users, onAddSc
                   <option value="">作物（任意）</option>
                   {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
+                {/* メモ */}
                 <input
                   style={css({ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.blue4}`, fontSize: 14, marginBottom: 10, background: "#fff", color: C.text, boxSizing: "border-box" })}
                   placeholder="メモ（任意）"
@@ -257,13 +281,13 @@ export default function CalendarView({ reports, schedules, crops, users, onAddSc
                 {addError && <div style={css({ color: C.danger, fontSize: 12, marginBottom: 8 })}>{addError}</div>}
                 <button
                   onClick={handleAdd}
-                  disabled={adding || !form.title.trim()}
+                  disabled={adding}
                   style={css({
                     width: "100%", padding: "11px 0", borderRadius: 8, border: "none",
-                    background: adding || !form.title.trim() ? C.border : `linear-gradient(135deg,${C.blue},#1976d2)`,
-                    color: adding || !form.title.trim() ? C.textMuted : "#fff",
+                    background: adding ? C.border : `linear-gradient(135deg,${C.blue},#1976d2)`,
+                    color: adding ? C.textMuted : "#fff",
                     fontSize: 14, fontWeight: 700,
-                    cursor: adding || !form.title.trim() ? "default" : "pointer",
+                    cursor: adding ? "default" : "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                   })}
                 >
@@ -310,7 +334,14 @@ export default function CalendarView({ reports, schedules, crops, users, onAddSc
                 </div>
                 {daySchedules.map(s => (
                   <div key={s.id} style={css({ background: C.blueBg, borderRadius: 10, padding: "10px 12px", marginBottom: 7, border: `1px solid ${C.blue4}` })}>
-                    <div style={css({ fontWeight: 700, fontSize: 13, color: C.blue, marginBottom: s.crop || s.note ? 4 : 0 })}>{s.title}</div>
+                    <div style={css({ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 })}>
+                      <span style={css({ fontWeight: 700, fontSize: 13, color: C.blue })}>{s.work_type || s.title}</span>
+                      {s.assigned_user_id && (
+                        <span style={css({ fontSize: 11, background: "#fff", borderRadius: 5, padding: "1px 7px", color: C.textSub, fontWeight: 600, display: "flex", alignItems: "center", gap: 3 })}>
+                          <UserCircle size={10} strokeWidth={2} />{userName(s.assigned_user_id)}
+                        </span>
+                      )}
+                    </div>
                     {s.crop && (
                       <div style={css({ fontSize: 11, color: C.textMuted, display: "flex", alignItems: "center", gap: 4 })}>
                         <Leaf size={10} strokeWidth={2} />{s.crop}
