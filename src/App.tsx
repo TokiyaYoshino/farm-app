@@ -1208,7 +1208,7 @@ export default function App() {
             </select>
 
             <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
-            <input type="date" style={{ ...S.input, paddingRight:32, minWidth:200, boxSizing:"border-box" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
+            <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
 
             <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />作業者</div>
             <select style={S.select} value={rForm.user_id} onChange={e => setRForm(f => ({ ...f, user_id:Number(e.target.value) }))}>
@@ -1297,7 +1297,7 @@ export default function App() {
                   <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
                   <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
                   <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
-                  <input type="date" style={{ ...S.input, padding:"11px 14px" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
+                  <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
                   <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
                     {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
                   </button>
