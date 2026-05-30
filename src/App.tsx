@@ -16,6 +16,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import CalendarView from "./components/CalendarView";
 import type { Schedule } from "./components/CalendarView";
+import DatePicker from "./components/DatePicker";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 
@@ -82,7 +83,7 @@ const getCropIcon = (name: string): CropIconDef =>
 // ─── 型 ─────────────────────────────────────────────────
 type Role = "admin" | "worker" | "viewer";
 interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; }
-interface Crop   { id: number; name: string; start_date: string; }
+interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; }
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
 interface Session { id: number; user_id: number; field_id: number | null; started_at: string; voice_memo: string; }
@@ -192,6 +193,7 @@ export default function App() {
   const recognitionRef                    = useRef<any>(null);
   const [deleteModal, setDeleteModal]     = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
+  const [datePickerTarget, setDatePickerTarget] = useState<{ cropId: number; field: "start_date" | "last_work_date"; value: string } | null>(null);
   const [openMenuId, setOpenMenuId]       = useState<string | null>(null);
   const [submitting, setSubmitting]       = useState(false);
 
@@ -672,6 +674,14 @@ export default function App() {
       console.error("addSchedule error:", e);
       return false;
     }
+  };
+
+  const updateCropDate = async (cropId: number, field: "start_date" | "last_work_date", value: string) => {
+    const { error } = await supabase.from("crops").update({ [field]: value || null }).eq("id", cropId);
+    if (error) return showToast(error.message, "err");
+    setCrops(p => p.map(c => c.id === cropId ? { ...c, [field]: value || undefined } : c));
+    setDatePickerTarget(null);
+    showToast("日付を更新しました");
   };
 
   const userName = (id: number) => users.find(u => u.id === id)?.name || "未設定";
@@ -1527,6 +1537,45 @@ export default function App() {
                 ))}
               </div>
 
+              {/* 日付情報 */}
+              {(() => {
+                const lastDate = crop.last_work_date || stat?.last?.date || null;
+                const isManual = !!crop.last_work_date;
+                return (
+                  <div style={{ background:C.card, borderRadius:14, padding:"12px 16px", marginBottom:16, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+                    {/* 作付け日 */}
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingBottom:10, borderBottom:`1px solid ${C.border}` }}>
+                      <span style={{ fontSize:12, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
+                        <CalendarDays size={12} strokeWidth={2} />作付け日
+                      </span>
+                      <button
+                        onClick={() => setDatePickerTarget({ cropId:crop.id, field:"start_date", value:crop.start_date || "" })}
+                        style={{ fontSize:13, fontWeight:700, color:C.primary, background:C.primary3, border:`1px solid ${C.primary4}`, borderRadius:8, padding:"4px 12px", cursor:"pointer" }}
+                      >
+                        {crop.start_date || "未設定"}
+                      </button>
+                    </div>
+                    {/* 最終作業日 */}
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingTop:10 }}>
+                      <span style={{ fontSize:12, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
+                        <CalendarDays size={12} strokeWidth={2} />最終作業日
+                      </span>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        {isManual && (
+                          <span style={{ fontSize:10, color:C.textMuted, background:C.bg, borderRadius:5, padding:"1px 6px", border:`1px solid ${C.border}` }}>手動</span>
+                        )}
+                        <button
+                          onClick={() => setDatePickerTarget({ cropId:crop.id, field:"last_work_date", value:crop.last_work_date || stat?.last?.date || "" })}
+                          style={{ fontSize:13, fontWeight:700, color:C.primary, background:C.primary3, border:`1px solid ${C.primary4}`, borderRadius:8, padding:"4px 12px", cursor:"pointer" }}
+                        >
+                          {lastDate || "未設定"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {chartData.length > 0 && (
                 <>
                   <div style={S.sec}><BarChart2 size={14} strokeWidth={2} />月別収穫量 (kg)</div>
@@ -1696,6 +1745,16 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 日付ピッカー */}
+      {datePickerTarget && (
+        <DatePicker
+          label={datePickerTarget.field === "start_date" ? "作付け日" : "最終作業日"}
+          value={datePickerTarget.value}
+          onSelect={date => updateCropDate(datePickerTarget.cropId, datePickerTarget.field, date)}
+          onClose={() => setDatePickerTarget(null)}
+        />
       )}
 
       {/* トースト */}
