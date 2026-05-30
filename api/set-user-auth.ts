@@ -1,7 +1,7 @@
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { user_id, name, role, login_id, password } = req.body ?? {};
+  const { user_id, name, role, login_id, password, org } = req.body ?? {};
   if (!login_id || !password) return res.status(400).json({ error: "login_id と password は必須です" });
   if (password.length < 6) return res.status(400).json({ error: "パスワードは6文字以上にしてください" });
 
@@ -33,7 +33,7 @@ export default async function handler(req: any, res: any) {
     const dbRes = await fetch(`${PROJECT_URL}/rest/v1/users`, {
       method:  "POST",
       headers: { "Authorization": `Bearer ${SERVICE_ROLE}`, "apikey": SERVICE_ROLE, "Content-Type": "application/json", "Prefer": "return=representation" },
-      body: JSON.stringify({ name, role, login_id, auth_id: authData.id, email }),
+      body: JSON.stringify({ name, role, login_id, auth_id: authData.id, email, org: org ?? "kishu" }),
     });
     if (!dbRes.ok) return res.status(500).json({ error: await dbRes.text() });
     const newUser = await dbRes.json();

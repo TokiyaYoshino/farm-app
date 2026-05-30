@@ -14,6 +14,8 @@ import {
   ChevronLeft, BarChart2,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import CalendarView from "./components/CalendarView";
+import type { Schedule } from "./components/CalendarView";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 
@@ -153,6 +155,7 @@ export default function App() {
   const [crops, setCrops]                 = useState<Crop[]>([]);
   const [fields, setFields]               = useState<Field[]>([]);
   const [reports, setReports]             = useState<Report[]>([]);
+  const [schedules, setSchedules]          = useState<Schedule[]>([]);
   const [currentUser, setCurrentUser]     = useState<User | null>(null);
   const [showUserPicker, setShowUserPicker] = useState(false);
   const [toast, setToast]                 = useState<{ msg: string; type: "ok"|"err" } | null>(null);
@@ -225,11 +228,15 @@ export default function App() {
       if (me) { setCurrentUser(me); setRForm(f => ({ ...f, user_id: me.id })); }
 
       // org でフィルタしてデータ取得
-      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }] = await Promise.all([
+      const orgUserIds = userList.filter(x => x.org === org).map(u => u.id);
+      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }] = await Promise.all([
         supabase.from("crops").select("*").eq("org", org).order("id"),
         supabase.from("fields").select("*").eq("org", org).order("id"),
         supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
         supabase.from("settings").select("*").eq("org", org).maybeSingle(),
+        orgUserIds.length > 0
+          ? supabase.from("schedules").select("*").in("user_id", orgUserIds).order("date")
+          : Promise.resolve({ data: null as any, error: null }),
       ]);
       if (cErr)  console.error("crops fetch error:",   cErr);
       if (fdErr) console.error("fields fetch error:",  fdErr);
@@ -243,6 +250,7 @@ export default function App() {
       if (c)  { setCrops(c as Crop[]); setRForm(f => ({ ...f, crop_id: (c[0] as Crop)?.id || 0 })); }
       if (fd) { setFields(fd as Field[]); setRForm(f => ({ ...f, field: (fd[0] as Field)?.name || "" })); }
       if (r)  setReports(r as Report[]);
+      if (sch) setSchedules(sch as Schedule[]);
       setLoading(false);
       } catch (e) {
         console.error("Startup error:", e);
@@ -645,6 +653,25 @@ export default function App() {
       showToast("圃場を削除しました");
     });
 
+  const addSchedule = async (date: string, title: string, note: string, crop: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    try {
+      const { data, error } = await supabase.from("schedules").insert([{
+        user_id: currentUser.id,
+        title,
+        date,
+        note: note || null,
+        crop: crop || null,
+      }]).select().single();
+      if (error) throw error;
+      setSchedules(p => [...p, data as Schedule]);
+      return true;
+    } catch (e) {
+      console.error("addSchedule error:", e);
+      return false;
+    }
+  };
+
   const userName = (id: number) => users.find(u => u.id === id)?.name || "未設定";
   const cropName = (id: number) => crops.find(c => c.id === id)?.name || "未設定";
 
@@ -853,6 +880,13 @@ export default function App() {
       {/* ───── HOME ───── */}
       {tab === "home" && (
         <div style={S.page}>
+          <CalendarView
+            reports={reports}
+            schedules={schedules}
+            crops={crops}
+            users={users}
+            onAddSchedule={addSchedule}
+          />
           {/* サマリーカード横スクロール */}
           <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4, marginBottom:4, scrollSnapType:"x mandatory", WebkitOverflowScrolling:"touch" as any, msOverflowStyle:"none" as any, scrollbarWidth:"none" as any }}>
             {/* 天気カード */}
