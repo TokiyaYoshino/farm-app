@@ -5,12 +5,15 @@ import {
   Home, PenLine, Sprout, Users, Leaf, Thermometer,
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
   Snowflake, CloudLightning, MapPin, RefreshCw, AlertCircle,
-  PackageCheck, RotateCcw, CalendarDays, Clock, Wheat,
+  PackageCheck, CalendarDays, Clock, Wheat,
   UserCircle, Trash2, PlusCircle, ClipboardList,
   Wind, Camera, X, Navigation, Search, Save,
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
+  LeafyGreen, Grape, Apple, MoreVertical,
+  ChevronLeft, BarChart2,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 
@@ -61,11 +64,22 @@ const WMO_MAP: Record<number, string> = {
   80:"雨",81:"雨",82:"雷雨",95:"雷雨",99:"雷雨",
 };
 
+// 作物別アイコン設定
+type CropIconDef = { Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; color: string; bg: string; };
+const CROP_ICON_MAP: Record<string, CropIconDef> = {
+  "ほうれん草": { Icon: LeafyGreen, color: "#2d6a2d", bg: "#e8f5e9" },
+  "にんにく":   { Icon: Sprout,     color: "#8d6e2e", bg: "#fff8e1" },
+  "たまねぎ":   { Icon: Apple,      color: "#c0392b", bg: "#fdecea" },
+  "ぶどう":     { Icon: Grape,      color: "#7b1fa2", bg: "#f3e5f5" },
+};
+const getCropIcon = (name: string): CropIconDef =>
+  CROP_ICON_MAP[name] ?? { Icon: Leaf, color: "#2d6a2d", bg: "#e8f5e9" };
+
 
 
 // ─── 型 ─────────────────────────────────────────────────
 type Role = "admin" | "worker" | "viewer";
-interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; }
+interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; }
 interface Crop   { id: number; name: string; start_date: string; }
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
@@ -108,9 +122,15 @@ const roleColor: Record<Role, string> = { admin:C.danger, worker:C.primary, view
 // ─── グローバルスタイル注入 ───────────────────────────────
 const globalStyle = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: ${C.bg}; font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+  body { background: ${C.bg}; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; }
   input, select, button { font-family: inherit; }
   input:focus, select:focus { outline: 2px solid ${C.primary}; outline-offset: -1px; }
+  @keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeIn    { from { opacity:0; } to { opacity:1; } }
+  @keyframes slideUp   { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+  .anim-slideDown { animation: slideDown 0.2s ease; }
+  .anim-fadeIn    { animation: fadeIn 0.2s ease; }
+  .anim-slideUp   { animation: slideUp 0.2s ease; }
 `;
 
 // ─── ユーティリティ ──────────────────────────────────────
@@ -128,6 +148,7 @@ export default function App() {
 
   // ─── App state ───────────────────────────────────────────
   const [tab, setTab]                     = useState("home");
+  const [currentOrg, setCurrentOrg]       = useState("kishu");
   const [users, setUsers]                 = useState<User[]>([]);
   const [crops, setCrops]                 = useState<Crop[]>([]);
   const [fields, setFields]               = useState<Field[]>([]);
@@ -142,7 +163,8 @@ export default function App() {
   const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", note:"" });
   const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10) });
   const [fForm, setFForm]                 = useState({ name:"" });
-  const [cropSubTab, setCropSubTab]       = useState<"register"|"list">("list");
+  const [cropListTab, setCropListTab]     = useState<"crops"|"fields">("crops");
+  const [expandedCrops, setExpandedCrops] = useState<Set<number>>(new Set());
   const [imageFile, setImageFile]         = useState<File | null>(null);
   const [imagePreview, setImagePreview]   = useState("");
   const [imgUploading, setImgUploading]   = useState(false);
@@ -165,6 +187,10 @@ export default function App() {
   const [isListening, setIsListening]     = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const recognitionRef                    = useRef<any>(null);
+  const [deleteModal, setDeleteModal]     = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
+  const [openMenuId, setOpenMenuId]       = useState<string | null>(null);
+  const [submitting, setSubmitting]       = useState(false);
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
@@ -186,18 +212,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!authSession) return;  // ログインしていなければフェッチしない
+    if (!authSession) return;
     (async () => {
       try {
       setLoading(true);
-      const [{ data: u, error: uErr }, { data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }] = await Promise.all([
-        supabase.from("users").select("*").order("id"),
-        supabase.from("crops").select("*").order("id"),
-        supabase.from("fields").select("*").order("id"),
-        supabase.from("reports").select("*").order("date", { ascending: false }),
-        supabase.from("settings").select("*").eq("id", 1).maybeSingle(),
+      // 全ユーザー取得してauth_idで現在ユーザーを特定
+      const { data: allUsers } = await supabase.from("users").select("*").order("id");
+      const userList = (allUsers ?? []) as User[];
+      const me = userList.find(x => x.auth_id === authSession.user.id) ?? null;
+      const org = me?.org ?? "kishu";
+      setCurrentOrg(org);
+      if (me) { setCurrentUser(me); setRForm(f => ({ ...f, user_id: me.id })); }
+
+      // org でフィルタしてデータ取得
+      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }] = await Promise.all([
+        supabase.from("crops").select("*").eq("org", org).order("id"),
+        supabase.from("fields").select("*").eq("org", org).order("id"),
+        supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
+        supabase.from("settings").select("*").eq("org", org).maybeSingle(),
       ]);
-      if (uErr)  console.error("users fetch error:",   uErr);
       if (cErr)  console.error("crops fetch error:",   cErr);
       if (fdErr) console.error("fields fetch error:",  fdErr);
       if (rErr)  console.error("reports fetch error:", rErr);
@@ -206,17 +239,7 @@ export default function App() {
         : { lat:35.0167, lng:135.5833, name:"京都府亀岡市" };
       setWeatherCoords(loc);
       setLocInput(loc.name);
-      if (u && u.length > 0) {
-        const userList = u as User[];
-        setUsers(userList);
-        // auth_id でログイン中ユーザーを特定
-        const me = userList.find(x => x.auth_id === authSession?.user?.id)
-          || userList.find(x => x.name === "吉野")
-          || userList.find(x => x.role === "admin")
-          || userList[0];
-        setCurrentUser(me);
-        setRForm(f => ({ ...f, user_id: me?.id || 0 }));
-      }
+      setUsers(userList.filter(x => x.org === org));
       if (c)  { setCrops(c as Crop[]); setRForm(f => ({ ...f, crop_id: (c[0] as Crop)?.id || 0 })); }
       if (fd) { setFields(fd as Field[]); setRForm(f => ({ ...f, field: (fd[0] as Field)?.name || "" })); }
       if (r)  setReports(r as Report[]);
@@ -228,10 +251,13 @@ export default function App() {
     })();
   }, [authSession]);
 
-  // GPS取得
+  // GPS取得・天気もGPS位置で更新
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
-      pos => setUserPos([pos.coords.latitude, pos.coords.longitude]),
+      pos => {
+        setUserPos([pos.coords.latitude, pos.coords.longitude]);
+        setWeatherCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude, name: "現在地" });
+      },
       () => {},
       { enableHighAccuracy: true }
     );
@@ -251,20 +277,29 @@ export default function App() {
     const { lat, lng } = weatherCoords;
     const tryFetch = async (attempt: number) => {
       try {
-        const res  = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&hourly=relative_humidity_2m,rain&timezone=Asia%2FTokyo&forecast_days=1`);
+        const res  = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&hourly=relative_humidity_2m,rain&timezone=Asia%2FTokyo&forecast_days=1`);
         const data = await res.json();
-        const cw   = data.current_weather;
-        const lbl  = WMO_MAP[cw.weathercode as number] || "曇り";
+        const cur  = data.current;
+        const lbl  = WMO_MAP[cur.weather_code as number] || "曇り";
         const opt  = WEATHER_OPTIONS.find(o => o.label === lbl) || WEATHER_OPTIONS[3];
+        // 当日6〜18時の平均湿度・合計雨量
         const times: string[] = data.hourly?.time ?? [];
-        const cwHour = cw.time.substring(0, 13) + ":00";
-        const idx = times.indexOf(cwHour);
-        const humidity = idx >= 0 ? Math.round(data.hourly.relative_humidity_2m[idx]) : undefined;
-        const rainVal  = idx >= 0 ? (data.hourly.rain[idx] as number) : 0;
+        const humList  = data.hourly?.relative_humidity_2m as number[] ?? [];
+        const rainList = data.hourly?.rain as number[] ?? [];
+        const today = cur.time.substring(0, 10);
+        const dayIdx = times.reduce<number[]>((acc, t, i) => {
+          const h = parseInt(t.substring(11, 13));
+          if (t.startsWith(today) && h >= 6 && h <= 18) acc.push(i);
+          return acc;
+        }, []);
+        const humidity = dayIdx.length > 0
+          ? Math.round(dayIdx.reduce((s, i) => s + humList[i], 0) / dayIdx.length)
+          : undefined;
+        const rainVal = dayIdx.reduce((s, i) => s + (rainList[i] ?? 0), 0);
         if (!cancelled) setWxAuto({
-          label: opt.label, Icon: opt.icon, temp: Math.round(cw.temperature),
+          label: opt.label, Icon: opt.icon, temp: Math.round(cur.temperature_2m),
           humidity,
-          rain: rainVal > 0 ? rainVal : undefined,
+          rain: rainVal > 0 ? Math.round(rainVal * 10) / 10 : undefined,
         });
       } catch {
         if (attempt < 2) { setTimeout(() => { if (!cancelled) tryFetch(attempt + 1); }, 1500); return; }
@@ -305,11 +340,12 @@ export default function App() {
       showToast("名前・ユーザーID・パスワードを入力してください", "err"); return;
     }
     if (password.length < 6) { showToast("パスワードは6文字以上にしてください", "err"); return; }
+    setSubmitting(true);
     try {
       const r = await fetch("/api/set-user-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, role, login_id, password }),
+        body: JSON.stringify({ name, role, login_id, password, org: currentOrg }),
       });
       const d = await r.json();
       if (!r.ok) { showToast(d.error ?? "作成に失敗しました", "err"); return; }
@@ -318,6 +354,7 @@ export default function App() {
       setInvForm({ name:"", role:"worker", password:"", login_id:"" });
       showToast(`${name} のアカウントを作成しました`);
     } catch (e: unknown) { showToast((e as Error).message, "err"); }
+    finally { setSubmitting(false); }
   };
 
   // ─── 他ユーザーのログイン設定（管理者のみ）──────────────────
@@ -375,7 +412,7 @@ export default function App() {
     }
     const w = wxAuto || (wxManual.temp ? wxManual : null);
     const { data, error } = await supabase.from("reports").insert([{
-      ...rForm, image_url: imageUrl,
+      ...rForm, image_url: imageUrl, org: currentOrg,
       weather:      w?.label || "",
       weather_icon: "",
       temp:         w?.temp     ? String(w.temp)     : "",
@@ -519,21 +556,24 @@ export default function App() {
   };
 
 
-  const deleteReport = async (id: number) => {
-    if (!window.confirm("この報告を削除しますか？")) return;
-    const { error } = await supabase.from("reports").delete().eq("id", id);
-    if (error) return showToast(error.message, "err");
-    setReports(p => p.filter(r => r.id !== id));
-    showToast("報告を削除しました");
-  };
+  const confirmDelete = (message: string, onConfirm: () => void) =>
+    setDeleteModal({ message, onConfirm });
 
-  const deleteUser = async (id: number) => {
-    if (!window.confirm("このユーザーを削除しますか？")) return;
-    const { error } = await supabase.from("users").delete().eq("id", id);
-    if (error) { console.error("deleteUser error:", error); return showToast(error.message, "err"); }
-    setUsers(p => p.filter(u => u.id !== id));
-    showToast("ユーザーを削除しました");
-  };
+  const deleteReport = (id: number) =>
+    confirmDelete("この作業報告を削除しますか？", async () => {
+      const { error } = await supabase.from("reports").delete().eq("id", id);
+      if (error) return showToast(error.message, "err");
+      setReports(p => p.filter(r => r.id !== id));
+      showToast("報告を削除しました");
+    });
+
+  const deleteUser = (id: number) =>
+    confirmDelete("このユーザーを削除しますか？", async () => {
+      const { error } = await supabase.from("users").delete().eq("id", id);
+      if (error) { console.error("deleteUser error:", error); return showToast(error.message, "err"); }
+      setUsers(p => p.filter(u => u.id !== id));
+      showToast("ユーザーを削除しました");
+    });
 
   const searchLocation = async () => {
     if (!locInput.trim()) return;
@@ -558,7 +598,7 @@ export default function App() {
   const saveLocation = async () => {
     if (!locPreview) return;
     setLocSaving(true);
-    const { error } = await supabase.from("settings").upsert({ id:1, location_name:locPreview.name, lat:locPreview.lat, lng:locPreview.lng });
+    const { error } = await supabase.from("settings").upsert({ org: currentOrg, location_name:locPreview.name, lat:locPreview.lat, lng:locPreview.lng }, { onConflict: "org" });
     setLocSaving(false);
     if (error) return showToast(error.message, "err");
     setWeatherCoords(locPreview);
@@ -569,37 +609,41 @@ export default function App() {
 
   const addCrop = async () => {
     if (!cForm.name.trim()) return;
-    const { data, error } = await supabase.from("crops").insert([cForm]).select();
+    setSubmitting(true);
+    const { data, error } = await supabase.from("crops").insert([{ ...cForm, org: currentOrg }]).select();
+    setSubmitting(false);
     if (error) { console.error("addCrop error:", error); return showToast(error.message, "err"); }
     if (data) setCrops(p => [...p, data[0] as Crop]);
     setCForm({ name:"", start_date:new Date().toISOString().slice(0,10) });
     showToast("作物を追加しました");
   };
 
-  const deleteCrop = async (id: number) => {
-    if (!window.confirm("この作物を削除しますか？")) return;
+  const deleteCrop = (id: number) =>
+    confirmDelete("この作物を削除しますか？", async () => {
     const { error } = await supabase.from("crops").delete().eq("id", id);
     if (error) { console.error("deleteCrop error:", error); return showToast(error.message, "err"); }
     setCrops(p => p.filter(c => c.id !== id));
     showToast("作物を削除しました");
-  };
+  });
 
   const addField = async () => {
     if (!fForm.name.trim()) return;
-    const { data, error } = await supabase.from("fields").insert([fForm]).select();
+    setSubmitting(true);
+    const { data, error } = await supabase.from("fields").insert([{ ...fForm, org: currentOrg }]).select();
+    setSubmitting(false);
     if (error) { console.error("addField error:", error); return showToast(error.message, "err"); }
     if (data) setFields(p => [...p, data[0] as Field]);
     setFForm({ name:"" });
     showToast("圃場を追加しました");
   };
 
-  const deleteField = async (id: number) => {
-    if (!window.confirm("この圃場を削除しますか？")) return;
-    const { error } = await supabase.from("fields").delete().eq("id", id);
-    if (error) { console.error("deleteField error:", error); return showToast(error.message, "err"); }
-    setFields(p => p.filter(f => f.id !== id));
-    showToast("圃場を削除しました");
-  };
+  const deleteField = (id: number) =>
+    confirmDelete("この圃場を削除しますか？", async () => {
+      const { error } = await supabase.from("fields").delete().eq("id", id);
+      if (error) { console.error("deleteField error:", error); return showToast(error.message, "err"); }
+      setFields(p => p.filter(f => f.id !== id));
+      showToast("圃場を削除しました");
+    });
 
   const userName = (id: number) => users.find(u => u.id === id)?.name || "未設定";
   const cropName = (id: number) => crops.find(c => c.id === id)?.name || "未設定";
@@ -614,24 +658,43 @@ export default function App() {
     return { ...c, count:rs.length, tot, last, growDays };
   });
 
+  // ─── ダッシュボード統計 ───────────────────────────────
+  const sevenAgo      = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+  const weekStart     = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return d.toISOString().slice(0,10); })();
+  const workCount7d   = reports.filter(r => r.date >= sevenAgo).length;
+  const weekHarvest   = reports.filter(r => r.date >= weekStart).reduce((s,r) => s+(Number(r.quantity)||0), 0);
+  const sortedReports = [...reports].sort((a,b) => b.date.localeCompare(a.date));
+  const lastWorkDate  = sortedReports[0]?.date ?? null;
+  const daysSinceWork = lastWorkDate ? Math.floor((Date.now()-new Date(lastWorkDate).getTime())/86400000) : null;
+
+  // 作物別月次収穫チャートデータ
+  const monthlyHarvest = (cropId: number) => {
+    const m: Record<string,number> = {};
+    reports.filter(r => r.crop_id === cropId && r.quantity).forEach(r => {
+      const k = r.date.slice(0,7);
+      m[k] = (m[k]||0) + (Number(r.quantity)||0);
+    });
+    return Object.entries(m).sort().map(([k,v]) => ({ month: k.slice(5)+"月", total:v }));
+  };
+
   // ─── スタイル ─────────────────────────────────────────
   const S = {
     wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:80 }),
-    header:  css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", padding:"8px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", boxShadow:"0 2px 8px rgba(45,106,45,0.25)" }),
-    headerTitle: css({ fontSize:15, fontWeight:700, letterSpacing:0.3, display:"flex", alignItems:"center", gap:6 }),
+    header:  css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", padding:"8px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, boxShadow:"0 2px 8px rgba(45,106,45,0.25)", minHeight:0 }),
+    headerTitle: css({ fontSize:14, fontWeight:700, letterSpacing:0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
     headerSub: css({ display:"none" }),
     page:    css({ padding:"16px 16px 0" }),
-    sec:     css({ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:10, marginTop:16, display:"flex", alignItems:"center", gap:6, textTransform:"uppercase" as const, letterSpacing:0.5 }),
+    sec:     css({ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:10, marginTop:16, display:"flex", alignItems:"center", gap:6, textTransform:"uppercase" as const, letterSpacing:0.5, whiteSpace:"nowrap" as const }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
     card:    css({ background:C.card, borderRadius:14, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }),
-    input:   css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text, transition:"border 0.15s" }),
+    input:   css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
     select:  css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text }),
-    btn:     css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", border:"none", borderRadius:10, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 2px 8px rgba(45,106,45,0.3)" }),
+    btn:     css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", border:"none", borderRadius:10, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 2px 8px rgba(45,106,45,0.3)", whiteSpace:"nowrap" as const }),
     btnSm:   css({ background:C.dangerBg, color:C.danger, border:`1.5px solid ${C.danger}22`, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap" as const, minWidth:48, flexShrink:0 }),
     row:     css({ display:"flex", justifyContent:"space-between", alignItems:"center" }),
     wxBox:   css({ background:`linear-gradient(135deg, #f0faf0 0%, #daf0da 100%)`, borderRadius:14, padding:"14px 16px", marginBottom:14, border:`1px solid ${C.primary4}` }),
-    wxGrid:  css({ display:"flex", flexWrap:"wrap" as const, gap:8, marginTop:8 }),
-    wxBadge: css({ background:"rgba(255,255,255,0.85)", backdropFilter:"blur(4px)", borderRadius:8, padding:"5px 8px", display:"inline-flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600, color:C.text, border:`1px solid ${C.border}`, whiteSpace:"nowrap" as const }),
+    wxGrid:  css({ display:"flex", flexWrap:"nowrap" as const, gap:6, marginTop:8, overflowX:"auto" as const }),
+    wxBadge: css({ background:"rgba(255,255,255,0.85)", backdropFilter:"blur(4px)", borderRadius:8, padding:"4px 7px", display:"inline-flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.text, border:`1px solid ${C.border}`, whiteSpace:"nowrap" as const, flexShrink:0 }),
 
     nav:     css({ position:"fixed" as const, bottom:0, left:0, right:0, background:C.navBg, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:100, boxShadow:"0 -2px 12px rgba(0,0,0,0.06)" }),
     center:  css({ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", flexDirection:"column" as const, gap:12, fontSize:15, color:C.textMuted }),
@@ -655,13 +718,28 @@ export default function App() {
   });
 
 
-  // ─── 天気バッジ ───────────────────────────────────────
+  // ─── 天気バッジ（1行コンパクト表示）────────────────────
   const WxBadges = ({ wx }: { wx: WeatherInfo }) => (
-    <div style={S.wxGrid}>
-      <span style={S.wxBadge}><wx.Icon size={15} color={C.primary} strokeWidth={2} /> {wx.label}</span>
-      <span style={S.wxBadge}><Thermometer size={15} color="#e07020" strokeWidth={2} /> {wx.temp}°C</span>
-      {wx.humidity !== undefined && <span style={S.wxBadge}><Droplets size={15} color="#1976d2" strokeWidth={2} /> {wx.humidity}%</span>}
-      {wx.rain !== undefined     && <span style={S.wxBadge}><CloudRain size={15} color="#0288d1" strokeWidth={2} /> {wx.rain}mm</span>}
+    <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:8, flexWrap:"nowrap" as const, overflow:"hidden" }}>
+      <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:13, fontWeight:700, color:C.text, whiteSpace:"nowrap" as const }}>
+        <wx.Icon size={14} color={C.primary} strokeWidth={2} />{wx.label}
+      </span>
+      <span style={{ color:C.border }}>|</span>
+      <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:13, fontWeight:600, color:C.textSub, whiteSpace:"nowrap" as const }}>
+        <Thermometer size={14} color="#e07020" strokeWidth={2} />{wx.temp}°C
+      </span>
+      {wx.humidity !== undefined && <>
+        <span style={{ color:C.border }}>|</span>
+        <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:13, fontWeight:600, color:C.textSub, whiteSpace:"nowrap" as const }}>
+          <Droplets size={14} color="#1976d2" strokeWidth={2} />{wx.humidity}%
+        </span>
+      </>}
+      {wx.rain !== undefined && <>
+        <span style={{ color:C.border }}>|</span>
+        <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:13, fontWeight:600, color:C.textSub, whiteSpace:"nowrap" as const }}>
+          <CloudRain size={14} color="#0288d1" strokeWidth={2} />{wx.rain}mm
+        </span>
+      </>}
     </div>
   );
 
@@ -752,21 +830,21 @@ export default function App() {
   );
 
   return (
-    <div style={S.wrap}>
+    <div style={S.wrap} onClick={() => openMenuId && setOpenMenuId(null)}>
       {/* ヘッダー */}
       <div style={S.header}>
         <div style={S.headerTitle}>
           <Wheat size={17} strokeWidth={1.8} />
           農作業レポート
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6, flex:"0 0 auto", flexShrink:0 }}>
           {currentUser && (
-            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 10px 4px 7px", border:"none", cursor:"pointer", color:"#fff", flexShrink:0 }}>
-              <UserCircle size={14} strokeWidth={1.8} />
-              <span style={{ fontSize:12, fontWeight:600, whiteSpace:"nowrap" as const }}>{currentUser.name}</span>
+            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 10px 4px 7px", border:"none", cursor:"pointer", color:"#fff", maxWidth:160, overflow:"hidden" }}>
+              <UserCircle size={14} strokeWidth={1.8} style={{ flexShrink:0 }} />
+              <span style={{ fontSize:12, fontWeight:600, whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis", maxWidth:120 }}>{currentUser.name}</span>
             </button>
           )}
-          <button onClick={handleLogout} style={{ display:"flex", alignItems:"center", padding:"4px 8px", background:"rgba(255,255,255,0.15)", border:"none", borderRadius:20, cursor:"pointer", color:"#fff" }}>
+          <button onClick={handleLogout} style={{ display:"flex", alignItems:"center", padding:"4px 8px", background:"rgba(255,255,255,0.15)", border:"none", borderRadius:20, cursor:"pointer", color:"#fff", flexShrink:0 }}>
             <LogOut size={15} strokeWidth={2} />
           </button>
         </div>
@@ -775,69 +853,160 @@ export default function App() {
       {/* ───── HOME ───── */}
       {tab === "home" && (
         <div style={S.page}>
-          <div style={S.wxBox}>
-            <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, color:C.textSub, fontWeight:600 }}>
-              <MapPin size={13} color={C.primary} strokeWidth={2} />
-              {weatherCoords?.name ?? "..."} · 現在の天気
+          {/* サマリーカード横スクロール */}
+          <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4, marginBottom:4, scrollSnapType:"x mandatory", WebkitOverflowScrolling:"touch" as any, msOverflowStyle:"none" as any, scrollbarWidth:"none" as any }}>
+            {/* 天気カード */}
+            {wxLoading ? (
+              <div style={{ background:`linear-gradient(135deg,#f0faf0,#daf0da)`, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.primary4}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}>
+                <RefreshCw size={18} color={C.primary} strokeWidth={1.8} />
+                <div style={{ fontSize:11, color:C.textSub, fontWeight:600 }}>取得中...</div>
+              </div>
+            ) : wxAuto ? (
+              <div style={{ background:`linear-gradient(135deg,#f0faf0,#daf0da)`, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.primary4}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4 }}>
+                <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                  <wxAuto.Icon size={11} color={C.primary} strokeWidth={2} />今日の天気
+                </div>
+                <div style={{ fontSize:30, fontWeight:800, color:C.text, lineHeight:1.1 }}>{wxAuto.temp}°</div>
+                <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{wxAuto.label}</div>
+                {wxAuto.humidity !== undefined && (
+                  <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3, marginTop:2 }}>
+                    <Droplets size={10} color="#1976d2" strokeWidth={2}/>{wxAuto.humidity}%
+                  </div>
+                )}
+              </div>
+            ) : null}
+            {/* 7日間作業数 */}
+            <div style={{ background:C.card, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.border}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                <CalendarDays size={11} color={C.primary} strokeWidth={2} />直近7日間
+              </div>
+              <div style={{ fontSize:30, fontWeight:800, color:C.text, lineHeight:1.1 }}>{workCount7d}</div>
+              <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>件の作業報告</div>
             </div>
-            {wxLoading
-              ? <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:8, fontSize:13, color:C.textMuted }}><RefreshCw size={14} strokeWidth={2} />取得中...</div>
-              : wxAuto
-              ? <WxBadges wx={wxAuto} />
-              : <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:8, fontSize:13, color:"#d07030" }}><AlertCircle size={14} strokeWidth={2} />取得できませんでした</div>
-            }
+            {/* 今週の収穫量 */}
+            <div style={{ background:C.card, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.border}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                <PackageCheck size={11} color={C.primary} strokeWidth={2} />今週の収穫
+              </div>
+              <div style={{ fontSize:30, fontWeight:800, color:C.text, lineHeight:1.1 }}>{weekHarvest > 0 ? weekHarvest : "—"}</div>
+              <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{weekHarvest > 0 ? "kg 収穫" : "収穫なし"}</div>
+            </div>
+            {/* 最終作業からの日数 */}
+            <div style={{ background:C.card, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.border}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                <Clock size={11} color={C.primary} strokeWidth={2} />最終作業
+              </div>
+              <div style={{ fontSize:30, fontWeight:800, color: daysSinceWork !== null && daysSinceWork > 7 ? "#e07020" : C.text, lineHeight:1.1 }}>
+                {daysSinceWork !== null ? daysSinceWork : "—"}
+              </div>
+              <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{daysSinceWork !== null ? "日前" : "記録なし"}</div>
+            </div>
           </div>
 
           <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />作物サマリー</div>
-          {cropStats.map(c => (
-            <div key={c.id} style={S.card}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                <div style={{ background:C.primary3, borderRadius:8, padding:6 }}>
-                  <Leaf size={16} color={C.primary} strokeWidth={2} />
-                </div>
-                <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
-                {c.growDays !== null && (
-                  <span style={{ marginLeft:"auto", fontSize:11, color:C.primary, background:C.primary3, borderRadius:6, padding:"2px 8px", fontWeight:600 }}>
-                    生育 {c.growDays}日
-                  </span>
+
+          {cropStats.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+              <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
+                <Sprout size={22} color={C.primary} strokeWidth={1.5} />
+              </div>
+              <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>作物が登録されていません</div>
+              <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>作物タブから追加してください</div>
+              <button style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", border:"none", borderRadius:10, padding:"9px 20px", fontSize:13, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={() => setTab("crops")}>
+                <PlusCircle size={14} strokeWidth={2} />作物を追加
+              </button>
+            </div>
+          ) : cropStats.map(c => {
+            const expanded = expandedCrops.has(c.id);
+            const ci = getCropIcon(c.name);
+            return (
+              <div key={c.id} style={S.card}>
+                <button
+                  onClick={() => setExpandedCrops(prev => { const s = new Set(prev); s.has(c.id) ? s.delete(c.id) : s.add(c.id); return s; })}
+                  style={{ width:"100%", background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:10 }}
+                >
+                  <div style={{ background:ci.bg, borderRadius:10, padding:8, flexShrink:0 }}>
+                    <ci.Icon size={18} color={ci.color} strokeWidth={1.8} />
+                  </div>
+                  <span style={{ fontWeight:700, fontSize:15, color:C.text, flex:1, textAlign:"left" }}>{c.name}</span>
+                  {c.growDays !== null && (
+                    <span style={{ fontSize:11, color:C.primary, background:C.primary3, borderRadius:6, padding:"2px 7px", fontWeight:600, whiteSpace:"nowrap" as const }}>
+                      {c.growDays}日目
+                    </span>
+                  )}
+                  <span style={{ marginLeft:4, fontSize:12, color:C.textMuted, flexShrink:0 }}>{expanded ? "▲" : "▼"}</span>
+                </button>
+                {expanded && (
+                  <>
+                    <div style={S.divider} />
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
+                      <div style={{ background:C.bg, borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
+                        <div style={{ fontSize:26, fontWeight:800, color:C.primary, lineHeight:1 }}>{c.growDays ?? "—"}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>生育日数</div>
+                      </div>
+                      <div style={{ background:C.bg, borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
+                        <div style={{ fontSize:26, fontWeight:800, color:C.primary, lineHeight:1 }}>{c.count}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>作業回数</div>
+                      </div>
+                      <div style={{ background:C.bg, borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
+                        <div style={{ fontSize:c.tot > 999 ? 18 : 26, fontWeight:800, color:C.primary, lineHeight:1 }}>{c.tot > 0 ? c.tot : "—"}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>{c.tot > 0 ? "kg収穫" : "収穫なし"}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); setSelectedCropId(c.id); }}
+                      style={{ width:"100%", padding:"9px 0", borderRadius:10, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                    >
+                      <BarChart2 size={14} strokeWidth={2} />詳細を見る
+                    </button>
+                  </>
                 )}
               </div>
-              <div style={S.divider} />
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                <div style={{ background:C.bg, borderRadius:9, padding:"8px 10px" }}>
-                  <div style={{ fontSize:10, color:C.textMuted, marginBottom:2, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={10} strokeWidth={2} />作付け日</div>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap" }}>{c.start_date || "—"}</div>
-                </div>
-                <div style={{ background:C.bg, borderRadius:9, padding:"8px 10px" }}>
-                  <div style={{ fontSize:10, color:C.textMuted, marginBottom:2, display:"flex", alignItems:"center", gap:3 }}><PackageCheck size={10} strokeWidth={2} />累計収穫量</div>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap" }}>{c.tot > 0 ? `${c.tot} kg` : "—"}</div>
-                </div>
-                <div style={{ background:C.bg, borderRadius:9, padding:"8px 10px" }}>
-                  <div style={{ fontSize:10, color:C.textMuted, marginBottom:2, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={10} strokeWidth={2} />最終作業日</div>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap" }}>{c.last?.date || "—"}</div>
-                </div>
-                <div style={{ background:C.bg, borderRadius:9, padding:"8px 10px" }}>
-                  <div style={{ fontSize:10, color:C.textMuted, marginBottom:2, display:"flex", alignItems:"center", gap:3 }}><RotateCcw size={10} strokeWidth={2} />作業回数</div>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{c.count}回</div>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
 
-          <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />最新の作業報告</div>
-          {reports.slice(0,5).map(r => (
+          <div style={{ ...S.sec, justifyContent:"space-between" }}>
+            <span style={{ display:"flex", alignItems:"center", gap:6 }}><ClipboardList size={14} strokeWidth={2} />最新の作業報告</span>
+            {reports.length > 2 && (
+              <button onClick={() => setTab("report")} style={{ background:"none", border:"none", cursor:"pointer", fontSize:12, color:C.primary, fontWeight:600, flexShrink:0, whiteSpace:"nowrap" as const }}>もっと見る →</button>
+            )}
+          </div>
+
+          {reports.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+              <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
+                <ClipboardList size={22} color={C.primary} strokeWidth={1.5} />
+              </div>
+              <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ作業報告がありません</div>
+              <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>最初の報告を登録してみましょう</div>
+              <button style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", border:"none", borderRadius:10, padding:"9px 20px", fontSize:13, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={() => setTab("report")}>
+                <PenLine size={14} strokeWidth={2} />報告を登録
+              </button>
+            </div>
+          ) : reports.slice(0,2).map(r => (
             <div key={r.id} style={S.card}>
               <div style={S.row}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <div style={{ background:C.primary3, borderRadius:7, padding:5 }}>
-                    <Sprout size={13} color={C.primary} strokeWidth={2} />
-                  </div>
+                  {(() => { const ci = getCropIcon(cropName(r.crop_id)); return <div style={{ background:ci.bg, borderRadius:7, padding:5, flexShrink:0 }}><ci.Icon size={13} color={ci.color} strokeWidth={2} /></div>; })()}
                   <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{cropName(r.crop_id)}</span>
                   <span style={{ fontSize:11, color: r.field ? C.primary : C.textMuted, background: r.field ? C.primary3 : C.bg, borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{r.field || "未設定"}</span>
                 </div>
-                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:C.textMuted }}>
-                  <CalendarDays size={11} strokeWidth={2} />
-                  {r.date}
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={11} strokeWidth={2}/>{r.date}</span>
+                  {(isAdmin || r.user_id === currentUser?.id) && (
+                    <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setOpenMenuId(openMenuId === `hr${r.id}` ? null : `hr${r.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", borderRadius:6, color:C.textMuted, display:"flex" }}>
+                        <MoreVertical size={16} strokeWidth={2} />
+                      </button>
+                      {openMenuId === `hr${r.id}` && (
+                        <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                          <button onClick={() => { setOpenMenuId(null); deleteReport(r.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                            <Trash2 size={13} strokeWidth={2} />削除
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div style={S.divider} />
@@ -848,21 +1017,13 @@ export default function App() {
               </div>
               <div style={{ ...S.row, marginTop:8 }}>
                 <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2}/>{userName(r.user_id)}</span>
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  {r.weather && (
-                    <span style={{ fontSize:11, color:C.textSub, display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" as const }}>
-                      <span>{r.weather}{r.temp ? ` ${r.temp}°C` : ""}</span>
-                      {r.humidity !== "" && r.humidity !== null && <span style={{ display:"flex", alignItems:"center", gap:2 }}><Droplets size={10} color="#1976d2" strokeWidth={2}/>{r.humidity}%</span>}
-                      {r.rain     !== "" && r.rain     !== null && <span style={{ display:"flex", alignItems:"center", gap:2 }}><CloudRain size={10} color="#0288d1" strokeWidth={2}/>{r.rain}mm</span>}
-                    </span>
-                  )}
-                  {/* 自分の報告 or 管理者のみ削除ボタン */}
-                  {(isAdmin || r.user_id === currentUser?.id) && (
-                    <button style={S.btnSm} onClick={() => deleteReport(r.id)}>
-                      <Trash2 size={11} strokeWidth={2} />削除
-                    </button>
-                  )}
-                </div>
+                {r.weather && (
+                  <span style={{ fontSize:11, color:C.textSub, display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" as const }}>
+                    <span>{r.weather}{r.temp ? ` ${r.temp}°C` : ""}</span>
+                    {r.humidity !== "" && r.humidity !== null && <span style={{ display:"flex", alignItems:"center", gap:2 }}><Droplets size={10} color="#1976d2" strokeWidth={2}/>{r.humidity}%</span>}
+                    {r.rain     !== "" && r.rain     !== null && <span style={{ display:"flex", alignItems:"center", gap:2 }}><CloudRain size={10} color="#0288d1" strokeWidth={2}/>{r.rain}mm</span>}
+                  </span>
+                )}
               </div>
               {r.note && (
                 <div style={{ fontSize:12, color:C.textSub, marginTop:8, padding:"7px 10px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}` }}>
@@ -880,6 +1041,11 @@ export default function App() {
       {/* ───── MAP ───── */}
       {tab === "map" && (
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:60, display:"flex", flexDirection:"column" }}>
+          {/* ⑪ マップタイトル */}
+          <div style={{ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", padding:"10px 16px", display:"flex", alignItems:"center", gap:8, zIndex:10, flexShrink:0 }}>
+            <MapIcon size={16} strokeWidth={2} />
+            <span style={{ fontSize:15, fontWeight:700 }}>農場マップ</span>
+          </div>
           {/* Leaflet マップ */}
           <MapContainer
             center={userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]}
@@ -941,9 +1107,9 @@ export default function App() {
                 </select>
                 <button
                   onClick={startWork}
-                  style={{ flex:2, display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontWeight:700, fontSize:15, cursor:"pointer", boxShadow:`0 2px 8px rgba(45,106,45,0.35)` }}
+                  style={{ flex:2, display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontWeight:700, fontSize:15, cursor:"pointer", boxShadow:`0 2px 8px rgba(45,106,45,0.35)`, whiteSpace:"nowrap" as const, flexShrink:0, minWidth:0 }}
                 >
-                  <Play size={18} strokeWidth={2} />農作業を開始する
+                  <Play size={18} strokeWidth={2} style={{ flexShrink:0 }} />農作業を開始する
                 </button>
               </div>
             ) : (
@@ -996,7 +1162,7 @@ export default function App() {
             </select>
 
             <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
-            <input type="date" style={S.input} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
+            <input type="date" style={{ ...S.input, paddingRight:32, minWidth:200, boxSizing:"border-box" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
 
             <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />作業者</div>
             <select style={S.select} value={rForm.user_id} onChange={e => setRForm(f => ({ ...f, user_id:Number(e.target.value) }))}>
@@ -1068,81 +1234,124 @@ export default function App() {
       {/* ───── CROPS ───── */}
       {tab === "crops" && (
         <div style={S.page}>
-          {/* サブタブ（管理者のみ登録タブを表示） */}
-          {isAdmin && (
-            <div style={{ display:"flex", background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
-              {(["list","register"] as const).map(k => (
-                <button key={k} onClick={() => setCropSubTab(k)} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: cropSubTab === k ? C.card : "transparent", color: cropSubTab === k ? C.primary : C.textMuted, boxShadow: cropSubTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-                  {k === "list" ? "一覧" : "登録"}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* ⑩ 作物 / 圃場 サブタブ */}
+          <div style={{ display:"flex", background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
+            {(["crops","fields"] as const).map(k => (
+              <button key={k} onClick={() => setCropListTab(k)} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: cropListTab === k ? C.card : "transparent", color: cropListTab === k ? C.primary : C.textMuted, boxShadow: cropListTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+                {k === "crops" ? "作物" : "圃場"}
+              </button>
+            ))}
+          </div>
 
-          {isAdmin && cropSubTab === "register" && <>
-            <div style={S.sec}><Sprout size={14} strokeWidth={2} />作物を追加</div>
-            <div style={S.card}>
-              <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
-              <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
-              <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
-              <input type="date" style={{ ...S.input, width:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
-              <button style={S.btn} onClick={addCrop}><PlusCircle size={16} strokeWidth={2} />作物を追加</button>
-            </div>
-            <div style={S.sec}><MapPin size={14} strokeWidth={2} />圃場を追加</div>
-            <div style={S.card}>
-              <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
-              <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
-              <button style={S.btn} onClick={addField}><PlusCircle size={16} strokeWidth={2} />圃場を追加</button>
-            </div>
-          </>}
-
-          {cropSubTab === "list" && <>
+          {cropListTab === "crops" && <>
+            {isAdmin && (
+              <>
+                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />作物を追加</div>
+                <div style={S.card}>
+                  <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
+                  <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
+                  <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
+                  <input type="date" style={{ ...S.input, padding:"11px 14px" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
+                  <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
+                    {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
+                  </button>
+                </div>
+              </>
+            )}
             <div style={S.sec}><Leaf size={14} strokeWidth={2} />登録作物</div>
-            {crops.length === 0 && <div style={{ fontSize:13, color:C.textMuted, textAlign:"center", padding:"20px 0" }}>作物が登録されていません</div>}
-            {crops.map(c => (
-              <div key={c.id} style={S.card}>
-                <div style={S.row}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
-                    <div style={{ background:C.primary3, borderRadius:10, padding:8, flexShrink:0 }}>
-                      <Leaf size={18} color={C.primary} strokeWidth={1.8} />
-                    </div>
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
-                      <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2, whiteSpace:"nowrap" }}>
-                        <CalendarDays size={11} strokeWidth={2} />{c.start_date}
+            {crops.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
+                  <Leaf size={22} color={C.primary} strokeWidth={1.5} />
+                </div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>作物が登録されていません</div>
+                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              </div>
+            ) : crops.map(c => {
+              const ci = getCropIcon(c.name);
+              return (
+                <div key={c.id} style={{ ...S.card, cursor:"pointer" }} onClick={() => setSelectedCropId(c.id)}>
+                  <div style={S.row}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
+                      <div style={{ background:ci.bg, borderRadius:10, padding:8, flexShrink:0 }}><ci.Icon size={18} color={ci.color} strokeWidth={1.8} /></div>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontWeight:700, fontSize:15, color:C.text, whiteSpace:"nowrap" as const }}>{c.name}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2, whiteSpace:"nowrap" as const }}>
+                          <CalendarDays size={11} strokeWidth={2} />{c.start_date}
+                        </div>
                       </div>
                     </div>
+                    {isAdmin && (
+                      <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setOpenMenuId(openMenuId === `c${c.id}` ? null : `c${c.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
+                          <MoreVertical size={18} strokeWidth={2} />
+                        </button>
+                        {openMenuId === `c${c.id}` && (
+                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                            <button onClick={() => { setOpenMenuId(null); deleteCrop(c.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                              <Trash2 size={13} strokeWidth={2} />削除
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {isAdmin && (
-                    <button style={S.btnSm} onClick={() => deleteCrop(c.id)}>
-                      <Trash2 size={12} strokeWidth={2} />削除
-                    </button>
-                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
+          </>}
+
+          {cropListTab === "fields" && <>
+            {isAdmin && (
+              <>
+                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />圃場を追加</div>
+                <div style={S.card}>
+                  <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
+                  <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
+                  <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addField} disabled={submitting}>
+                    {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />圃場を追加</>}
+                  </button>
+                </div>
+              </>
+            )}
             <div style={S.sec}><MapPin size={14} strokeWidth={2} />登録圃場</div>
-            {fields.length === 0 && <div style={{ fontSize:13, color:C.textMuted, textAlign:"center", padding:"20px 0" }}>圃場が登録されていません</div>}
-            {fields.map(f => (
+            {fields.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
+                  <MapPin size={22} color={C.primary} strokeWidth={1.5} />
+                </div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>圃場が登録されていません</div>
+                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              </div>
+            ) : fields.map(f => (
               <div key={f.id} style={S.card}>
                 <div style={S.row}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
                     <div style={{ background: f.lat ? C.primary3 : C.bg, borderRadius:9, padding:7, flexShrink:0 }}>
                       <MapPin size={16} color={f.lat ? C.primary : C.textMuted} strokeWidth={1.8} />
                     </div>
                     <div style={{ minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{f.name}</div>
-                      <div style={{ fontSize:11, color:C.textMuted, whiteSpace:"nowrap" }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
+                      <div style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" as const }}>{f.name}</div>
+                      <div style={{ fontSize:11, color:C.textMuted, whiteSpace:"nowrap" as const }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
                     </div>
                   </div>
                   {isAdmin && (
-                    <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                    <div style={{ display:"flex", gap:6, flexShrink:0 }} onClick={e => e.stopPropagation()}>
                       <button style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }} onClick={() => setFieldLocation(f.id)}>
                         <Navigation size={12} strokeWidth={2} />現在地
                       </button>
-                      <button style={S.btnSm} onClick={() => deleteField(f.id)}>
-                        <Trash2 size={12} strokeWidth={2} />削除
-                      </button>
+                      <div style={{ position:"relative" }}>
+                        <button onClick={() => setOpenMenuId(openMenuId === `f${f.id}` ? null : `f${f.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
+                          <MoreVertical size={18} strokeWidth={2} />
+                        </button>
+                        {openMenuId === `f${f.id}` && (
+                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                            <button onClick={() => { setOpenMenuId(null); deleteField(f.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                              <Trash2 size={13} strokeWidth={2} />削除
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1158,9 +1367,9 @@ export default function App() {
           <div style={S.sec}><Navigation size={14} strokeWidth={2} />農場の場所設定</div>
           <div style={S.card}>
             <div style={S.lbl}><MapPin size={13} strokeWidth={2} />場所を検索</div>
-            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+            <div style={{ display:"flex", gap:8, marginBottom:12, width:"100%" }}>
               <input
-                style={{ ...S.input, marginBottom:0, flex:1 }}
+                style={{ ...S.input, marginBottom:0, flex:1, minWidth:0 }}
                 placeholder="例: 京都府亀岡市"
                 value={locInput}
                 onChange={e => { setLocInput(e.target.value); setLocPreview(null); }}
@@ -1208,46 +1417,151 @@ export default function App() {
             </select>
             <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />ユーザーID *</div>
             <input style={S.input} placeholder="例: worker-001" value={invForm.login_id} onChange={e => setInvForm(f => ({ ...f, login_id:e.target.value }))} />
-            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />パスワード *（6文字以上）</div>
-            <input type="password" style={S.input} placeholder="パスワードを設定" value={invForm.password} onChange={e => setInvForm(f => ({ ...f, password:e.target.value }))} />
-            <button style={S.btn} onClick={inviteUser}><PlusCircle size={16} strokeWidth={2} />アカウントを作成する</button>
+            <div style={{ ...S.lbl, flexWrap:"nowrap" as const, whiteSpace:"nowrap" as const }}><KeyRound size={13} strokeWidth={2} />パスワード * <span style={{ fontWeight:400, color:C.textMuted, fontSize:11 }}>（6文字以上）</span></div>
+            <input type="password" style={{ ...S.input, padding:"11px 14px" }} placeholder="パスワードを設定" value={invForm.password} onChange={e => setInvForm(f => ({ ...f, password:e.target.value }))} />
+            <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={inviteUser} disabled={submitting}>
+              {submitting ? <><RefreshCw size={16} strokeWidth={2} />作成中...</> : <><PlusCircle size={16} strokeWidth={2} />アカウントを作成する</>}
+            </button>
           </div>
 
           <div style={S.sec}><Users size={14} strokeWidth={2} />登録済みユーザー</div>
           {users.map(u => (
             <div key={u.id} style={S.card}>
-              <div style={S.row}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ background:C.primary3, borderRadius:9, padding:7 }}>
-                    <UserCircle size={16} color={C.primary} strokeWidth={1.8} />
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                <div style={{ background:C.primary3, borderRadius:9, padding:7, flexShrink:0 }}>
+                  <UserCircle size={16} color={C.primary} strokeWidth={1.8} />
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" as const }}>
+                    <span style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" as const }}>{u.name}</span>
+                    <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
                   </div>
-                  <div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap" }}>
-                      <span style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" }}>{u.name}</span>
-                      <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
-                    </div>
-                    <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>
-                      {u.login_id ? `ID: ${u.login_id}` : <span style={{ color:"#e07020" }}>ログイン未設定</span>}
-                    </div>
+                  <div style={{ fontSize:11, color:C.textMuted, marginTop:2, whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {u.login_id ? `ID: ${u.login_id}` : <span style={{ color:"#e07020" }}>ログイン未設定</span>}
                   </div>
                 </div>
-                <div style={{ display:"flex", gap:6 }}>
-                  <button
-                    style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }}
-                    onClick={() => { setSetAuthTarget(u); setSetAuthFormState({ login_id: u.login_id || "", password:"", confirmPass:"" }); }}
-                  >
-                    <KeyRound size={12} strokeWidth={2} />{u.auth_id ? "変更" : "設定"}
-                  </button>
-                  <button style={S.btnSm} onClick={() => deleteUser(u.id)}>
-                    <Trash2 size={12} strokeWidth={2} />削除
-                  </button>
-                </div>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button
+                  style={{ ...S.btnSm, flex:1, justifyContent:"center", background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }}
+                  onClick={() => { setSetAuthTarget(u); setSetAuthFormState({ login_id: u.login_id || "", password:"", confirmPass:"" }); }}
+                >
+                  <KeyRound size={12} strokeWidth={2} />{u.auth_id ? "変更" : "設定"}
+                </button>
+                <button style={{ ...S.btnSm, flex:1, justifyContent:"center" }} onClick={() => deleteUser(u.id)}>
+                  <Trash2 size={12} strokeWidth={2} />削除
+                </button>
               </div>
             </div>
           ))}
 
         </div>
       )}
+
+      {/* ───── 作物詳細 ───── */}
+      {selectedCropId !== null && (() => {
+        const crop = crops.find(c => c.id === selectedCropId);
+        if (!crop) return null;
+        const ci = getCropIcon(crop.name);
+        const cropReports = reports.filter(r => r.crop_id === selectedCropId).sort((a,b) => b.date.localeCompare(a.date));
+        const chartData = monthlyHarvest(selectedCropId);
+        const stat = cropStats.find(c => c.id === selectedCropId);
+        return (
+          <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:200, overflowY:"auto", paddingBottom:80 }} className="anim-slideUp">
+            <div style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", padding:"10px 12px", display:"flex", alignItems:"center", gap:10, position:"sticky", top:0, zIndex:10 }}>
+              <button onClick={() => setSelectedCropId(null)} style={{ background:"rgba(255,255,255,0.18)", border:"none", borderRadius:20, padding:"6px 8px", color:"#fff", cursor:"pointer", display:"flex", flexShrink:0 }}>
+                <ChevronLeft size={18} strokeWidth={2.5} />
+              </button>
+              <div style={{ background:ci.bg, borderRadius:8, padding:6, flexShrink:0 }}>
+                <ci.Icon size={16} color={ci.color} strokeWidth={2} />
+              </div>
+              <span style={{ fontSize:16, fontWeight:700 }}>{crop.name}</span>
+            </div>
+            <div style={{ padding:"16px 16px 0" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
+                {[
+                  { label:"生育日数", value:stat?.growDays ?? "—" },
+                  { label:"作業回数", value:stat?.count ?? 0 },
+                  { label: stat?.tot ? "kg総収穫" : "収穫なし", value: stat?.tot ?? "—" },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ background:C.card, borderRadius:14, padding:"14px 8px", textAlign:"center", boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }}>
+                    <div style={{ fontSize:String(value).length > 4 ? 20 : 30, fontWeight:800, color:C.primary, lineHeight:1 }}>{value}</div>
+                    <div style={{ fontSize:11, color:C.textMuted, marginTop:6 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {chartData.length > 0 && (
+                <>
+                  <div style={S.sec}><BarChart2 size={14} strokeWidth={2} />月別収穫量 (kg)</div>
+                  <div style={{ background:C.card, borderRadius:14, padding:"16px 6px 8px", marginBottom:14, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }}>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={chartData} margin={{ top:0, right:8, bottom:0, left:-16 }}>
+                        <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize:10, fill:C.textMuted }} axisLine={false} tickLine={false} />
+                        <Tooltip
+                          contentStyle={{ fontSize:12, borderRadius:8, border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(0,0,0,0.1)" }}
+                          formatter={(v) => [`${Number(v)}kg`, "収穫量"]}
+                        />
+                        <Bar dataKey="total" radius={[6,6,0,0]} maxBarSize={44}>
+                          {chartData.map((_,i) => <Cell key={i} fill={C.primary} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </>
+              )}
+
+              <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />作業報告</div>
+              {cropReports.length === 0 ? (
+                <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ報告がありません</div>
+                  <div style={{ fontSize:12, color:C.textMuted }}>報告タブから登録できます</div>
+                </div>
+              ) : cropReports.map(r => (
+                <div key={r.id} style={S.card}>
+                  <div style={S.row}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontWeight:700, fontSize:13, color:C.primary }}>{r.work_type}</span>
+                      {r.field && <span style={{ fontSize:11, color:C.primary, background:C.primary3, borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{r.field}</span>}
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={11} strokeWidth={2}/>{r.date}</span>
+                      {(isAdmin || r.user_id === currentUser?.id) && (
+                        <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                          <button onClick={() => setOpenMenuId(openMenuId === `dr${r.id}` ? null : `dr${r.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", borderRadius:6, color:C.textMuted, display:"flex" }}>
+                            <MoreVertical size={15} strokeWidth={2} />
+                          </button>
+                          {openMenuId === `dr${r.id}` && (
+                            <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                              <button onClick={() => { setOpenMenuId(null); deleteReport(r.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                                <Trash2 size={13} strokeWidth={2} />削除
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8, fontSize:12 }}>
+                    {r.quantity  && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><PackageCheck size={11} strokeWidth={2}/>{r.quantity}kg</span>}
+                    {r.work_time && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span>}
+                    <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2}/>{userName(r.user_id)}</span>
+                  </div>
+                  {r.note && (
+                    <div style={{ fontSize:12, color:C.textSub, marginTop:8, padding:"7px 10px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}` }}>
+                      {r.note}
+                    </div>
+                  )}
+                  {r.image_url && (
+                    <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:8, marginTop:8, maxHeight:160, objectFit:"cover", display:"block" }} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ナビゲーション */}
       <nav style={S.nav}>
@@ -1317,19 +1631,53 @@ export default function App() {
         </div>
       )}
 
+      {/* 削除確認ボトムシート */}
+      {deleteModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:400, display:"flex", alignItems:"flex-end" }}
+          onClick={() => setDeleteModal(null)}>
+          <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", padding:"24px 16px 40px", boxShadow:"0 -4px 24px rgba(0,0,0,0.15)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"0 auto 20px" }} />
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+              <div style={{ background:C.dangerBg, borderRadius:10, padding:8, flexShrink:0 }}>
+                <Trash2 size={18} color={C.danger} strokeWidth={2} />
+              </div>
+              <div>
+                <div style={{ fontWeight:700, fontSize:15, color:C.text }}>削除の確認</div>
+                <div style={{ fontSize:13, color:C.textMuted, marginTop:2 }}>{deleteModal.message}</div>
+              </div>
+            </div>
+            <div style={{ fontSize:12, color:C.textMuted, marginBottom:20, paddingLeft:2 }}>この操作は取り消せません。</div>
+            <div style={{ display:"flex", gap:10 }}>
+              <button
+                onClick={() => setDeleteModal(null)}
+                style={{ flex:1, padding:"13px 0", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:15, fontWeight:700, cursor:"pointer" }}
+              >キャンセル</button>
+              <button
+                onClick={() => { deleteModal.onConfirm(); setDeleteModal(null); }}
+                style={{ flex:1, padding:"13px 0", borderRadius:10, border:"none", background:C.danger, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+              ><Trash2 size={15} strokeWidth={2} />削除する</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* トースト */}
       {toast && (
         <div style={{
           position:"fixed", bottom:90, left:"50%", transform:"translateX(-50%)",
           background: toast.type === "err" ? C.danger : C.primary,
-          color:"#fff", padding:"10px 20px", borderRadius:16, fontSize:13, fontWeight:600,
+          color:"#fff", padding:"10px 14px 10px 18px", borderRadius:16, fontSize:13, fontWeight:600,
           zIndex:999, maxWidth:"calc(100vw - 32px)", wordBreak:"break-all" as const, boxShadow:"0 4px 16px rgba(0,0,0,0.2)",
           display:"flex", alignItems:"center", gap:8,
         }}>
           {toast.type === "err"
-            ? <AlertCircle size={15} strokeWidth={2} />
-            : <Wind size={15} strokeWidth={2} />}
-          {toast.msg}
+            ? <AlertCircle size={15} strokeWidth={2} style={{ flexShrink:0 }} />
+            : <Wind size={15} strokeWidth={2} style={{ flexShrink:0 }} />}
+          <span style={{ flex:1 }}>{toast.msg}</span>
+          <button onClick={() => setToast(null)} style={{ background:"rgba(255,255,255,0.22)", border:"none", borderRadius:8, padding:"3px 7px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", flexShrink:0, marginLeft:4 }}>
+            <X size={13} strokeWidth={2.5} />
+          </button>
         </div>
       )}
     </div>
