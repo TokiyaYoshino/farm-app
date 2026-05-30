@@ -1501,7 +1501,7 @@ export default function App() {
                         <YAxis tick={{ fontSize:10, fill:C.textMuted }} axisLine={false} tickLine={false} />
                         <Tooltip
                           contentStyle={{ fontSize:12, borderRadius:8, border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(0,0,0,0.1)" }}
-                          formatter={(v) => [`${Number(v)}kg`, "収穫量"]}
+                          formatter={(v: unknown) => [`${Number(v)}kg`, "収穫量"]}
                         />
                         <Bar dataKey="total" radius={[6,6,0,0]} maxBarSize={44}>
                           {chartData.map((_,i) => <Cell key={i} fill={C.primary} />)}
