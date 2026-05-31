@@ -11,7 +11,7 @@ import {
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
   LeafyGreen, Grape, Apple, MoreVertical,
-  ChevronLeft, BarChart2, Plus,
+  ChevronLeft, BarChart2, Plus, FlaskConical,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -87,11 +87,16 @@ interface Crop   { id: number; name: string; start_date: string; last_work_date?
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
 interface Session { id: number; user_id: number; field_id: number | null; started_at: string; voice_memo: string; }
+interface Pesticide {
+  id: string; org: string; name: string; type: string;
+  dilution_rate: string; notes: string; created_at: string;
+}
 interface Report {
   id: number; user_id: number; crop_id: number; field: string; date: string;
   work_type: string; quantity: string; work_time: string; note: string;
   image_url: string; weather: string; weather_icon: string; temp: string;
   humidity: string; rain: string;
+  pesticide_id?: string; pesticide_amount?: string;
 }
 interface WeatherInfo {
   label: string;
@@ -158,6 +163,8 @@ export default function App() {
   const [fields, setFields]               = useState<Field[]>([]);
   const [reports, setReports]             = useState<Report[]>([]);
   const [schedules, setSchedules]          = useState<Schedule[]>([]);
+  const [pesticides, setPesticides]       = useState<Pesticide[]>([]);
+  const [pForm, setPForm]                 = useState({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
   const [currentUser, setCurrentUser]     = useState<User | null>(null);
   const [showUserPicker, setShowUserPicker] = useState(false);
   const [toast, setToast]                 = useState<{ msg: string; type: "ok"|"err" } | null>(null);
@@ -165,7 +172,7 @@ export default function App() {
   const [wxLoading, setWxLoading]         = useState(true);
   const [wxAuto, setWxAuto]               = useState<WeatherInfo | null>(null);
   const [wxManual, setWxManual]           = useState<WeatherInfo>({ label:"晴れ", Icon:Sun, temp:"" });
-  const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", note:"" });
+  const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", note:"", pesticide_id:"", pesticide_amount:"" });
   const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10) });
   const [fForm, setFForm]                 = useState({ name:"" });
   const [cropListTab, setCropListTab]     = useState<"crops"|"fields">("crops");
@@ -232,7 +239,7 @@ export default function App() {
 
       // org でフィルタしてデータ取得
       const orgUserIds = userList.filter(x => x.org === org).map(u => u.id);
-      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }] = await Promise.all([
+      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }] = await Promise.all([
         supabase.from("crops").select("*").eq("org", org).order("id"),
         supabase.from("fields").select("*").eq("org", org).order("id"),
         supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
@@ -240,6 +247,7 @@ export default function App() {
         orgUserIds.length > 0
           ? supabase.from("schedules").select("*").in("user_id", orgUserIds).order("date")
           : Promise.resolve({ data: null as any, error: null }),
+        supabase.from("pesticides").select("*").eq("org", org).order("name"),
       ]);
       if (cErr)  console.error("crops fetch error:",   cErr);
       if (fdErr) console.error("fields fetch error:",  fdErr);
@@ -254,6 +262,7 @@ export default function App() {
       if (fd) { setFields(fd as Field[]); setRForm(f => ({ ...f, field: (fd[0] as Field)?.name || "" })); }
       if (r)  setReports(r as Report[]);
       if (sch) setSchedules(sch as Schedule[]);
+      if (ps) setPesticides(ps as Pesticide[]);
       setLoading(false);
       } catch (e) {
         console.error("Startup error:", e);
@@ -429,6 +438,8 @@ export default function App() {
       temp:         w?.temp     ? String(w.temp)     : "",
       humidity:     w?.humidity !== undefined ? String(w.humidity) : "",
       rain:         w?.rain     !== undefined ? String(w.rain)     : "",
+      pesticide_id:     rForm.pesticide_id     || null,
+      pesticide_amount: rForm.pesticide_amount || null,
     }]).select();
     setImgUploading(false);
     if (error) return showToast("登録に失敗しました", "err");
@@ -654,6 +665,25 @@ export default function App() {
       if (error) { console.error("deleteField error:", error); return showToast(error.message, "err"); }
       setFields(p => p.filter(f => f.id !== id));
       showToast("圃場を削除しました");
+    });
+
+  const addPesticide = async () => {
+    if (!pForm.name.trim()) return;
+    setSubmitting(true);
+    const { data, error } = await supabase.from("pesticides").insert([{ ...pForm, org: currentOrg }]).select();
+    setSubmitting(false);
+    if (error) { console.error("addPesticide error:", error); return showToast(error.message, "err"); }
+    if (data) setPesticides(p => [...p, data[0] as Pesticide].sort((a, b) => a.name.localeCompare(b.name)));
+    setPForm({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
+    showToast("農薬を追加しました");
+  };
+
+  const deletePesticide = (id: string) =>
+    confirmDelete("この農薬を削除しますか？", async () => {
+      const { error } = await supabase.from("pesticides").delete().eq("id", id);
+      if (error) { console.error("deletePesticide error:", error); return showToast(error.message, "err"); }
+      setPesticides(p => p.filter(x => x.id !== id));
+      showToast("農薬を削除しました");
     });
 
   const addSchedule = async (date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string): Promise<boolean> => {
@@ -958,6 +988,18 @@ export default function App() {
                 <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>管理・追加・編集</div>
               </div>
             </button>
+            <button
+              onClick={() => setTab("pesticides")}
+              style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 12px", cursor:"pointer", display:"flex", alignItems:"center", gap:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", textAlign:"left" as const }}
+            >
+              <div style={{ background:"#f3e5f5", borderRadius:10, padding:8, flexShrink:0 }}>
+                <FlaskConical size={18} color="#7b1fa2" strokeWidth={1.8} />
+              </div>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>農薬管理</div>
+                <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>登録・追加・削除</div>
+              </div>
+            </button>
           </div>
 
           <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />作物サマリー</div>
@@ -1068,6 +1110,7 @@ export default function App() {
                 <span style={{ color:C.textSub, fontWeight:600 }}>{r.work_type}</span>
                 {r.quantity  && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><PackageCheck size={11} strokeWidth={2}/>{r.quantity}kg</span>}
                 {r.work_time && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span>}
+                {r.pesticide_id && (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? <span style={{ color:"#7b1fa2", display:"flex", alignItems:"center", gap:3, background:"#f3e5f5", borderRadius:6, padding:"1px 7px", fontWeight:600 }}><FlaskConical size={10} strokeWidth={2}/>{ps.name}{r.pesticide_amount ? ` ${r.pesticide_amount}` : ""}</span> : null; })()}
               </div>
               <div style={{ ...S.row, marginTop:8 }}>
                 <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2}/>{userName(r.user_id)}</span>
@@ -1280,6 +1323,18 @@ export default function App() {
               </label>
             )}
 
+            <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬（任意）</div>
+            <select style={S.select} value={rForm.pesticide_id} onChange={e => setRForm(f => ({ ...f, pesticide_id:e.target.value, pesticide_amount: e.target.value ? f.pesticide_amount : "" }))}>
+              <option value="">使用しない</option>
+              {pesticides.map(p => <option key={p.id} value={p.id}>{p.name}（{p.type}）</option>)}
+            </select>
+            {rForm.pesticide_id && (
+              <>
+                <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />使用量</div>
+                <input style={S.input} placeholder="例: 100ml、1L など" value={rForm.pesticide_amount} onChange={e => setRForm(f => ({ ...f, pesticide_amount:e.target.value }))} />
+              </>
+            )}
+
             <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
             <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
 
@@ -1289,6 +1344,79 @@ export default function App() {
                 : <><ClipboardList size={16} strokeWidth={2} />報告を登録する</>}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ───── PESTICIDES ───── */}
+      {tab === "pesticides" && (
+        <div style={S.page}>
+          <button onClick={() => setTab("home")} style={{ display:"flex", alignItems:"center", gap:4, background:"none", border:"none", cursor:"pointer", color:C.primary, fontSize:13, fontWeight:600, marginBottom:8, padding:0 }}>
+            <ChevronLeft size={16} strokeWidth={2.5} />ホームへ戻る
+          </button>
+
+          {isAdmin && (
+            <>
+              <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />農薬を追加</div>
+              <div style={S.card}>
+                <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬名 *</div>
+                <input style={S.input} placeholder="例: スミチオン" value={pForm.name} onChange={e => setPForm(f => ({ ...f, name:e.target.value }))} />
+                <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />種別</div>
+                <select style={S.select} value={pForm.type} onChange={e => setPForm(f => ({ ...f, type:e.target.value }))}>
+                  {["殺虫剤","殺菌剤","除草剤","その他"].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />希釈倍数</div>
+                <input style={S.input} placeholder="例: 1000倍" value={pForm.dilution_rate} onChange={e => setPForm(f => ({ ...f, dilution_rate:e.target.value }))} />
+                <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考</div>
+                <input style={S.input} placeholder="注意事項など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
+                <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addPesticide} disabled={submitting}>
+                  {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />農薬を追加</>}
+                </button>
+              </div>
+            </>
+          )}
+
+          <div style={S.sec}><FlaskConical size={14} strokeWidth={2} />登録農薬</div>
+          {pesticides.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+              <div style={{ background:"#f3e5f5", borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
+                <FlaskConical size={22} color="#7b1fa2" strokeWidth={1.5} />
+              </div>
+              <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>農薬が登録されていません</div>
+              <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+            </div>
+          ) : pesticides.map(p => (
+            <div key={p.id} style={S.card}>
+              <div style={S.row}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
+                  <div style={{ background:"#f3e5f5", borderRadius:10, padding:8, flexShrink:0 }}>
+                    <FlaskConical size={18} color="#7b1fa2" strokeWidth={1.8} />
+                  </div>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{p.name}</div>
+                    <div style={{ display:"flex", gap:6, marginTop:3, flexWrap:"wrap" as const }}>
+                      <span style={{ fontSize:11, background:"#f3e5f5", color:"#7b1fa2", borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{p.type}</span>
+                      {p.dilution_rate && <span style={{ fontSize:11, color:C.textMuted }}>{p.dilution_rate}</span>}
+                    </div>
+                    {p.notes && <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{p.notes}</div>}
+                  </div>
+                </div>
+                {isAdmin && (
+                  <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                    <button onClick={() => setOpenMenuId(openMenuId === `ps${p.id}` ? null : `ps${p.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
+                      <MoreVertical size={18} strokeWidth={2} />
+                    </button>
+                    {openMenuId === `ps${p.id}` && (
+                      <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                        <button onClick={() => { setOpenMenuId(null); deletePesticide(p.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                          <Trash2 size={13} strokeWidth={2} />削除
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
