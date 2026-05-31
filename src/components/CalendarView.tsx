@@ -6,6 +6,7 @@ import {
   PackageCheck, Clock, Leaf, RefreshCw,
   MessageSquare, Send, FlaskConical,
   CloudRain, Droplets, Pencil, Check,
+  ArrowUpDown,
 } from "lucide-react";
 
 export type Schedule = {
@@ -92,6 +93,11 @@ export default function CalendarView({
   const [addingCmt, setAddingCmt]       = useState(false);
   const [editingCmtId, setEditingCmtId] = useState<string | null>(null);
   const [editingText, setEditingText]   = useState("");
+
+  const [currentFilter, setCurrentFilter] = useState<"all"|"reports"|"schedules"|"user">("all");
+  const [filterUserId, setFilterUserId]   = useState<number>(0);
+  const [currentSort, setCurrentSort]     = useState<"date-desc"|"date-asc"|"user"|"work_type">("date-desc");
+  const [showSortMenu, setShowSortMenu]   = useState(false);
 
   const goPrev = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -194,19 +200,60 @@ export default function CalendarView({
     else setAddError("追加に失敗しました。もう一度お試しください。");
   };
 
-  const dayReports   = selectedDate ? (byDateR[selectedDate] ?? []) : [];
-  const daySchedules = selectedDate ? (byDateS[selectedDate] ?? []) : [];
+  const sortReports = (items: ReportRow[]) => [...items].sort((a, b) => {
+    switch (currentSort) {
+      case "date-asc":  return a.id - b.id;
+      case "user":      return userName(a.user_id).localeCompare(userName(b.user_id), "ja");
+      case "work_type": return a.work_type.localeCompare(b.work_type, "ja");
+      default:          return b.id - a.id;
+    }
+  });
+  const sortSchedules = (items: Schedule[]) => [...items].sort((a, b) => {
+    switch (currentSort) {
+      case "date-asc":  return a.created_at.localeCompare(b.created_at);
+      case "user": {
+        const ua = userName(a.assigned_user_id ?? a.user_id);
+        const ub = userName(b.assigned_user_id ?? b.user_id);
+        return ua.localeCompare(ub, "ja");
+      }
+      case "work_type": return (a.work_type || a.title).localeCompare(b.work_type || b.title, "ja");
+      default:          return b.created_at.localeCompare(a.created_at);
+    }
+  });
+
+  const baseReports   = selectedDate ? (byDateR[selectedDate] ?? []) : [];
+  const baseSchedules = selectedDate ? (byDateS[selectedDate] ?? []) : [];
+  const dayReports = sortReports(
+    currentFilter === "schedules" ? [] :
+    currentFilter === "user" && filterUserId ? baseReports.filter(r => r.user_id === filterUserId) :
+    baseReports
+  );
+  const daySchedules = sortSchedules(
+    currentFilter === "reports" ? [] :
+    currentFilter === "user" && filterUserId ? baseSchedules.filter(s => (s.assigned_user_id ?? s.user_id) === filterUserId) :
+    baseSchedules
+  );
   const isEmpty = dayReports.length === 0 && daySchedules.length === 0;
 
   // セル内に表示するイベントリスト（最大2件）
   const cellItems = (date: string | null) => {
     if (!date) return { items: [] as Array<{ type: "r" | "s"; label: string }>, extra: 0 };
     const all: Array<{ type: "r" | "s"; label: string }> = [];
-    (byDateR[date] ?? []).forEach(r => {
+    const rs = (byDateR[date] ?? []).filter(r => {
+      if (currentFilter === "schedules") return false;
+      if (currentFilter === "user" && filterUserId && r.user_id !== filterUserId) return false;
+      return true;
+    });
+    const ss = (byDateS[date] ?? []).filter(s => {
+      if (currentFilter === "reports") return false;
+      if (currentFilter === "user" && filterUserId && (s.assigned_user_id ?? s.user_id) !== filterUserId) return false;
+      return true;
+    });
+    rs.forEach(r => {
       const uname = shortName(users.find(u => u.id === r.user_id)?.name ?? "");
       all.push({ type: "r", label: `${uname} ${r.work_type}` });
     });
-    (byDateS[date] ?? []).forEach(s => {
+    ss.forEach(s => {
       const uid = s.assigned_user_id ?? s.user_id;
       const uname = shortName(users.find(u => u.id === uid)?.name ?? "");
       all.push({ type: "s", label: `${uname} ${s.work_type || s.title}` });
@@ -290,16 +337,78 @@ export default function CalendarView({
           })}
         </div>
 
-        {/* Legend */}
-        <div style={css({ display: "flex", gap: 16, padding: "7px 14px", borderTop: `1px solid ${C.border}`, background: C.bg })}>
-          <span style={css({ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.textMuted })}>
-            <span style={css({ background: C.primary3, border: `1px solid ${C.primary4}`, borderRadius: 3, padding: "1px 5px", fontSize: 9, fontWeight: 700, color: C.primary })}>名前 作業</span>
-            作業報告
-          </span>
-          <span style={css({ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.textMuted })}>
-            <span style={css({ background: C.blueBg, border: `1px solid ${C.blue4}`, borderRadius: 3, padding: "1px 5px", fontSize: 9, fontWeight: 700, color: C.blue })}>名前 予定</span>
-            スケジュール
-          </span>
+        {/* Filter row */}
+        <div style={css({ borderTop: `1px solid ${C.border}`, background: C.bg })}>
+          <div style={css({ display: "flex", alignItems: "center", gap: 5, padding: "7px 10px" })}>
+            {(["all", "reports", "schedules", "user"] as const).map(f => {
+              const label = f === "all" ? "全表示" : f === "reports" ? "報告済み" : f === "schedules" ? "予定一覧" : "担当者別";
+              const active = currentFilter === f;
+              return (
+                <button
+                  key={f}
+                  onClick={() => { setCurrentFilter(f); setShowSortMenu(false); }}
+                  style={css({
+                    padding: "4px 8px", borderRadius: 10, fontSize: 11, fontWeight: active ? 700 : 500,
+                    border: active ? `1.5px solid ${C.primary}` : `1px solid ${C.border}`,
+                    background: active ? C.primary3 : "transparent",
+                    color: active ? C.primary : C.textMuted,
+                    cursor: "pointer", whiteSpace: "nowrap" as const, flexShrink: 0,
+                  })}
+                >
+                  {label}
+                </button>
+              );
+            })}
+            <div style={css({ flex: 1 })} />
+            <button
+              onClick={() => setShowSortMenu(s => !s)}
+              style={css({
+                flexShrink: 0, padding: "4px 7px", borderRadius: 10, fontSize: 11, fontWeight: 500,
+                border: `1px solid ${showSortMenu ? C.primary : C.border}`,
+                background: showSortMenu ? C.primary3 : "transparent",
+                color: showSortMenu ? C.primary : C.textMuted,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 3,
+              })}
+            >
+              <ArrowUpDown size={12} strokeWidth={2} />並替
+            </button>
+          </div>
+          {currentFilter === "user" && (
+            <div style={css({ padding: "0 10px 7px" })}>
+              <select
+                value={filterUserId}
+                onChange={e => setFilterUserId(Number(e.target.value))}
+                style={css({ width: "100%", padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${C.primary4}`, fontSize: 12, background: "#fff", color: C.text, boxSizing: "border-box" })}
+              >
+                <option value={0}>全員</option>
+                {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
+          {showSortMenu && (
+            <div style={css({ padding: "0 10px 7px", display: "flex", gap: 5, flexWrap: "wrap" as const })}>
+              {([
+                { key: "date-desc" as const, label: "新しい順" },
+                { key: "date-asc"  as const, label: "古い順" },
+                { key: "user"      as const, label: "担当者名" },
+                { key: "work_type" as const, label: "作業種別" },
+              ]).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => { setCurrentSort(key); setShowSortMenu(false); }}
+                  style={css({
+                    padding: "4px 9px", borderRadius: 8, fontSize: 11, fontWeight: currentSort === key ? 700 : 400,
+                    border: currentSort === key ? `1.5px solid ${C.primary}` : `1px solid ${C.border}`,
+                    background: currentSort === key ? C.primary3 : "#fff",
+                    color: currentSort === key ? C.primary : C.textSub,
+                    cursor: "pointer",
+                  })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
