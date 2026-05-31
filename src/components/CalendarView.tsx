@@ -5,7 +5,7 @@ import {
   CalendarDays, ClipboardList, UserCircle,
   PackageCheck, Clock, Leaf, RefreshCw,
   MessageSquare, Send, FlaskConical,
-  CloudRain, Droplets,
+  CloudRain, Droplets, Pencil, Check,
 } from "lucide-react";
 
 export type Schedule = {
@@ -50,6 +50,7 @@ interface Props {
   onAddSchedule: (date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string) => Promise<boolean>;
   onLoadComments: (targetType: string, targetId: string) => Promise<Comment[]>;
   onAddComment: (targetType: string, targetId: string, message: string) => Promise<boolean>;
+  onEditComment: (id: string, message: string) => Promise<boolean>;
 }
 
 const C = {
@@ -72,7 +73,7 @@ const shortName = (name: string) => name.slice(0, 2);
 
 export default function CalendarView({
   reports, schedules, crops, users, pesticides, currentUserId,
-  onAddSchedule, onLoadComments, onAddComment,
+  onAddSchedule, onLoadComments, onAddComment, onEditComment,
 }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const [viewYear, setViewYear]   = useState(() => new Date().getFullYear());
@@ -89,6 +90,8 @@ export default function CalendarView({
   const [commentText, setCommentText]   = useState("");
   const [loadingCmts, setLoadingCmts]   = useState(false);
   const [addingCmt, setAddingCmt]       = useState(false);
+  const [editingCmtId, setEditingCmtId] = useState<string | null>(null);
+  const [editingText, setEditingText]   = useState("");
 
   const goPrev = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -166,6 +169,16 @@ export default function CalendarView({
       setCommentText("");
     }
     setAddingCmt(false);
+  };
+
+  const saveEdit = async () => {
+    if (!editingCmtId || !editingText.trim()) return;
+    const ok = await onEditComment(editingCmtId, editingText.trim());
+    if (ok) {
+      setComments(prev => prev.map(c => c.id === editingCmtId ? { ...c, message: editingText.trim() } : c));
+      setEditingCmtId(null);
+      setEditingText("");
+    }
   };
 
   const handleAdd = async () => {
@@ -400,24 +413,59 @@ export default function CalendarView({
                   ) : (
                     comments.map(c => {
                       const isMe = c.user_id === currentUserId;
+                      const isEditing = editingCmtId === c.id;
                       return (
                         <div key={c.id} style={css({ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 8, marginBottom: 10, alignItems: "flex-end" })}>
                           <div style={css({ background: C.bg, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 })}>
                             <UserCircle size={16} color={C.textMuted} strokeWidth={1.8} />
                           </div>
                           <div style={css({ maxWidth: "72%" })}>
-                            <div style={css({ fontSize: 10, color: C.textMuted, marginBottom: 3, textAlign: isMe ? "right" : "left" as const })}>
+                            <div style={css({ fontSize: 10, color: C.textMuted, marginBottom: 3, textAlign: isMe ? "right" : "left" as const, display: "flex", alignItems: "center", justifyContent: isMe ? "flex-end" : "flex-start", gap: 5 })}>
                               {userName(c.user_id)} · {fmtTime(c.created_at)}
+                              {isMe && !isEditing && (
+                                <button
+                                  onClick={() => { setEditingCmtId(c.id); setEditingText(c.message); }}
+                                  style={css({ background: "none", border: "none", cursor: "pointer", padding: "1px 3px", borderRadius: 4, color: C.textMuted, display: "flex", alignItems: "center" })}
+                                >
+                                  <Pencil size={10} strokeWidth={2} />
+                                </button>
+                              )}
                             </div>
-                            <div style={css({
-                              fontSize: 13, padding: "8px 11px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
-                              background: isMe ? C.primary : C.card,
-                              color: isMe ? "#fff" : C.text,
-                              border: isMe ? "none" : `1px solid ${C.border}`,
-                              lineHeight: 1.5,
-                            })}>
-                              {c.message}
-                            </div>
+                            {isEditing ? (
+                              <div style={css({ display: "flex", flexDirection: "column", gap: 5 })}>
+                                <textarea
+                                  autoFocus
+                                  value={editingText}
+                                  onChange={e => setEditingText(e.target.value)}
+                                  style={css({ width: "100%", padding: "8px 10px", borderRadius: 10, border: `1.5px solid ${C.primary4}`, fontSize: 13, lineHeight: 1.5, resize: "none" as const, background: "#fff", color: C.text, minHeight: 60, boxSizing: "border-box" })}
+                                />
+                                <div style={css({ display: "flex", gap: 5, justifyContent: "flex-end" })}>
+                                  <button
+                                    onClick={() => { setEditingCmtId(null); setEditingText(""); }}
+                                    style={css({ padding: "4px 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.bg, color: C.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 })}
+                                  >
+                                    <X size={11} strokeWidth={2} />キャンセル
+                                  </button>
+                                  <button
+                                    onClick={saveEdit}
+                                    disabled={!editingText.trim()}
+                                    style={css({ padding: "4px 10px", borderRadius: 7, border: "none", background: editingText.trim() ? C.primary : C.border, color: editingText.trim() ? "#fff" : C.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 })}
+                                  >
+                                    <Check size={11} strokeWidth={2.5} />保存
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={css({
+                                fontSize: 13, padding: "8px 11px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                                background: isMe ? C.primary : C.card,
+                                color: isMe ? "#fff" : C.text,
+                                border: isMe ? "none" : `1px solid ${C.border}`,
+                                lineHeight: 1.5,
+                              })}>
+                                {c.message}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );

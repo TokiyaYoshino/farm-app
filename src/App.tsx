@@ -722,6 +722,11 @@ export default function App() {
     return !error;
   };
 
+  const editComment = async (id: string, message: string): Promise<boolean> => {
+    const { error } = await supabase.from("comments").update({ message }).eq("id", id);
+    return !error;
+  };
+
   const updateCropDate = async (cropId: number, field: "start_date" | "last_work_date", value: string) => {
     const { error } = await supabase.from("crops").update({ [field]: value || null }).eq("id", cropId);
     if (error) return showToast(error.message, "err");
@@ -1249,6 +1254,7 @@ export default function App() {
             onAddSchedule={addSchedule}
             onLoadComments={loadComments}
             onAddComment={addComment}
+            onEditComment={editComment}
           />
           <div style={S.sec}><PenLine size={14} strokeWidth={2} />作業報告を登録</div>
 
