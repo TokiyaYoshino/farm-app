@@ -786,15 +786,13 @@ export default function App() {
   // ─── 権限ヘルパー（取得できない場合は worker として扱う）────
   const isAdmin = (currentUser?.role ?? "worker") === "admin";
 
-  // worker が管理タブを直接開いていたらホームへ
-  if (!isAdmin && tab === "users") setTab("home");
+  // 非表示タブにいたらホームへ
+  if (tab === "crops" || tab === "users") setTab("home");
 
   const navItems = [
-    { key:"home",   Icon:Home,    label:"ホーム" },
-    { key:"map",    Icon:MapIcon, label:"マップ" },
-    { key:"report", Icon:PenLine, label:"報告" },
-    { key:"crops",  Icon:Sprout,  label:"作物" },
-    ...(isAdmin ? [{ key:"users", Icon:Users, label:"管理" }] : []),
+    { key:"home",    Icon:Home,     label:"ホーム" },
+    { key:"map",     Icon:MapIcon,  label:"マップ" },
+    { key:"report",  Icon:BarChart2, label:"レポート" },
   ];
 
   // ─── Auth ゲート ─────────────────────────────────────────
@@ -961,10 +959,7 @@ export default function App() {
                 <Sprout size={22} color={C.primary} strokeWidth={1.5} />
               </div>
               <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>作物が登録されていません</div>
-              <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>作物タブから追加してください</div>
-              <button style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", border:"none", borderRadius:10, padding:"9px 20px", fontSize:13, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={() => setTab("crops")}>
-                <PlusCircle size={14} strokeWidth={2} />作物を追加
-              </button>
+              <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>管理者に作物の登録を依頼してください</div>
             </div>
           ) : cropStats.map(c => {
             const expanded = expandedCrops.has(c.id);
