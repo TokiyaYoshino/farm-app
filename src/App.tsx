@@ -87,9 +87,15 @@ interface Crop   { id: number; name: string; start_date: string; last_work_date?
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
 interface Session { id: number; user_id: number; field_id: number | null; started_at: string; voice_memo: string; }
+interface PesticideMaster {
+  id: string; reg_no: string; name: string; type: string | null;
+  company: string | null; dilution_rate: string | null;
+  target_crop: string | null; target_pest: string | null; is_active: boolean;
+}
 interface Pesticide {
   id: string; org: string; name: string; type: string;
   dilution_rate: string; notes: string; created_at: string;
+  master_id?: string;
 }
 interface Report {
   id: number; user_id: number; crop_id: number; field: string; date: string;
@@ -165,6 +171,12 @@ export default function App() {
   const [schedules, setSchedules]          = useState<Schedule[]>([]);
   const [pesticides, setPesticides]       = useState<Pesticide[]>([]);
   const [pForm, setPForm]                 = useState({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
+  const [pManualMode, setPManualMode]     = useState(false);
+  const [masterSearch, setMasterSearch]   = useState("");
+  const [masterResults, setMasterResults] = useState<PesticideMaster[]>([]);
+  const [masterSearching, setMasterSearching] = useState(false);
+  const [selectedMaster, setSelectedMaster]   = useState<PesticideMaster | null>(null);
+  const masterTimerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [currentUser, setCurrentUser]     = useState<User | null>(null);
   const [showUserPicker, setShowUserPicker] = useState(false);
   const [toast, setToast]                 = useState<{ msg: string; type: "ok"|"err" } | null>(null);
@@ -667,14 +679,47 @@ export default function App() {
       showToast("圃場を削除しました");
     });
 
+  const searchPesticideMaster = async (q: string) => {
+    if (!q.trim()) { setMasterResults([]); setMasterSearching(false); return; }
+    setMasterSearching(true);
+    const { data } = await supabase.from("pesticides_master")
+      .select("*").eq("is_active", true).ilike("name", `%${q}%`).limit(10);
+    setMasterResults((data ?? []) as PesticideMaster[]);
+    setMasterSearching(false);
+  };
+
+  const handleMasterSearchChange = (q: string) => {
+    setMasterSearch(q);
+    setSelectedMaster(null);
+    if (masterTimerRef.current) clearTimeout(masterTimerRef.current);
+    masterTimerRef.current = setTimeout(() => searchPesticideMaster(q), 300);
+  };
+
+  const selectMaster = (m: PesticideMaster) => {
+    setSelectedMaster(m);
+    setPForm(f => ({ ...f, name: m.name, type: m.type || "その他", dilution_rate: m.dilution_rate || "" }));
+    setMasterSearch(m.name);
+    setMasterResults([]);
+  };
+
+  const resetPesticideForm = () => {
+    setPForm({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
+    setMasterSearch("");
+    setMasterResults([]);
+    setSelectedMaster(null);
+  };
+
   const addPesticide = async () => {
     if (!pForm.name.trim()) return;
     setSubmitting(true);
-    const { data, error } = await supabase.from("pesticides").insert([{ ...pForm, org: currentOrg }]).select();
+    const { data, error } = await supabase.from("pesticides").insert([{
+      ...pForm, org: currentOrg,
+      master_id: selectedMaster?.id || null,
+    }]).select();
     setSubmitting(false);
     if (error) { console.error("addPesticide error:", error); return showToast(error.message, "err"); }
     if (data) setPesticides(p => [...p, data[0] as Pesticide].sort((a, b) => a.name.localeCompare(b.name)));
-    setPForm({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
+    resetPesticideForm();
     showToast("農薬を追加しました");
   };
 
@@ -1383,19 +1428,98 @@ export default function App() {
             <>
               <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />農薬を追加</div>
               <div style={S.card}>
-                <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬名 *</div>
-                <input style={S.input} placeholder="例: スミチオン" value={pForm.name} onChange={e => setPForm(f => ({ ...f, name:e.target.value }))} />
-                <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />種別</div>
-                <select style={S.select} value={pForm.type} onChange={e => setPForm(f => ({ ...f, type:e.target.value }))}>
-                  {["殺虫剤","殺菌剤","除草剤","その他"].map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />希釈倍数</div>
-                <input style={S.input} placeholder="例: 1000倍" value={pForm.dilution_rate} onChange={e => setPForm(f => ({ ...f, dilution_rate:e.target.value }))} />
-                <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考</div>
-                <input style={S.input} placeholder="注意事項など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
-                <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addPesticide} disabled={submitting}>
-                  {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />農薬を追加</>}
-                </button>
+                {!pManualMode ? (
+                  <>
+                    {/* マスタ検索モード */}
+                    <div style={S.lbl}><Search size={13} strokeWidth={2} />農薬名で検索（マスタから選択）</div>
+                    <div style={{ position:"relative", marginBottom:12 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <input
+                          style={{ ...S.input, marginBottom:0, flex:1 }}
+                          placeholder="例: スミチオン、ラウンドアップ..."
+                          value={masterSearch}
+                          onChange={e => handleMasterSearchChange(e.target.value)}
+                          autoComplete="off"
+                        />
+                        {masterSearching && <RefreshCw size={14} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />}
+                      </div>
+                      {masterResults.length > 0 && (
+                        <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, background:C.card, border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", marginTop:4, overflow:"hidden" }}>
+                          {masterResults.map(m => (
+                            <button
+                              key={m.id}
+                              onClick={() => selectMaster(m)}
+                              style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", borderBottom:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" as const, display:"flex", flexDirection:"column" as const, gap:2 }}
+                            >
+                              <span style={{ fontWeight:700, fontSize:13, color:C.text }}>{m.name}</span>
+                              <div style={{ display:"flex", gap:6 }}>
+                                {m.type && <span style={{ fontSize:11, color:"#7b1fa2", background:"#f3e5f5", borderRadius:5, padding:"1px 6px", fontWeight:600 }}>{m.type}</span>}
+                                {m.dilution_rate && <span style={{ fontSize:11, color:C.textMuted }}>{m.dilution_rate}</span>}
+                                {m.company && <span style={{ fontSize:11, color:C.textMuted }}>{m.company}</span>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {selectedMaster && (
+                      <div style={{ background:C.primary3, borderRadius:10, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:8 }}>
+                        <FlaskConical size={14} color={C.primary} strokeWidth={2} />
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{selectedMaster.name}</div>
+                          <div style={{ fontSize:11, color:C.textMuted }}>{selectedMaster.type}{selectedMaster.dilution_rate ? ` / ${selectedMaster.dilution_rate}` : ""}</div>
+                        </div>
+                        <span style={{ fontSize:11, background:C.primary4, color:C.primary, borderRadius:5, padding:"1px 7px", fontWeight:700 }}>マスタ</span>
+                      </div>
+                    )}
+                    {/* 備考（マスタ選択後も入力可） */}
+                    {selectedMaster && (
+                      <>
+                        <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考（任意）</div>
+                        <input style={S.input} placeholder="使用上の注意など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
+                      </>
+                    )}
+                    <button
+                      style={{ ...S.btn, opacity:(!selectedMaster || submitting)?0.5:1 }}
+                      onClick={addPesticide}
+                      disabled={!selectedMaster || submitting}
+                    >
+                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />農薬を追加</>}
+                    </button>
+                    <button
+                      onClick={() => { setPManualMode(true); resetPesticideForm(); }}
+                      style={{ width:"100%", padding:"8px 0", background:"none", border:"none", cursor:"pointer", fontSize:12, color:C.textMuted, textDecoration:"underline", marginTop:4 }}
+                    >
+                      マスタにない農薬を手動で追加
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {/* 手動入力モード */}
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:C.textSub }}>手動入力モード</div>
+                      <button
+                        onClick={() => { setPManualMode(false); resetPesticideForm(); }}
+                        style={{ fontSize:12, color:C.primary, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}
+                      >
+                        マスタから検索に戻る
+                      </button>
+                    </div>
+                    <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬名 *</div>
+                    <input style={S.input} placeholder="例: スミチオン" value={pForm.name} onChange={e => setPForm(f => ({ ...f, name:e.target.value }))} />
+                    <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />種別</div>
+                    <select style={S.select} value={pForm.type} onChange={e => setPForm(f => ({ ...f, type:e.target.value }))}>
+                      {["殺虫剤","殺菌剤","除草剤","その他"].map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />希釈倍数</div>
+                    <input style={S.input} placeholder="例: 1000倍" value={pForm.dilution_rate} onChange={e => setPForm(f => ({ ...f, dilution_rate:e.target.value }))} />
+                    <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考</div>
+                    <input style={S.input} placeholder="注意事項など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
+                    <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addPesticide} disabled={submitting}>
+                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />農薬を追加</>}
+                    </button>
+                  </>
+                )}
               </div>
             </>
           )}
@@ -1417,7 +1541,10 @@ export default function App() {
                     <FlaskConical size={18} color="#7b1fa2" strokeWidth={1.8} />
                   </div>
                   <div style={{ minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{p.name}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontWeight:700, fontSize:15, color:C.text }}>{p.name}</span>
+                      {p.master_id && <span style={{ fontSize:10, background:C.primary4, color:C.primary, borderRadius:5, padding:"1px 6px", fontWeight:700, flexShrink:0 }}>マスタ</span>}
+                    </div>
                     <div style={{ display:"flex", gap:6, marginTop:3, flexWrap:"wrap" as const }}>
                       <span style={{ fontSize:11, background:"#f3e5f5", color:"#7b1fa2", borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{p.type}</span>
                       {p.dilution_rate && <span style={{ fontSize:11, color:C.textMuted }}>{p.dilution_rate}</span>}
