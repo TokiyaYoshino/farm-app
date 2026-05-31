@@ -1444,7 +1444,7 @@ export default function App() {
                         {masterSearching && <RefreshCw size={14} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />}
                       </div>
                       {masterResults.length > 0 && (
-                        <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, background:C.card, border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", marginTop:4, overflow:"hidden" }}>
+                        <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, background:C.card, border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", marginTop:4, maxHeight:220, overflowY:"auto" }}>
                           {masterResults.map(m => (
                             <button
                               key={m.id}
@@ -1469,7 +1469,6 @@ export default function App() {
                           <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{selectedMaster.name}</div>
                           <div style={{ fontSize:11, color:C.textMuted }}>{selectedMaster.type}{selectedMaster.dilution_rate ? ` / ${selectedMaster.dilution_rate}` : ""}</div>
                         </div>
-                        <span style={{ fontSize:11, background:C.primary4, color:C.primary, borderRadius:5, padding:"1px 7px", fontWeight:700 }}>マスタ</span>
                       </div>
                     )}
                     {/* 備考（マスタ選択後も入力可） */}
@@ -1543,7 +1542,6 @@ export default function App() {
                   <div style={{ minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <span style={{ fontWeight:700, fontSize:15, color:C.text }}>{p.name}</span>
-                      {p.master_id && <span style={{ fontSize:10, background:C.primary4, color:C.primary, borderRadius:5, padding:"1px 6px", fontWeight:700, flexShrink:0 }}>マスタ</span>}
                     </div>
                     <div style={{ display:"flex", gap:6, marginTop:3, flexWrap:"wrap" as const }}>
                       <span style={{ fontSize:11, background:"#f3e5f5", color:"#7b1fa2", borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{p.type}</span>
