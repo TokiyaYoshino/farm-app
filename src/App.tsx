@@ -1431,7 +1431,7 @@ export default function App() {
                 {!pManualMode ? (
                   <>
                     {/* マスタ検索モード */}
-                    <div style={S.lbl}><Search size={13} strokeWidth={2} />農薬名で検索（マスタから選択）</div>
+                    <div style={S.lbl}><Search size={13} strokeWidth={2} />農薬名で検索</div>
                     <div style={{ position:"relative", marginBottom:12 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <input
@@ -1489,7 +1489,7 @@ export default function App() {
                       onClick={() => { setPManualMode(true); resetPesticideForm(); }}
                       style={{ width:"100%", padding:"8px 0", background:"none", border:"none", cursor:"pointer", fontSize:12, color:C.textMuted, textDecoration:"underline", marginTop:4 }}
                     >
-                      マスタにない農薬を手動で追加
+                      検索に出てこない農薬を手動で追加
                     </button>
                   </>
                 ) : (
@@ -1501,7 +1501,7 @@ export default function App() {
                         onClick={() => { setPManualMode(false); resetPesticideForm(); }}
                         style={{ fontSize:12, color:C.primary, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}
                       >
-                        マスタから検索に戻る
+                        検索から選ぶ
                       </button>
                     </div>
                     <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬名 *</div>
