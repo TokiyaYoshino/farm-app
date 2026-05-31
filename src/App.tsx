@@ -894,13 +894,6 @@ export default function App() {
       {/* ───── HOME ───── */}
       {tab === "home" && (
         <div style={S.page}>
-          <CalendarView
-            reports={reports}
-            schedules={schedules}
-            crops={crops}
-            users={users}
-            onAddSchedule={addSchedule}
-          />
           {/* サマリーカード横スクロール */}
           <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4, marginBottom:4, scrollSnapType:"x mandatory", WebkitOverflowScrolling:"touch" as any, msOverflowStyle:"none" as any, scrollbarWidth:"none" as any }}>
             {/* 天気カード */}
@@ -1172,6 +1165,13 @@ export default function App() {
       {/* ───── REPORT ───── */}
       {tab === "report" && (
         <div style={S.page}>
+          <CalendarView
+            reports={reports}
+            schedules={schedules}
+            crops={crops}
+            users={users}
+            onAddSchedule={addSchedule}
+          />
           <div style={S.sec}><PenLine size={14} strokeWidth={2} />作業報告を登録</div>
 
           <div style={S.wxBox}>
