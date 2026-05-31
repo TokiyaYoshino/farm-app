@@ -1496,7 +1496,7 @@ export default function App() {
                   <>
                     {/* 手動入力モード */}
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                      <div style={{ fontSize:12, fontWeight:700, color:C.textSub }}>手動入力モード</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:C.textSub }}>自分で入力する</div>
                       <button
                         onClick={() => { setPManualMode(false); resetPesticideForm(); }}
                         style={{ fontSize:12, color:C.primary, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}
