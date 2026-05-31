@@ -11,7 +11,7 @@ import {
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
   LeafyGreen, Grape, Apple, MoreVertical,
-  ChevronLeft, BarChart2,
+  ChevronLeft, BarChart2, Plus,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -874,19 +874,22 @@ export default function App() {
       {/* ヘッダー */}
       <div style={S.header}>
         <div style={S.headerTitle}>
-          <Wheat size={17} strokeWidth={1.8} />
+          <Leaf size={17} strokeWidth={1.8} />
           農作業レポート
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:6, flex:"0 0 auto", flexShrink:0 }}>
+          <button
+            onClick={() => setTab("report")}
+            style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", borderRadius:20, padding:"5px 11px 5px 8px", border:"none", cursor:"pointer", color:C.primary, fontWeight:700, fontSize:13, flexShrink:0 }}
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            作業記録
+          </button>
           {currentUser && (
-            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 10px 4px 7px", border:"none", cursor:"pointer", color:"#fff", maxWidth:160, overflow:"hidden" }}>
-              <UserCircle size={14} strokeWidth={1.8} style={{ flexShrink:0 }} />
-              <span style={{ fontSize:12, fontWeight:600, whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis", maxWidth:120 }}>{currentUser.name}</span>
+            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", padding:"5px 7px", background:"rgba(255,255,255,0.15)", borderRadius:20, border:"none", cursor:"pointer", color:"#fff", flexShrink:0 }}>
+              <UserCircle size={18} strokeWidth={1.8} />
             </button>
           )}
-          <button onClick={handleLogout} style={{ display:"flex", alignItems:"center", padding:"4px 8px", background:"rgba(255,255,255,0.15)", border:"none", borderRadius:20, cursor:"pointer", color:"#fff", flexShrink:0 }}>
-            <LogOut size={15} strokeWidth={2} />
-          </button>
         </div>
       </div>
 
@@ -1713,6 +1716,13 @@ export default function App() {
                 {currentUser?.id === u.id && <span style={{ fontSize:12, color:C.primary, fontWeight:700 }}>✓</span>}
               </button>
             ))}
+            <button
+              onClick={() => { setShowUserPicker(false); handleLogout(); }}
+              style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", marginTop:8, borderRadius:12, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:700, cursor:"pointer" }}
+            >
+              <LogOut size={15} strokeWidth={2} />
+              ログアウト
+            </button>
           </div>
         </div>
       )}
