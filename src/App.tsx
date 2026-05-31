@@ -11,7 +11,7 @@ import {
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
   LeafyGreen, Grape, Apple, MoreVertical,
-  ChevronLeft, BarChart2, Plus, FlaskConical,
+  ChevronLeft, BarChart2, Plus, FlaskConical, Settings,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -211,6 +211,10 @@ export default function App() {
   const [isListening, setIsListening]     = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const recognitionRef                    = useRef<any>(null);
+  const [showQuickReport, setShowQuickReport] = useState(false);
+  const [quickExpanded, setQuickExpanded]     = useState(false);
+  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
+  const cropExpandedInit                       = useRef(false);
   const [deleteModal, setDeleteModal]     = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
   const [datePickerTarget, setDatePickerTarget] = useState<{ cropId: number; field: "start_date" | "last_work_date"; value: string } | null>(null);
@@ -344,6 +348,16 @@ export default function App() {
   }, [weatherCoords]);
 
 
+
+  // 作物リスト初回ロード時に最終作業日が最新の作物をデフォルト展開
+  useEffect(() => {
+    if (cropExpandedInit.current || crops.length === 0) return;
+    cropExpandedInit.current = true;
+    const best = [...crops].sort((a, b) =>
+      (b.last_work_date || "").localeCompare(a.last_work_date || "")
+    )[0];
+    setExpandedCrops(new Set([best.id]));
+  }, [crops]);
 
   const showToast = (msg: string, type: "ok"|"err" = "ok") => {
     setToast({ msg, type });
@@ -885,9 +899,10 @@ export default function App() {
   if (!isAdmin && tab === "users") setTab("home");
 
   const navItems = [
-    { key:"home",    Icon:Home,     label:"ホーム" },
-    { key:"map",     Icon:MapIcon,  label:"マップ" },
-    { key:"report",  Icon:BarChart2, label:"レポート" },
+    { key:"home",   Icon:Home,     label:"ホーム" },
+    { key:"report", Icon:PenLine,  label:"記録" },
+    { key:"map",    Icon:MapIcon,  label:"圃場" },
+    { key:"manage", Icon:Settings, label:"管理" },
   ];
 
   // ─── Auth ゲート ─────────────────────────────────────────
@@ -972,7 +987,7 @@ export default function App() {
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:6, flex:"0 0 auto", flexShrink:0 }}>
           <button
-            onClick={() => setTab("report")}
+            onClick={() => setShowQuickReport(true)}
             style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", borderRadius:20, padding:"5px 11px 5px 8px", border:"none", cursor:"pointer", color:C.primary, fontWeight:700, fontSize:13, flexShrink:0 }}
           >
             <Plus size={14} strokeWidth={2.5} />
@@ -1037,34 +1052,6 @@ export default function App() {
               </div>
               <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{daysSinceWork !== null ? "日前" : "記録なし"}</div>
             </div>
-          </div>
-
-          {/* 管理カード */}
-          <div style={{ display:"flex", gap:10, marginBottom:4 }}>
-            <button
-              onClick={() => setTab("crops")}
-              style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 12px", cursor:"pointer", display:"flex", alignItems:"center", gap:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", textAlign:"left" as const }}
-            >
-              <div style={{ background:C.primary3, borderRadius:10, padding:8, flexShrink:0 }}>
-                <Sprout size={18} color={C.primary} strokeWidth={1.8} />
-              </div>
-              <div>
-                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>作物・圃場</div>
-                <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>管理・追加・編集</div>
-              </div>
-            </button>
-            <button
-              onClick={() => setTab("pesticides")}
-              style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 12px", cursor:"pointer", display:"flex", alignItems:"center", gap:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", textAlign:"left" as const }}
-            >
-              <div style={{ background:"#f3e5f5", borderRadius:10, padding:8, flexShrink:0 }}>
-                <FlaskConical size={18} color="#7b1fa2" strokeWidth={1.8} />
-              </div>
-              <div>
-                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>農薬管理</div>
-                <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>登録・追加・削除</div>
-              </div>
-            </button>
           </div>
 
           <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />作物サマリー</div>
@@ -1301,128 +1288,12 @@ export default function App() {
             onAddComment={addComment}
             onEditComment={editComment}
           />
-          <div style={S.sec}><PenLine size={14} strokeWidth={2} />作業報告を登録</div>
-
-          <div style={S.wxBox}>
-            <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, color:C.textSub, fontWeight:600 }}>
-              <MapPin size={13} color={C.primary} strokeWidth={2} />
-              {weatherCoords?.name ?? "..."} · 天気（自動入力）
-            </div>
-            {wxLoading
-              ? <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:8, fontSize:13, color:C.textMuted }}><RefreshCw size={14} strokeWidth={2} />取得中...</div>
-              : wxAuto
-              ? <WxBadges wx={wxAuto} />
-              : (
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:8, marginBottom:10, fontSize:12, color:"#d07030" }}>
-                    <AlertCircle size={13} strokeWidth={2} />手動で入力してください
-                  </div>
-                  <div style={{ display:"flex", gap:8 }}>
-                    <select style={{ ...S.select, marginBottom:0, flex:2 }} value={wxManual.label}
-                      onChange={e => { const o = WEATHER_OPTIONS.find(x => x.label === e.target.value) || WEATHER_OPTIONS[0]; setWxManual(f => ({ ...f, label:o.label, Icon:o.icon })); }}>
-                      {WEATHER_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.label}</option>)}
-                    </select>
-                    <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1 }}
-                      value={wxManual.temp} onChange={e => setWxManual(f => ({ ...f, temp:e.target.value }))} />
-                  </div>
-                </div>
-              )}
-          </div>
-
-          <div style={S.card}>
-            <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業の種類</div>
-            <select style={S.select} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
-              {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-
-            <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
-            <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
-
-            <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />作業者</div>
-            <select style={S.select} value={rForm.user_id} onChange={e => setRForm(f => ({ ...f, user_id:Number(e.target.value) }))}>
-              {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-
-            <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物</div>
-            <select style={S.select} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
-              {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-
-            <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場</div>
-            <select style={S.select} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
-              {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
-            </select>
-
-            <div style={{ display:"flex", gap:12 }}>
-              <div style={{ flex:1 }}>
-                <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />収穫量 (kg)</div>
-                <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時間 (h)</div>
-                <input type="number" style={S.input} placeholder="例: 2" value={rForm.work_time} onChange={e => setRForm(f => ({ ...f, work_time:e.target.value }))} />
-              </div>
-            </div>
-
-            <div style={S.lbl}><Camera size={13} strokeWidth={2} />写真</div>
-            <input
-              type="file" id="img-input" accept="image/*"
-              style={{ display:"none" }}
-              onChange={e => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setImageFile(file);
-                setImagePreview(URL.createObjectURL(file));
-                e.target.value = "";
-              }}
-            />
-            {imagePreview ? (
-              <div style={{ position:"relative", marginBottom:12 }}>
-                <img src={imagePreview} alt="preview" style={{ width:"100%", borderRadius:10, maxHeight:220, objectFit:"cover", display:"block" }} />
-                <button
-                  onClick={() => { setImageFile(null); setImagePreview(""); }}
-                  style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.55)", border:"none", borderRadius:20, padding:"5px 10px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600 }}
-                >
-                  <X size={12} strokeWidth={2.5} />削除
-                </button>
-              </div>
-            ) : (
-              <label htmlFor="img-input" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, border:`2px dashed ${C.border}`, borderRadius:10, padding:"24px 0", cursor:"pointer", marginBottom:12, color:C.textMuted, fontSize:13, background:C.bg }}>
-                <Camera size={26} color={C.textMuted} strokeWidth={1.5} />
-                <span>タップして写真を選択</span>
-              </label>
-            )}
-
-            <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬（任意）</div>
-            <select style={S.select} value={rForm.pesticide_id} onChange={e => setRForm(f => ({ ...f, pesticide_id:e.target.value, pesticide_amount: e.target.value ? f.pesticide_amount : "" }))}>
-              <option value="">使用しない</option>
-              {pesticides.map(p => <option key={p.id} value={p.id}>{p.name}（{p.type}）</option>)}
-            </select>
-            {rForm.pesticide_id && (
-              <>
-                <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />使用量</div>
-                <input style={S.input} placeholder="例: 100ml、1L など" value={rForm.pesticide_amount} onChange={e => setRForm(f => ({ ...f, pesticide_amount:e.target.value }))} />
-              </>
-            )}
-
-            <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
-            <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
-
-            <button style={{ ...S.btn, opacity: imgUploading ? 0.7 : 1 }} onClick={addReport} disabled={imgUploading}>
-              {imgUploading
-                ? <><RefreshCw size={16} strokeWidth={2} />アップロード中...</>
-                : <><ClipboardList size={16} strokeWidth={2} />報告を登録する</>}
-            </button>
-          </div>
         </div>
       )}
 
       {/* ───── PESTICIDES ───── */}
       {tab === "pesticides" && (
         <div style={S.page}>
-          <button onClick={() => setTab("home")} style={{ display:"flex", alignItems:"center", gap:4, background:"none", border:"none", cursor:"pointer", color:C.primary, fontSize:13, fontWeight:600, marginBottom:8, padding:0 }}>
-            <ChevronLeft size={16} strokeWidth={2.5} />ホームへ戻る
-          </button>
 
           {isAdmin && (
             <>
@@ -1567,6 +1438,247 @@ export default function App() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ───── MANAGE ───── */}
+      {tab === "manage" && (
+        <div style={S.page}>
+          {/* サブタブ */}
+          <div style={{ display:"flex", background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
+            {(["crops","fields","pesticides"] as const).map(k => (
+              <button key={k} onClick={() => setManageSubTab(k)} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === k ? C.card : "transparent", color: manageSubTab === k ? C.primary : C.textMuted, boxShadow: manageSubTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+                {k === "crops" ? "作物" : k === "fields" ? "圃場" : "農薬"}
+              </button>
+            ))}
+          </div>
+
+          {/* 作物 */}
+          {manageSubTab === "crops" && <>
+            {isAdmin && (
+              <>
+                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />作物を追加</div>
+                <div style={S.card}>
+                  <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
+                  <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
+                  <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
+                  <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
+                  <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
+                    {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
+                  </button>
+                </div>
+              </>
+            )}
+            <div style={S.sec}><Leaf size={14} strokeWidth={2} />登録作物</div>
+            {crops.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><Leaf size={22} color={C.primary} strokeWidth={1.5} /></div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>作物が登録されていません</div>
+                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              </div>
+            ) : crops.map(c => {
+              const ci = getCropIcon(c.name);
+              return (
+                <div key={c.id} style={{ ...S.card, cursor:"pointer" }} onClick={() => setSelectedCropId(c.id)}>
+                  <div style={S.row}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
+                      <div style={{ background:ci.bg, borderRadius:10, padding:8, flexShrink:0 }}><ci.Icon size={18} color={ci.color} strokeWidth={1.8} /></div>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontWeight:700, fontSize:15, color:C.text, whiteSpace:"nowrap" as const }}>{c.name}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2, whiteSpace:"nowrap" as const }}><CalendarDays size={11} strokeWidth={2} />{c.start_date}</div>
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setOpenMenuId(openMenuId === `mc${c.id}` ? null : `mc${c.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
+                          <MoreVertical size={18} strokeWidth={2} />
+                        </button>
+                        {openMenuId === `mc${c.id}` && (
+                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                            <button onClick={() => { setOpenMenuId(null); deleteCrop(c.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                              <Trash2 size={13} strokeWidth={2} />削除
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </>}
+
+          {/* 圃場 */}
+          {manageSubTab === "fields" && <>
+            {isAdmin && (
+              <>
+                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />圃場を追加</div>
+                <div style={S.card}>
+                  <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
+                  <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
+                  <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addField} disabled={submitting}>
+                    {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />圃場を追加</>}
+                  </button>
+                </div>
+              </>
+            )}
+            <div style={S.sec}><MapPin size={14} strokeWidth={2} />登録圃場</div>
+            {fields.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><MapPin size={22} color={C.primary} strokeWidth={1.5} /></div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>圃場が登録されていません</div>
+                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              </div>
+            ) : fields.map(f => (
+              <div key={f.id} style={S.card}>
+                <div style={S.row}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
+                    <div style={{ background: f.lat ? C.primary3 : C.bg, borderRadius:9, padding:7, flexShrink:0 }}>
+                      <MapPin size={16} color={f.lat ? C.primary : C.textMuted} strokeWidth={1.8} />
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" as const }}>{f.name}</div>
+                      <div style={{ fontSize:11, color:C.textMuted, whiteSpace:"nowrap" as const }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div style={{ display:"flex", gap:6, flexShrink:0 }} onClick={e => e.stopPropagation()}>
+                      <button style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }} onClick={() => setFieldLocation(f.id)}>
+                        <Navigation size={12} strokeWidth={2} />現在地
+                      </button>
+                      <div style={{ position:"relative" }}>
+                        <button onClick={() => setOpenMenuId(openMenuId === `mf${f.id}` ? null : `mf${f.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
+                          <MoreVertical size={18} strokeWidth={2} />
+                        </button>
+                        {openMenuId === `mf${f.id}` && (
+                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                            <button onClick={() => { setOpenMenuId(null); deleteField(f.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                              <Trash2 size={13} strokeWidth={2} />削除
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </>}
+
+          {/* 農薬 */}
+          {manageSubTab === "pesticides" && <>
+            {isAdmin && (
+              <>
+                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />農薬を追加</div>
+                <div style={S.card}>
+                  {!pManualMode ? (
+                    <>
+                      <div style={S.lbl}><Search size={13} strokeWidth={2} />農薬名で検索</div>
+                      <div style={{ position:"relative", marginBottom:12 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <input style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: スミチオン、ラウンドアップ..." value={masterSearch} onChange={e => handleMasterSearchChange(e.target.value)} autoComplete="off" />
+                          {masterSearching && <RefreshCw size={14} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />}
+                        </div>
+                        {masterResults.length > 0 && (
+                          <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, background:C.card, border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", marginTop:4, maxHeight:220, overflowY:"auto" }}>
+                            {masterResults.map(m => (
+                              <button key={m.id} onClick={() => selectMaster(m)} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", borderBottom:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" as const, display:"flex", flexDirection:"column" as const, gap:2 }}>
+                                <span style={{ fontWeight:700, fontSize:13, color:C.text }}>{m.name}</span>
+                                <div style={{ display:"flex", gap:6 }}>
+                                  {m.type && <span style={{ fontSize:11, color:"#7b1fa2", background:"#f3e5f5", borderRadius:5, padding:"1px 6px", fontWeight:600 }}>{m.type}</span>}
+                                  {m.dilution_rate && <span style={{ fontSize:11, color:C.textMuted }}>{m.dilution_rate}</span>}
+                                  {m.company && <span style={{ fontSize:11, color:C.textMuted }}>{m.company}</span>}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {selectedMaster && (
+                        <div style={{ background:C.primary3, borderRadius:10, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:8 }}>
+                          <FlaskConical size={14} color={C.primary} strokeWidth={2} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{selectedMaster.name}</div>
+                            <div style={{ fontSize:11, color:C.textMuted }}>{selectedMaster.type}{selectedMaster.dilution_rate ? ` / ${selectedMaster.dilution_rate}` : ""}</div>
+                          </div>
+                        </div>
+                      )}
+                      {selectedMaster && (
+                        <>
+                          <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考（任意）</div>
+                          <input style={S.input} placeholder="使用上の注意など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
+                        </>
+                      )}
+                      <button style={{ ...S.btn, opacity:(!selectedMaster || submitting)?0.5:1 }} onClick={addPesticide} disabled={!selectedMaster || submitting}>
+                        {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />この農薬を登録する</>}
+                      </button>
+                      <button onClick={() => { setPManualMode(true); resetPesticideForm(); }} style={{ width:"100%", padding:"8px 0", background:"none", border:"none", cursor:"pointer", fontSize:12, color:C.textMuted, textDecoration:"underline", marginTop:4 }}>
+                        リストにない農薬を手動で追加
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:C.textSub }}>自分で入力する</div>
+                        <button onClick={() => { setPManualMode(false); resetPesticideForm(); }} style={{ fontSize:12, color:C.primary, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>検索から選ぶ</button>
+                      </div>
+                      <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬名 *</div>
+                      <input style={S.input} placeholder="例: スミチオン" value={pForm.name} onChange={e => setPForm(f => ({ ...f, name:e.target.value }))} />
+                      <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />種別</div>
+                      <select style={S.select} value={pForm.type} onChange={e => setPForm(f => ({ ...f, type:e.target.value }))}>
+                        {["殺虫剤","殺菌剤","除草剤","その他"].map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />希釈倍数</div>
+                      <input style={S.input} placeholder="例: 1000倍" value={pForm.dilution_rate} onChange={e => setPForm(f => ({ ...f, dilution_rate:e.target.value }))} />
+                      <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考</div>
+                      <input style={S.input} placeholder="注意事項など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
+                      <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addPesticide} disabled={submitting}>
+                        {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />この農薬を登録する</>}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+            <div style={S.sec}><FlaskConical size={14} strokeWidth={2} />登録済みの農薬</div>
+            {pesticides.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                <div style={{ background:"#f3e5f5", borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><FlaskConical size={22} color="#7b1fa2" strokeWidth={1.5} /></div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>農薬が登録されていません</div>
+                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              </div>
+            ) : pesticides.map(p => (
+              <div key={p.id} style={S.card}>
+                <div style={S.row}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
+                    <div style={{ background:"#f3e5f5", borderRadius:10, padding:8, flexShrink:0 }}><FlaskConical size={18} color="#7b1fa2" strokeWidth={1.8} /></div>
+                    <div style={{ minWidth:0 }}>
+                      <span style={{ fontWeight:700, fontSize:15, color:C.text }}>{p.name}</span>
+                      <div style={{ display:"flex", gap:6, marginTop:3, flexWrap:"wrap" as const }}>
+                        <span style={{ fontSize:11, background:"#f3e5f5", color:"#7b1fa2", borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{p.type}</span>
+                        {p.dilution_rate && <span style={{ fontSize:11, color:C.textMuted }}>{p.dilution_rate}</span>}
+                      </div>
+                      {p.notes && <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{p.notes}</div>}
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setOpenMenuId(openMenuId === `mp${p.id}` ? null : `mp${p.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
+                        <MoreVertical size={18} strokeWidth={2} />
+                      </button>
+                      {openMenuId === `mp${p.id}` && (
+                        <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                          <button onClick={() => { setOpenMenuId(null); deletePesticide(p.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                            <Trash2 size={13} strokeWidth={2} />削除
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </>}
         </div>
       )}
 
@@ -1950,6 +2062,164 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {/* ───── クイック作業記録モーダル ───── */}
+      {showQuickReport && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:450, display:"flex", alignItems:"flex-end" }}
+          onClick={() => { setShowQuickReport(false); setQuickExpanded(false); }}>
+          <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"90vh", overflowY:"auto", paddingBottom:44 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"12px auto 0" }} />
+
+            {/* ヘッダー */}
+            <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <div style={{ background:C.primary3, borderRadius:10, padding:7, flexShrink:0 }}>
+                  <PenLine size={16} color={C.primary} strokeWidth={2} />
+                </div>
+                <span style={{ fontWeight:700, fontSize:16, color:C.text }}>作業記録</span>
+              </div>
+              <button onClick={() => { setShowQuickReport(false); setQuickExpanded(false); }}
+                style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 8px", cursor:"pointer", display:"flex", color:C.textMuted }}>
+                <X size={16} strokeWidth={2} />
+              </button>
+            </div>
+
+            <div style={{ padding:"0 16px" }}>
+              {/* 天気表示 */}
+              <div style={{ background:"#f0faf0", borderRadius:10, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
+                <div style={{ fontSize:11, color:C.textSub, fontWeight:600, marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
+                  <MapPin size={11} color={C.primary} strokeWidth={2} />{weatherCoords?.name ?? "..."} · 天気（自動入力）
+                </div>
+                {wxLoading
+                  ? <div style={{ fontSize:12, color:C.textMuted }}>取得中...</div>
+                  : wxAuto
+                  ? <WxBadges wx={wxAuto} />
+                  : (
+                    <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                      <select style={{ ...S.select, marginBottom:0, flex:2, fontSize:13, padding:"7px 10px" }} value={wxManual.label}
+                        onChange={e => { const o = WEATHER_OPTIONS.find(x => x.label === e.target.value) || WEATHER_OPTIONS[0]; setWxManual(f => ({ ...f, label:o.label, Icon:o.icon })); }}>
+                        {WEATHER_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.label}</option>)}
+                      </select>
+                      <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1, fontSize:13, padding:"7px 10px" }}
+                        value={wxManual.temp} onChange={e => setWxManual(f => ({ ...f, temp:e.target.value }))} />
+                    </div>
+                  )}
+              </div>
+
+              {/* 日付 */}
+              <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
+              <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
+
+              {/* 作物・圃場 2カラム */}
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物</div>
+                  <select style={{ ...S.select }} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
+                    {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場</div>
+                  <select style={{ ...S.select }} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
+                    {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* 作業種別 */}
+              <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業の種類</div>
+              <select style={S.select} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
+                {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+
+              {/* 詳細アコーディオン */}
+              <button
+                onClick={() => setQuickExpanded(p => !p)}
+                style={{ width:"100%", padding:"10px 0", background:"none", border:"none", cursor:"pointer", fontSize:13, color:C.primary, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:4, marginBottom: quickExpanded ? 8 : 0 }}
+              >
+                {quickExpanded ? "▲ 詳細を閉じる" : "▼ 詳細を入力"}
+              </button>
+
+              {quickExpanded && (
+                <>
+                  {/* 作業者 */}
+                  <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />作業者</div>
+                  <select style={S.select} value={rForm.user_id} onChange={e => setRForm(f => ({ ...f, user_id:Number(e.target.value) }))}>
+                    {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+
+                  {/* 収穫量・作業時間 */}
+                  <div style={{ display:"flex", gap:12 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />収穫量 (kg)</div>
+                      <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時間 (h)</div>
+                      <input type="number" style={S.input} placeholder="例: 2" value={rForm.work_time} onChange={e => setRForm(f => ({ ...f, work_time:e.target.value }))} />
+                    </div>
+                  </div>
+
+                  {/* 写真 */}
+                  <div style={S.lbl}><Camera size={13} strokeWidth={2} />写真</div>
+                  <input type="file" id="img-input-quick" accept="image/*" style={{ display:"none" }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setImageFile(file);
+                      setImagePreview(URL.createObjectURL(file));
+                      e.target.value = "";
+                    }}
+                  />
+                  {imagePreview ? (
+                    <div style={{ position:"relative", marginBottom:12 }}>
+                      <img src={imagePreview} alt="preview" style={{ width:"100%", borderRadius:10, maxHeight:200, objectFit:"cover", display:"block" }} />
+                      <button onClick={() => { setImageFile(null); setImagePreview(""); }}
+                        style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.55)", border:"none", borderRadius:20, padding:"5px 10px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600 }}>
+                        <X size={12} strokeWidth={2.5} />削除
+                      </button>
+                    </div>
+                  ) : (
+                    <label htmlFor="img-input-quick" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, border:`2px dashed ${C.border}`, borderRadius:10, padding:"20px 0", cursor:"pointer", marginBottom:12, color:C.textMuted, fontSize:13, background:C.bg }}>
+                      <Camera size={24} color={C.textMuted} strokeWidth={1.5} />
+                      <span>タップして写真を選択</span>
+                    </label>
+                  )}
+
+                  {/* 農薬 */}
+                  <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬（任意）</div>
+                  <select style={S.select} value={rForm.pesticide_id} onChange={e => setRForm(f => ({ ...f, pesticide_id:e.target.value, pesticide_amount: e.target.value ? f.pesticide_amount : "" }))}>
+                    <option value="">使用しない</option>
+                    {pesticides.map(p => <option key={p.id} value={p.id}>{p.name}（{p.type}）</option>)}
+                  </select>
+                  {rForm.pesticide_id && (
+                    <>
+                      <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />使用量</div>
+                      <input style={S.input} placeholder="例: 100ml、1L など" value={rForm.pesticide_amount} onChange={e => setRForm(f => ({ ...f, pesticide_amount:e.target.value }))} />
+                    </>
+                  )}
+
+                  {/* メモ */}
+                  <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
+                  <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
+                </>
+              )}
+
+              {/* 保存ボタン */}
+              <button
+                style={{ ...S.btn, opacity: imgUploading ? 0.7 : 1, marginTop: 4 }}
+                onClick={async () => { await addReport(); setShowQuickReport(false); setQuickExpanded(false); }}
+                disabled={imgUploading}
+              >
+                {imgUploading
+                  ? <><RefreshCw size={16} strokeWidth={2} />アップロード中...</>
+                  : <><ClipboardList size={16} strokeWidth={2} />すぐ保存する</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ログイン設定モーダル */}
       {setAuthTarget && (
