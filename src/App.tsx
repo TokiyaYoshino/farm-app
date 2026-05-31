@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import CalendarView from "./components/CalendarView";
-import type { Schedule } from "./components/CalendarView";
+import type { Schedule, Comment } from "./components/CalendarView";
 import DatePicker from "./components/DatePicker";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -707,6 +707,21 @@ export default function App() {
     }
   };
 
+  const loadComments = async (targetType: string, targetId: string): Promise<Comment[]> => {
+    const { data } = await supabase.from("comments")
+      .select("*").eq("target_type", targetType).eq("target_id", targetId).order("created_at");
+    return (data ?? []) as Comment[];
+  };
+
+  const addComment = async (targetType: string, targetId: string, message: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    const { error } = await supabase.from("comments").insert([{
+      target_type: targetType, target_id: targetId,
+      user_id: currentUser.id, message,
+    }]);
+    return !error;
+  };
+
   const updateCropDate = async (cropId: number, field: "start_date" | "last_work_date", value: string) => {
     const { error } = await supabase.from("crops").update({ [field]: value || null }).eq("id", cropId);
     if (error) return showToast(error.message, "err");
@@ -1229,7 +1244,11 @@ export default function App() {
             schedules={schedules}
             crops={crops}
             users={users}
+            pesticides={pesticides}
+            currentUserId={currentUser?.id ?? 0}
             onAddSchedule={addSchedule}
+            onLoadComments={loadComments}
+            onAddComment={addComment}
           />
           <div style={S.sec}><PenLine size={14} strokeWidth={2} />作業報告を登録</div>
 
