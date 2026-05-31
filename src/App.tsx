@@ -1431,7 +1431,7 @@ export default function App() {
                 {!pManualMode ? (
                   <>
                     {/* マスタ検索モード */}
-                    <div style={S.lbl}><Search size={13} strokeWidth={2} />農薬名で検索</div>
+                    <div style={S.lbl}><Search size={13} strokeWidth={2} />農薬名で検索して追加</div>
                     <div style={{ position:"relative", marginBottom:12 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <input
@@ -1483,13 +1483,13 @@ export default function App() {
                       onClick={addPesticide}
                       disabled={!selectedMaster || submitting}
                     >
-                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />農薬を追加</>}
+                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />この農薬を登録する</>}
                     </button>
                     <button
                       onClick={() => { setPManualMode(true); resetPesticideForm(); }}
                       style={{ width:"100%", padding:"8px 0", background:"none", border:"none", cursor:"pointer", fontSize:12, color:C.textMuted, textDecoration:"underline", marginTop:4 }}
                     >
-                      検索に出てこない農薬を手動で追加
+                      リストに載っていない農薬を自分で入力する
                     </button>
                   </>
                 ) : (
@@ -1515,7 +1515,7 @@ export default function App() {
                     <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考</div>
                     <input style={S.input} placeholder="注意事項など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addPesticide} disabled={submitting}>
-                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />農薬を追加</>}
+                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />この農薬を登録する</>}
                     </button>
                   </>
                 )}
@@ -1523,7 +1523,7 @@ export default function App() {
             </>
           )}
 
-          <div style={S.sec}><FlaskConical size={14} strokeWidth={2} />登録農薬</div>
+          <div style={S.sec}><FlaskConical size={14} strokeWidth={2} />登録済みの農薬</div>
           {pesticides.length === 0 ? (
             <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
               <div style={{ background:"#f3e5f5", borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
