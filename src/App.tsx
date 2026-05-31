@@ -786,8 +786,8 @@ export default function App() {
   // ─── 権限ヘルパー（取得できない場合は worker として扱う）────
   const isAdmin = (currentUser?.role ?? "worker") === "admin";
 
-  // 非表示タブにいたらホームへ
-  if (tab === "crops" || tab === "users") setTab("home");
+  // workerが管理タブを直接開いていたらホームへ
+  if (!isAdmin && tab === "users") setTab("home");
 
   const navItems = [
     { key:"home",    Icon:Home,     label:"ホーム" },
@@ -942,6 +942,36 @@ export default function App() {
               </div>
               <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{daysSinceWork !== null ? "日前" : "記録なし"}</div>
             </div>
+          </div>
+
+          {/* 管理カード */}
+          <div style={{ display:"flex", gap:10, marginBottom:4 }}>
+            <button
+              onClick={() => setTab("crops")}
+              style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 12px", cursor:"pointer", display:"flex", alignItems:"center", gap:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", textAlign:"left" as const }}
+            >
+              <div style={{ background:C.primary3, borderRadius:10, padding:8, flexShrink:0 }}>
+                <Sprout size={18} color={C.primary} strokeWidth={1.8} />
+              </div>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>作物・圃場</div>
+                <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>管理・追加・編集</div>
+              </div>
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setTab("users")}
+                style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 12px", cursor:"pointer", display:"flex", alignItems:"center", gap:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", textAlign:"left" as const }}
+              >
+                <div style={{ background:"#fff3e0", borderRadius:10, padding:8, flexShrink:0 }}>
+                  <Users size={18} color="#e07020" strokeWidth={1.8} />
+                </div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.text }}>管理者</div>
+                  <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>ユーザー・設定</div>
+                </div>
+              </button>
+            )}
           </div>
 
           <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />作物サマリー</div>
