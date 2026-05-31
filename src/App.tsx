@@ -214,6 +214,9 @@ export default function App() {
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
+  const [inlineOpen, setInlineOpen]           = useState(false);
+  const [inlineMode, setInlineMode]           = useState<null | "schedule" | "report">(null);
+  const [inlineSchedForm, setInlineSchedForm] = useState({ date: new Date().toISOString().slice(0,10), work_type:"収穫", assigned_user_id:0, crop:"", note:"" });
   const cropExpandedInit                       = useRef(false);
   const [deleteModal, setDeleteModal]     = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
@@ -786,6 +789,40 @@ export default function App() {
     return !error;
   };
 
+  const addReportInline = async () => {
+    if (!rForm.date || !rForm.work_type || !currentUser) return;
+    setSubmitting(true);
+    const w = wxAuto || (wxManual.temp ? wxManual : null);
+    const { data, error } = await supabase.from("reports").insert([{
+      ...rForm, image_url: "", org: currentOrg,
+      weather:      w?.label || "",
+      weather_icon: "",
+      temp:         w?.temp     ? String(w.temp)     : "",
+      humidity:     w?.humidity !== undefined ? String(w.humidity) : "",
+      rain:         w?.rain     !== undefined ? String(w.rain)     : "",
+      pesticide_id:     rForm.pesticide_id     || null,
+      pesticide_amount: rForm.pesticide_amount || null,
+    }]).select();
+    setSubmitting(false);
+    if (error) return showToast("登録に失敗しました", "err");
+    if (data) setReports(p => [data[0] as Report, ...p]);
+    setInlineMode(null);
+    setInlineOpen(false);
+    showToast("作業報告を登録しました");
+  };
+
+  const addScheduleInline = async () => {
+    const { date, work_type, assigned_user_id, crop, note } = inlineSchedForm;
+    if (!date || !work_type) return;
+    setSubmitting(true);
+    const ok = await addSchedule(date, work_type, note, crop, assigned_user_id || null, work_type);
+    setSubmitting(false);
+    if (!ok) return showToast("登録に失敗しました", "err");
+    setInlineMode(null);
+    setInlineOpen(false);
+    showToast("予定を登録しました");
+  };
+
   const updateCropDate = async (cropId: number, field: "start_date" | "last_work_date", value: string) => {
     const { error } = await supabase.from("crops").update({ [field]: value || null }).eq("id", cropId);
     if (error) return showToast(error.message, "err");
@@ -1288,6 +1325,157 @@ export default function App() {
             onAddComment={addComment}
             onEditComment={editComment}
           />
+
+          {/* ── 記録を追加エリア ── */}
+          <div style={{ marginBottom:16 }}>
+            {!inlineOpen ? (
+              <button
+                onClick={() => setInlineOpen(true)}
+                style={{ width:"100%", padding:"12px 0", borderRadius:12, border:`2px dashed ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+              >
+                <Plus size={16} strokeWidth={2.5} />記録を追加
+              </button>
+            ) : (
+              <>
+                {/* 2択セレクター */}
+                {!inlineMode && (
+                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:14, padding:14, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                      <span>何を追加しますか？</span>
+                      <button onClick={() => setInlineOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><X size={16} strokeWidth={2} /></button>
+                    </div>
+                    <div style={{ display:"flex", gap:10 }}>
+                      <button
+                        onClick={() => setInlineMode("schedule")}
+                        style={{ flex:1, padding:"14px 8px", borderRadius:12, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}
+                      >
+                        <CalendarDays size={22} color={C.primary} strokeWidth={1.8} />
+                        <span style={{ fontSize:13, fontWeight:700 }}>予定を登録</span>
+                        <span style={{ fontSize:11, color:C.textSub }}>作業スケジュール</span>
+                      </button>
+                      <button
+                        onClick={() => setInlineMode("report")}
+                        style={{ flex:1, padding:"14px 8px", borderRadius:12, border:`1.5px solid ${C.primary4}`, background:"#fff", color:C.text, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}
+                      >
+                        <ClipboardList size={22} color={C.primary} strokeWidth={1.8} />
+                        <span style={{ fontSize:13, fontWeight:700 }}>作業報告</span>
+                        <span style={{ fontSize:11, color:C.textSub }}>実績を記録</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 予定フォーム */}
+                {inlineMode === "schedule" && (
+                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:14, padding:16, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <button onClick={() => setInlineMode(null)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><ChevronLeft size={18} strokeWidth={2.5} /></button>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <CalendarDays size={15} color={C.primary} strokeWidth={2} />
+                          <span style={{ fontWeight:700, fontSize:15, color:C.text }}>予定を登録</span>
+                        </div>
+                      </div>
+                      <button onClick={() => { setInlineOpen(false); setInlineMode(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><X size={16} strokeWidth={2} /></button>
+                    </div>
+
+                    <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
+                    <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={inlineSchedForm.date} onChange={e => setInlineSchedForm(f => ({ ...f, date:e.target.value }))} />
+
+                    <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物（任意）</div>
+                    <select style={S.select} value={inlineSchedForm.crop} onChange={e => setInlineSchedForm(f => ({ ...f, crop:e.target.value }))}>
+                      <option value="">未指定</option>
+                      {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+
+                    <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業種別</div>
+                    <select style={S.select} value={inlineSchedForm.work_type} onChange={e => setInlineSchedForm(f => ({ ...f, work_type:e.target.value }))}>
+                      {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+
+                    <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />担当者</div>
+                    <select style={S.select} value={inlineSchedForm.assigned_user_id} onChange={e => setInlineSchedForm(f => ({ ...f, assigned_user_id:Number(e.target.value) }))}>
+                      <option value={0}>未指定</option>
+                      {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+
+                    <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
+                    <input style={S.input} placeholder="詳細・備考など" value={inlineSchedForm.note} onChange={e => setInlineSchedForm(f => ({ ...f, note:e.target.value }))} />
+
+                    <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addScheduleInline} disabled={submitting}>
+                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />登録中...</> : <><Save size={16} strokeWidth={2} />予定を保存する</>}
+                    </button>
+                  </div>
+                )}
+
+                {/* 作業報告フォーム */}
+                {inlineMode === "report" && (
+                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:14, padding:16, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <button onClick={() => setInlineMode(null)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><ChevronLeft size={18} strokeWidth={2.5} /></button>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <ClipboardList size={15} color={C.primary} strokeWidth={2} />
+                          <span style={{ fontWeight:700, fontSize:15, color:C.text }}>作業報告</span>
+                        </div>
+                      </div>
+                      <button onClick={() => { setInlineOpen(false); setInlineMode(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><X size={16} strokeWidth={2} /></button>
+                    </div>
+
+                    <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
+                    <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
+
+                    <div style={{ display:"flex", gap:10 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物</div>
+                        <select style={S.select} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
+                          {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場</div>
+                        <select style={S.select} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
+                          {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業種別</div>
+                    <select style={S.select} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
+                      {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+
+                    <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />担当者</div>
+                    <select style={S.select} value={rForm.user_id} onChange={e => setRForm(f => ({ ...f, user_id:Number(e.target.value) }))}>
+                      {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+
+                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />実績数量 (kg)</div>
+                    <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
+
+                    <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />使用農薬（任意）</div>
+                    <select style={S.select} value={rForm.pesticide_id} onChange={e => setRForm(f => ({ ...f, pesticide_id:e.target.value, pesticide_amount: e.target.value ? f.pesticide_amount : "" }))}>
+                      <option value="">使用しない</option>
+                      {pesticides.map(p => <option key={p.id} value={p.id}>{p.name}（{p.type}）</option>)}
+                    </select>
+                    {rForm.pesticide_id && (
+                      <>
+                        <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />使用量</div>
+                        <input style={S.input} placeholder="例: 100ml、1L など" value={rForm.pesticide_amount} onChange={e => setRForm(f => ({ ...f, pesticide_amount:e.target.value }))} />
+                      </>
+                    )}
+
+                    <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
+                    <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
+
+                    <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addReportInline} disabled={submitting}>
+                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />登録中...</> : <><ClipboardList size={16} strokeWidth={2} />作業報告を保存する</>}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
