@@ -103,6 +103,8 @@ interface Report {
   image_url: string; weather: string; weather_icon: string; temp: string;
   humidity: string; rain: string;
   pesticide_id?: string; pesticide_amount?: string;
+  pesticides_used?: { id: string; amount: string | null }[];
+  soil_ph?: number | null;
 }
 interface WeatherInfo {
   label: string;
@@ -222,6 +224,9 @@ export default function App() {
   const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
   const [datePickerTarget, setDatePickerTarget] = useState<{ cropId: number; field: "start_date" | "last_work_date"; value: string } | null>(null);
   const [openMenuId, setOpenMenuId]       = useState<string | null>(null);
+  const [selectedPesticides, setSelectedPesticides] = useState<string[]>([]);
+  const [pesticideAmounts, setPesticideAmounts]     = useState<Record<string, string>>({});
+  const [soilPh, setSoilPh]                         = useState("");
   const [submitting, setSubmitting]       = useState(false);
 
   // ─── Auth セッション監視 ──────────────────────────────────
@@ -469,12 +474,19 @@ export default function App() {
       rain:         w?.rain     !== undefined ? String(w.rain)     : "",
       pesticide_id:     rForm.pesticide_id     || null,
       pesticide_amount: rForm.pesticide_amount || null,
+      pesticides_used: selectedPesticides.length > 0
+        ? selectedPesticides.map(id => ({ id, amount: pesticideAmounts[id] || null }))
+        : null,
+      soil_ph: soilPh ? parseFloat(soilPh) : null,
     }]).select();
     setImgUploading(false);
     if (error) return showToast("登録に失敗しました", "err");
     if (data) setReports(p => [data[0] as Report, ...p]);
     setImageFile(null);
     setImagePreview("");
+    setSelectedPesticides([]);
+    setPesticideAmounts({});
+    setSoilPh("");
     showToast("作業報告を登録しました");
     setTab("home");
 
@@ -802,12 +814,19 @@ export default function App() {
       rain:         w?.rain     !== undefined ? String(w.rain)     : "",
       pesticide_id:     rForm.pesticide_id     || null,
       pesticide_amount: rForm.pesticide_amount || null,
+      pesticides_used: selectedPesticides.length > 0
+        ? selectedPesticides.map(id => ({ id, amount: pesticideAmounts[id] || null }))
+        : null,
+      soil_ph: soilPh ? parseFloat(soilPh) : null,
     }]).select();
     setSubmitting(false);
     if (error) return showToast("登録に失敗しました", "err");
     if (data) setReports(p => [data[0] as Report, ...p]);
     setInlineMode(null);
     setInlineOpen(false);
+    setSelectedPesticides([]);
+    setPesticideAmounts({});
+    setSoilPh("");
     showToast("作業報告を登録しました");
   };
 
@@ -1454,16 +1473,48 @@ export default function App() {
                     <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
 
                     <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />使用農薬（任意）</div>
-                    <select style={S.select} value={rForm.pesticide_id} onChange={e => setRForm(f => ({ ...f, pesticide_id:e.target.value, pesticide_amount: e.target.value ? f.pesticide_amount : "" }))}>
-                      <option value="">使用しない</option>
-                      {pesticides.map(p => <option key={p.id} value={p.id}>{p.name}（{p.type}）</option>)}
-                    </select>
-                    {rForm.pesticide_id && (
-                      <>
-                        <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />使用量</div>
-                        <input style={S.input} placeholder="例: 100ml、1L など" value={rForm.pesticide_amount} onChange={e => setRForm(f => ({ ...f, pesticide_amount:e.target.value }))} />
-                      </>
+                    {pesticides.length === 0 ? (
+                      <div style={{ fontSize:12, color:C.textMuted, padding:"8px 12px", background:C.bg, borderRadius:8, marginBottom:12 }}>登録済みの農薬がありません</div>
+                    ) : (
+                      <div style={{ border:`1.5px solid ${C.border}`, borderRadius:10, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
+                        {pesticides.map(p => (
+                          <div key={p.id} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:6, marginBottom:6, lastChild:{ border:"none" } as CSSProperties }}>
+                            <label style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", cursor:"pointer" }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedPesticides.includes(p.id)}
+                                onChange={e => {
+                                  if (e.target.checked) {
+                                    setSelectedPesticides(prev => [...prev, p.id]);
+                                  } else {
+                                    setSelectedPesticides(prev => prev.filter(id => id !== p.id));
+                                    setPesticideAmounts(prev => { const next = { ...prev }; delete next[p.id]; return next; });
+                                  }
+                                }}
+                                style={{ accentColor:C.primary, width:16, height:16, cursor:"pointer", flexShrink:0 }}
+                              />
+                              <span style={{ fontSize:13, color:C.text, fontWeight:500 }}>{p.name}</span>
+                              <span style={{ fontSize:11, color:C.textMuted, background:C.bg, borderRadius:4, padding:"1px 6px", flexShrink:0 }}>{p.type}</span>
+                            </label>
+                            {selectedPesticides.includes(p.id) && (
+                              <input
+                                placeholder="散布量（例: 100ml、1L）"
+                                value={pesticideAmounts[p.id] || ""}
+                                onChange={e => setPesticideAmounts(prev => ({ ...prev, [p.id]: e.target.value }))}
+                                style={{ ...S.input, marginLeft:24, marginBottom:0, width:"calc(100% - 24px)", boxSizing:"border-box" as const, fontSize:13, padding:"8px 12px" }}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
+
+                    <div style={S.lbl}><Droplets size={13} strokeWidth={2} />土壌pH（任意）</div>
+                    <input
+                      type="number" placeholder="例: 6.5" min="0" max="14" step="0.1"
+                      value={soilPh} onChange={e => setSoilPh(e.target.value)}
+                      style={S.input}
+                    />
 
                     <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
                     <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
@@ -2375,18 +2426,51 @@ export default function App() {
                     </label>
                   )}
 
-                  {/* 農薬 */}
-                  <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬（任意）</div>
-                  <select style={S.select} value={rForm.pesticide_id} onChange={e => setRForm(f => ({ ...f, pesticide_id:e.target.value, pesticide_amount: e.target.value ? f.pesticide_amount : "" }))}>
-                    <option value="">使用しない</option>
-                    {pesticides.map(p => <option key={p.id} value={p.id}>{p.name}（{p.type}）</option>)}
-                  </select>
-                  {rForm.pesticide_id && (
-                    <>
-                      <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />使用量</div>
-                      <input style={S.input} placeholder="例: 100ml、1L など" value={rForm.pesticide_amount} onChange={e => setRForm(f => ({ ...f, pesticide_amount:e.target.value }))} />
-                    </>
+                  {/* 農薬複数選択 */}
+                  <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />使用農薬（任意）</div>
+                  {pesticides.length === 0 ? (
+                    <div style={{ fontSize:12, color:C.textMuted, padding:"8px 12px", background:C.bg, borderRadius:8, marginBottom:12 }}>登録済みの農薬がありません</div>
+                  ) : (
+                    <div style={{ border:`1.5px solid ${C.border}`, borderRadius:10, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
+                      {pesticides.map(p => (
+                        <div key={p.id} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:6, marginBottom:6 }}>
+                          <label style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", cursor:"pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedPesticides.includes(p.id)}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setSelectedPesticides(prev => [...prev, p.id]);
+                                } else {
+                                  setSelectedPesticides(prev => prev.filter(id => id !== p.id));
+                                  setPesticideAmounts(prev => { const next = { ...prev }; delete next[p.id]; return next; });
+                                }
+                              }}
+                              style={{ accentColor:C.primary, width:16, height:16, cursor:"pointer", flexShrink:0 }}
+                            />
+                            <span style={{ fontSize:13, color:C.text, fontWeight:500 }}>{p.name}</span>
+                            <span style={{ fontSize:11, color:C.textMuted, background:C.bg, borderRadius:4, padding:"1px 6px", flexShrink:0 }}>{p.type}</span>
+                          </label>
+                          {selectedPesticides.includes(p.id) && (
+                            <input
+                              placeholder="散布量（例: 100ml、1L）"
+                              value={pesticideAmounts[p.id] || ""}
+                              onChange={e => setPesticideAmounts(prev => ({ ...prev, [p.id]: e.target.value }))}
+                              style={{ ...S.input, marginLeft:24, marginBottom:0, width:"calc(100% - 24px)", boxSizing:"border-box" as const, fontSize:13, padding:"8px 12px" }}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
+
+                  {/* 土壌pH */}
+                  <div style={S.lbl}><Droplets size={13} strokeWidth={2} />土壌pH（任意）</div>
+                  <input
+                    type="number" placeholder="例: 6.5" min="0" max="14" step="0.1"
+                    value={soilPh} onChange={e => setSoilPh(e.target.value)}
+                    style={S.input}
+                  />
 
                   {/* メモ */}
                   <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
