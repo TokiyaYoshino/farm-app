@@ -225,6 +225,8 @@ export default function App() {
   const [datePickerTarget, setDatePickerTarget] = useState<{ cropId: number; field: "start_date" | "last_work_date"; value: string } | null>(null);
   const [openMenuId, setOpenMenuId]       = useState<string | null>(null);
   const [chartYear, setChartYear]         = useState(() => new Date().getFullYear());
+  const [editingTargetYield, setEditingTargetYield] = useState(false);
+  const [targetYieldInput, setTargetYieldInput]     = useState("");
   const [selectedPesticides, setSelectedPesticides] = useState<string[]>([]);
   const [pesticideAmounts, setPesticideAmounts]     = useState<Record<string, string>>({});
   const [soilPh, setSoilPh]                         = useState("");
@@ -368,9 +370,11 @@ export default function App() {
     setExpandedCrops(new Set([best.id]));
   }, [crops]);
 
-  // 作物詳細を開くたびに年を今年にリセット
+  // 作物詳細を開くたびに年・編集状態をリセット
   useEffect(() => {
     setChartYear(new Date().getFullYear());
+    setEditingTargetYield(false);
+    setTargetYieldInput("");
   }, [selectedCropId]);
 
   const showToast = (msg: string, type: "ok"|"err" = "ok") => {
@@ -699,6 +703,15 @@ export default function App() {
     setCrops(p => p.filter(c => c.id !== id));
     showToast("作物を削除しました");
   });
+
+  const updateTargetYield = async (cropId: number, value: string) => {
+    const num = value.trim() ? Number(value) : null;
+    const { error } = await supabase.from("crops").update({ target_yield: num }).eq("id", cropId);
+    if (error) return showToast(error.message, "err");
+    setCrops(prev => prev.map(c => c.id === cropId ? { ...c, target_yield: num ?? undefined } : c));
+    setEditingTargetYield(false);
+    showToast("目標収穫量を更新しました");
+  };
 
   const addField = async () => {
     if (!fForm.name.trim()) return;
@@ -2252,23 +2265,52 @@ export default function App() {
                 );
               })()}
 
-              {cropYears.length > 0 && (
+              {/* 目標収穫量 編集行 */}
+              <div style={{ background:C.card, borderRadius:14, padding:"12px 16px", marginBottom:16, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <span style={{ fontSize:12, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
+                    <PackageCheck size={12} strokeWidth={2} />目標収穫量（kg/年）
+                  </span>
+                  {editingTargetYield ? (
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <input
+                        type="number" min="0" placeholder="例: 500" autoFocus
+                        value={targetYieldInput}
+                        onChange={e => setTargetYieldInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && updateTargetYield(crop.id, targetYieldInput)}
+                        style={{ width:100, padding:"5px 9px", borderRadius:8, border:`1.5px solid ${C.primary4}`, fontSize:13, background:"#fff", color:C.text, boxSizing:"border-box" as const }}
+                      />
+                      <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, border:"none", borderRadius:8, padding:"5px 11px", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>保存</button>
+                      <button onClick={() => setEditingTargetYield(false)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"5px 9px", color:C.textSub, fontSize:12, cursor:"pointer" }}>×</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setTargetYieldInput(crop.target_yield ? String(crop.target_yield) : ""); setEditingTargetYield(true); }}
+                      style={{ fontSize:13, fontWeight:700, color:C.primary, background:C.primary3, border:`1px solid ${C.primary4}`, borderRadius:8, padding:"4px 12px", cursor:"pointer" }}
+                    >
+                      {crop.target_yield ? `${crop.target_yield}kg` : "未設定"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {(cropYears.length > 0 || !!crop.target_yield) && (
                 <>
                   <div style={{ ...S.sec, marginBottom:8 }}>
                     <BarChart2 size={14} strokeWidth={2} />月別収穫量 (kg)
                     <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:4 }}>
                       <button
                         onClick={() => setChartYear(y => y - 1)}
-                        disabled={safeYear <= cropYears[0]}
-                        style={{ background:C.primary3, border:"none", borderRadius:7, padding:"3px 7px", cursor:safeYear <= cropYears[0] ? "default":"pointer", color:safeYear <= cropYears[0] ? C.textMuted:C.primary, display:"flex", alignItems:"center" }}
+                        disabled={cropYears.length === 0 || safeYear <= cropYears[0]}
+                        style={{ background:C.primary3, border:"none", borderRadius:7, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear <= cropYears[0]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear <= cropYears[0]) ? C.textMuted:C.primary, display:"flex", alignItems:"center" }}
                       >
                         <ChevronLeft size={14} strokeWidth={2.5} />
                       </button>
                       <span style={{ fontSize:12, fontWeight:700, color:C.text, minWidth:40, textAlign:"center" as const }}>{safeYear}年</span>
                       <button
                         onClick={() => setChartYear(y => y + 1)}
-                        disabled={safeYear >= cropYears[cropYears.length-1]}
-                        style={{ background:C.primary3, border:"none", borderRadius:7, padding:"3px 7px", cursor:safeYear >= cropYears[cropYears.length-1] ? "default":"pointer", color:safeYear >= cropYears[cropYears.length-1] ? C.textMuted:C.primary, display:"flex", alignItems:"center" }}
+                        disabled={cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]}
+                        style={{ background:C.primary3, border:"none", borderRadius:7, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? C.textMuted:C.primary, display:"flex", alignItems:"center" }}
                       >
                         <ChevronRight size={14} strokeWidth={2.5} />
                       </button>
