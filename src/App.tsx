@@ -11,9 +11,9 @@ import {
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
   LeafyGreen, Grape, Apple, MoreVertical,
-  ChevronLeft, BarChart2, Plus, FlaskConical, Settings,
+  ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
 import type { Schedule, Comment } from "./components/CalendarView";
 import DatePicker from "./components/DatePicker";
@@ -83,7 +83,7 @@ const getCropIcon = (name: string): CropIconDef =>
 // ─── 型 ─────────────────────────────────────────────────
 type Role = "admin" | "worker" | "viewer";
 interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; }
-interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; }
+interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; }
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
 interface Session { id: number; user_id: number; field_id: number | null; started_at: string; voice_memo: string; }
@@ -187,7 +187,7 @@ export default function App() {
   const [wxAuto, setWxAuto]               = useState<WeatherInfo | null>(null);
   const [wxManual, setWxManual]           = useState<WeatherInfo>({ label:"晴れ", Icon:Sun, temp:"" });
   const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", note:"", pesticide_id:"", pesticide_amount:"" });
-  const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10) });
+  const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"" });
   const [fForm, setFForm]                 = useState({ name:"" });
   const [cropListTab, setCropListTab]     = useState<"crops"|"fields">("crops");
   const [expandedCrops, setExpandedCrops] = useState<Set<number>>(new Set());
@@ -224,6 +224,7 @@ export default function App() {
   const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
   const [datePickerTarget, setDatePickerTarget] = useState<{ cropId: number; field: "start_date" | "last_work_date"; value: string } | null>(null);
   const [openMenuId, setOpenMenuId]       = useState<string | null>(null);
+  const [chartYear, setChartYear]         = useState(() => new Date().getFullYear());
   const [selectedPesticides, setSelectedPesticides] = useState<string[]>([]);
   const [pesticideAmounts, setPesticideAmounts]     = useState<Record<string, string>>({});
   const [soilPh, setSoilPh]                         = useState("");
@@ -366,6 +367,11 @@ export default function App() {
     )[0];
     setExpandedCrops(new Set([best.id]));
   }, [crops]);
+
+  // 作物詳細を開くたびに年を今年にリセット
+  useEffect(() => {
+    setChartYear(new Date().getFullYear());
+  }, [selectedCropId]);
 
   const showToast = (msg: string, type: "ok"|"err" = "ok") => {
     setToast({ msg, type });
@@ -673,11 +679,16 @@ export default function App() {
   const addCrop = async () => {
     if (!cForm.name.trim()) return;
     setSubmitting(true);
-    const { data, error } = await supabase.from("crops").insert([{ ...cForm, org: currentOrg }]).select();
+    const { data, error } = await supabase.from("crops").insert([{
+      name: cForm.name.trim(),
+      start_date: cForm.start_date,
+      target_yield: cForm.target_yield ? Number(cForm.target_yield) : null,
+      org: currentOrg,
+    }]).select();
     setSubmitting(false);
     if (error) { console.error("addCrop error:", error); return showToast(error.message, "err"); }
     if (data) setCrops(p => [...p, data[0] as Crop]);
-    setCForm({ name:"", start_date:new Date().toISOString().slice(0,10) });
+    setCForm({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"" });
     showToast("作物を追加しました");
   };
 
@@ -872,15 +883,23 @@ export default function App() {
   const lastWorkDate  = sortedReports[0]?.date ?? null;
   const daysSinceWork = lastWorkDate ? Math.floor((Date.now()-new Date(lastWorkDate).getTime())/86400000) : null;
 
-  // 作物別月次収穫チャートデータ
-  const monthlyHarvest = (cropId: number) => {
+  // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）
+  const monthlyHarvest = (cropId: number, year: number) => {
+    const prefix = String(year);
     const m: Record<string,number> = {};
-    reports.filter(r => r.crop_id === cropId && r.quantity).forEach(r => {
-      const k = r.date.slice(0,7);
-      m[k] = (m[k]||0) + (Number(r.quantity)||0);
+    reports.filter(r => r.crop_id === cropId && r.quantity && r.date.startsWith(prefix)).forEach(r => {
+      const mo = r.date.slice(5,7);
+      m[mo] = (m[mo]||0) + (Number(r.quantity)||0);
     });
-    return Object.entries(m).sort().map(([k,v]) => ({ month: k.slice(5)+"月", total:v }));
+    return Array.from({ length:12 }, (_, i) => {
+      const mo = String(i+1).padStart(2,"0");
+      return { month:`${i+1}月`, total: m[mo] || 0 };
+    });
   };
+
+  // 作物のデータがある年一覧
+  const cropDataYears = (cropId: number) =>
+    [...new Set(reports.filter(r => r.crop_id === cropId && r.quantity).map(r => Number(r.date.slice(0,4))))].sort();
 
   // ─── スタイル ─────────────────────────────────────────
   const S = {
@@ -1702,6 +1721,8 @@ export default function App() {
                   <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
                   <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
                   <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
+                  <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />目標収穫量（kg/年・任意）</div>
+                  <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
                   <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
                     {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
                   </button>
@@ -1942,6 +1963,8 @@ export default function App() {
                   <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
                   <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
                   <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
+                  <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />目標収穫量（kg/年・任意）</div>
+                  <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
                   <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
                     {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
                   </button>
@@ -2154,7 +2177,16 @@ export default function App() {
         if (!crop) return null;
         const ci = getCropIcon(crop.name);
         const cropReports = reports.filter(r => r.crop_id === selectedCropId).sort((a,b) => b.date.localeCompare(a.date));
-        const chartData = monthlyHarvest(selectedCropId);
+        const cropYears  = cropDataYears(selectedCropId);
+        const safeYear   = cropYears.length > 0 && !cropYears.includes(chartYear)
+          ? cropYears[cropYears.length - 1]
+          : chartYear;
+        const chartData  = monthlyHarvest(selectedCropId, safeYear);
+        const yearTotal  = chartData.reduce((s, d) => s + d.total, 0);
+        const monthTarget = crop.target_yield ? Math.round(crop.target_yield / 12 * 10) / 10 : null;
+        const chartDataWithTarget = monthTarget
+          ? chartData.map(d => ({ ...d, target: monthTarget }))
+          : chartData;
         const stat = cropStats.find(c => c.id === selectedCropId);
         return (
           <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:200, overflowY:"auto", paddingBottom:80 }} className="anim-slideUp">
@@ -2220,24 +2252,56 @@ export default function App() {
                 );
               })()}
 
-              {chartData.length > 0 && (
+              {cropYears.length > 0 && (
                 <>
-                  <div style={S.sec}><BarChart2 size={14} strokeWidth={2} />月別収穫量 (kg)</div>
-                  <div style={{ background:C.card, borderRadius:14, padding:"16px 6px 8px", marginBottom:14, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }}>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={chartData} margin={{ top:0, right:8, bottom:0, left:-16 }}>
-                        <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize:10, fill:C.textMuted }} axisLine={false} tickLine={false} />
-                        <Tooltip
-                          contentStyle={{ fontSize:12, borderRadius:8, border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(0,0,0,0.1)" }}
-                          formatter={(v: unknown) => [`${Number(v)}kg`, "収穫量"]}
-                        />
-                        <Bar dataKey="total" radius={[6,6,0,0]} maxBarSize={44}>
-                          {chartData.map((_,i) => <Cell key={i} fill={C.primary} />)}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <div style={{ ...S.sec, marginBottom:8 }}>
+                    <BarChart2 size={14} strokeWidth={2} />月別収穫量 (kg)
+                    <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:4 }}>
+                      <button
+                        onClick={() => setChartYear(y => y - 1)}
+                        disabled={safeYear <= cropYears[0]}
+                        style={{ background:C.primary3, border:"none", borderRadius:7, padding:"3px 7px", cursor:safeYear <= cropYears[0] ? "default":"pointer", color:safeYear <= cropYears[0] ? C.textMuted:C.primary, display:"flex", alignItems:"center" }}
+                      >
+                        <ChevronLeft size={14} strokeWidth={2.5} />
+                      </button>
+                      <span style={{ fontSize:12, fontWeight:700, color:C.text, minWidth:40, textAlign:"center" as const }}>{safeYear}年</span>
+                      <button
+                        onClick={() => setChartYear(y => y + 1)}
+                        disabled={safeYear >= cropYears[cropYears.length-1]}
+                        style={{ background:C.primary3, border:"none", borderRadius:7, padding:"3px 7px", cursor:safeYear >= cropYears[cropYears.length-1] ? "default":"pointer", color:safeYear >= cropYears[cropYears.length-1] ? C.textMuted:C.primary, display:"flex", alignItems:"center" }}
+                      >
+                        <ChevronRight size={14} strokeWidth={2.5} />
+                      </button>
+                    </div>
                   </div>
+                  <div style={{ background:C.card, borderRadius:14, padding:"16px 6px 8px", marginBottom:14, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }}>
+                    {yearTotal === 0 ? (
+                      <div style={{ textAlign:"center" as const, padding:"32px 0", color:C.textMuted, fontSize:13 }}>{safeYear}年の収穫記録はありません</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={180}>
+                        <ComposedChart data={chartDataWithTarget} margin={{ top:4, right:8, bottom:0, left:-16 }}>
+                          <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize:10, fill:C.textMuted }} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{ fontSize:12, borderRadius:8, border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(0,0,0,0.1)" }}
+                            formatter={(v: unknown, name: unknown) => [`${Number(v)}kg`, name === "target" ? "月別目標" : "収穫量"]}
+                          />
+                          <Bar dataKey="total" radius={[6,6,0,0]} maxBarSize={44}>
+                            {chartDataWithTarget.map((_,i) => <Cell key={i} fill={C.primary} />)}
+                          </Bar>
+                          {monthTarget && (
+                            <Line dataKey="target" stroke={C.accent} strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                          )}
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                  {monthTarget && (
+                    <div style={{ display:"flex", gap:14, fontSize:11, color:C.textMuted, marginTop:-10, marginBottom:10, paddingLeft:6 }}>
+                      <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display:"inline-block", width:12, height:3, background:C.primary, borderRadius:2 }} />実績</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display:"inline-block", width:12, height:2, borderTop:`2px dashed ${C.accent}` }} />月別目標 ({monthTarget}kg)</span>
+                    </div>
+                  )}
                 </>
               )}
 
