@@ -13,7 +13,7 @@ import {
   LeafyGreen, Grape, Apple, MoreVertical,
   ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
+import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
 import type { Schedule, Comment } from "./components/CalendarView";
 import DatePicker from "./components/DatePicker";
@@ -1510,7 +1510,7 @@ export default function App() {
                     ) : (
                       <div style={{ border:`1.5px solid ${C.border}`, borderRadius:10, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
                         {pesticides.map(p => (
-                          <div key={p.id} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:6, marginBottom:6, lastChild:{ border:"none" } as CSSProperties }}>
+                          <div key={p.id} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:6, marginBottom:6 }}>
                             <label style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", cursor:"pointer" }}>
                               <input
                                 type="checkbox"
