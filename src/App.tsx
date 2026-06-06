@@ -113,6 +113,31 @@ interface WeatherInfo {
   humidity?: number;
   rain?: number;
 }
+interface Project {
+  id: string;
+  org?: string;
+  name: string;
+  crop_id?: number;
+  field?: string;
+  start_date?: string;
+  end_date?: string;
+  status: "active" | "completed" | "archived";
+  created_by?: number;
+  created_at: string;
+}
+interface Ticket {
+  id: string;
+  project_id: string;
+  org?: string;
+  title: string;
+  work_type?: string;
+  assigned_user_id?: number;
+  due_date?: string;
+  status: "open" | "done";
+  report_id?: number;
+  note?: string;
+  created_at: string;
+}
 
 // ─── カラーパレット ──────────────────────────────────────
 const C = {
@@ -172,8 +197,14 @@ export default function App() {
   const [reports, setReports]             = useState<Report[]>([]);
   const [schedules, setSchedules]          = useState<Schedule[]>([]);
   const [pesticides, setPesticides]       = useState<Pesticide[]>([]);
+  const [projects, setProjects]           = useState<Project[]>([]);
+  const [tickets, setTickets]             = useState<Ticket[]>([]);
   const [pForm, setPForm]                 = useState({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
   const [pManualMode, setPManualMode]     = useState(false);
+  const [prjForm, setPrjForm]             = useState({ name:"", crop_id:0, field:"", start_date:"", end_date:"" });
+  const [tForm, setTForm]                 = useState({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" });
+  const [addingTicketProjectId, setAddingTicketProjectId] = useState<string | null>(null);
+  const [showAddProject, setShowAddProject] = useState(false);
   const [masterSearch, setMasterSearch]   = useState("");
   const [masterResults, setMasterResults] = useState<PesticideMaster[]>([]);
   const [masterSearching, setMasterSearching] = useState(false);
@@ -215,7 +246,7 @@ export default function App() {
   const recognitionRef                    = useRef<any>(null);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
-  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides"|"progress">("crops");
+  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides"|"progress"|"backlog">("crops");
   const [inlineOpen, setInlineOpen]           = useState(false);
   const [inlineMode, setInlineMode]           = useState<null | "schedule" | "report">(null);
   const [inlineSchedForm, setInlineSchedForm] = useState({ date: new Date().toISOString().slice(0,10), work_type:"収穫", assigned_user_id:0, crop:"", note:"" });
@@ -272,7 +303,7 @@ export default function App() {
 
       // org でフィルタしてデータ取得
       const orgUserIds = userList.filter(x => x.org === org).map(u => u.id);
-      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }] = await Promise.all([
+      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: tkt }] = await Promise.all([
         supabase.from("crops").select("*").eq("org", org).order("id"),
         supabase.from("fields").select("*").eq("org", org).order("id"),
         supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
@@ -281,6 +312,8 @@ export default function App() {
           ? supabase.from("schedules").select("*").in("user_id", orgUserIds).order("date")
           : Promise.resolve({ data: null as any, error: null }),
         supabase.from("pesticides").select("*").eq("org", org).order("name"),
+        supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
+        supabase.from("tickets").select("*").eq("org", org),
       ]);
       if (cErr)  console.error("crops fetch error:",   cErr);
       if (fdErr) console.error("fields fetch error:",  fdErr);
@@ -296,6 +329,8 @@ export default function App() {
       if (r)  setReports(r as Report[]);
       if (sch) setSchedules(sch as Schedule[]);
       if (ps) setPesticides(ps as Pesticide[]);
+      if (prj) setProjects(prj as Project[]);
+      if (tkt) setTickets(tkt as Ticket[]);
       setLoading(false);
       } catch (e) {
         console.error("Startup error:", e);
@@ -497,7 +532,8 @@ export default function App() {
     }]).select();
     setImgUploading(false);
     if (error) return showToast("登録に失敗しました", "err");
-    if (data) setReports(p => [data[0] as Report, ...p]);
+    const newReport = data?.[0] as Report | undefined;
+    if (newReport) { setReports(p => [newReport, ...p]); await autoMatchTicket(newReport); }
     setImageFile(null);
     setImagePreview("");
     setSelectedPesticides([]);
@@ -880,7 +916,8 @@ export default function App() {
     }]).select();
     setSubmitting(false);
     if (error) return showToast("登録に失敗しました", "err");
-    if (data) setReports(p => [data[0] as Report, ...p]);
+    const newReport = data?.[0] as Report | undefined;
+    if (newReport) { setReports(p => [newReport, ...p]); await autoMatchTicket(newReport); }
     setInlineMode(null);
     setInlineOpen(false);
     setCopySource(null);
@@ -901,6 +938,79 @@ export default function App() {
     setInlineOpen(false);
     showToast("予定を登録しました");
   };
+
+  const autoMatchTicket = async (report: Report) => {
+    const matched = tickets.find(t =>
+      t.assigned_user_id === report.user_id &&
+      t.work_type === report.work_type &&
+      t.status === "open" &&
+      t.due_date !== undefined &&
+      t.due_date >= report.date
+    );
+    if (!matched) return;
+    await supabase.from("tickets").update({ status: "done", report_id: report.id }).eq("id", matched.id);
+    setTickets(prev => prev.map(t => t.id === matched.id ? { ...t, status: "done" as const, report_id: report.id } : t));
+  };
+
+  const addProject = async () => {
+    if (!prjForm.name.trim()) return;
+    setSubmitting(true);
+    const { data, error } = await supabase.from("projects").insert([{
+      name: prjForm.name.trim(),
+      crop_id: prjForm.crop_id || null,
+      field: prjForm.field || null,
+      start_date: prjForm.start_date || null,
+      end_date: prjForm.end_date || null,
+      org: currentOrg,
+      created_by: currentUser?.id,
+    }]).select().single();
+    setSubmitting(false);
+    if (error) return showToast(error.message, "err");
+    if (data) setProjects(prev => [data as Project, ...prev]);
+    setPrjForm({ name:"", crop_id:0, field:"", start_date:"", end_date:"" });
+    setShowAddProject(false);
+    showToast("プロジェクトを追加しました");
+  };
+
+  const addTicket = async (projectId: string) => {
+    if (!tForm.title.trim()) return;
+    setSubmitting(true);
+    const { data, error } = await supabase.from("tickets").insert([{
+      project_id: projectId,
+      title: tForm.title.trim(),
+      work_type: tForm.work_type || null,
+      assigned_user_id: tForm.assigned_user_id || null,
+      due_date: tForm.due_date || null,
+      org: currentOrg,
+    }]).select().single();
+    setSubmitting(false);
+    if (error) return showToast(error.message, "err");
+    if (data) setTickets(prev => [...prev, data as Ticket]);
+    setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" });
+    setAddingTicketProjectId(null);
+    showToast("チケットを追加しました");
+  };
+
+  const toggleTicketStatus = async (ticket: Ticket) => {
+    const newStatus = ticket.status === "open" ? "done" : "open";
+    await supabase.from("tickets").update({ status: newStatus }).eq("id", ticket.id);
+    setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: newStatus } : t));
+  };
+
+  const deleteTicket = (id: string) =>
+    confirmDelete("このチケットを削除しますか？", async () => {
+      await supabase.from("tickets").delete().eq("id", id);
+      setTickets(prev => prev.filter(t => t.id !== id));
+      showToast("チケットを削除しました");
+    });
+
+  const deleteProject = (id: string) =>
+    confirmDelete("このプロジェクトと全チケットを削除しますか？", async () => {
+      await supabase.from("projects").delete().eq("id", id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+      setTickets(prev => prev.filter(t => t.project_id !== id));
+      showToast("プロジェクトを削除しました");
+    });
 
   const updateCropDate = async (cropId: number, field: "start_date" | "last_work_date", value: string) => {
     const { error } = await supabase.from("crops").update({ [field]: value || null }).eq("id", cropId);
@@ -1816,6 +1926,9 @@ export default function App() {
                 {k === "crops" ? "作物" : k === "fields" ? "圃場" : "農薬"}
               </button>
             ))}
+            <button onClick={() => setManageSubTab("backlog")} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "backlog" ? C.card : "transparent", color: manageSubTab === "backlog" ? C.primary : C.textMuted, boxShadow: manageSubTab === "backlog" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+              案件
+            </button>
             <button
               onClick={() => isAdmin && setManageSubTab("progress")}
               style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, transition:"all 0.15s", background: manageSubTab === "progress" ? C.card : "transparent", color: manageSubTab === "progress" ? C.primary : C.textMuted, boxShadow: manageSubTab === "progress" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", cursor: isAdmin ? "pointer" : "default", opacity: isAdmin ? 1 : 0.45 }}
@@ -2087,6 +2200,165 @@ export default function App() {
           </>}
 
           {/* 進捗 */}
+          {/* 案件（バックログ） */}
+          {manageSubTab === "backlog" && (
+            <div>
+              {/* プロジェクト追加フォーム（管理者のみ） */}
+              {isAdmin && (
+                <>
+                  <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />プロジェクトを追加</div>
+                  {showAddProject ? (
+                    <div style={S.card}>
+                      <div style={S.lbl}><ClipboardList size={13} strokeWidth={2} />プロジェクト名 *</div>
+                      <input style={S.input} placeholder="例: 2024年 ぶどう栽培" value={prjForm.name} onChange={e => setPrjForm(f => ({ ...f, name:e.target.value }))} />
+                      <div style={{ display:"flex", gap:10 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物（任意）</div>
+                          <select style={S.select} value={prjForm.crop_id} onChange={e => setPrjForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
+                            <option value={0}>未指定</option>
+                            {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場（任意）</div>
+                          <select style={S.select} value={prjForm.field} onChange={e => setPrjForm(f => ({ ...f, field:e.target.value }))}>
+                            <option value="">未指定</option>
+                            {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", gap:10 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />開始日</div>
+                          <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={prjForm.start_date} onChange={e => setPrjForm(f => ({ ...f, start_date:e.target.value }))} />
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />終了予定日</div>
+                          <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={prjForm.end_date} onChange={e => setPrjForm(f => ({ ...f, end_date:e.target.value }))} />
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addProject} disabled={submitting}>
+                          {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />追加する</>}
+                        </button>
+                        <button onClick={() => setShowAddProject(false)} style={{ flex:1, padding:"12px 0", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:600, cursor:"pointer" }}>
+                          キャンセル
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setShowAddProject(true)} style={{ ...S.btn, marginBottom:14 }}>
+                      <PlusCircle size={16} strokeWidth={2} />プロジェクトを追加
+                    </button>
+                  )}
+                </>
+              )}
+
+              <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />プロジェクト一覧</div>
+              {projects.length === 0 ? (
+                <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                  <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><ClipboardList size={22} color={C.primary} strokeWidth={1.5} /></div>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>プロジェクトがありません</div>
+                  {isAdmin && <div style={{ fontSize:12, color:C.textMuted }}>上のボタンから追加できます</div>}
+                </div>
+              ) : projects.map(project => {
+                const projTickets = tickets.filter(t => t.project_id === project.id);
+                const doneCount   = projTickets.filter(t => t.status === "done").length;
+                const cropLabel   = crops.find(c => c.id === project.crop_id)?.name;
+                return (
+                  <div key={project.id} style={{ ...S.card, marginBottom:12 }}>
+                    {/* プロジェクトヘッダー */}
+                    <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{project.name}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, display:"flex", flexWrap:"wrap" as const, gap:6 }}>
+                          {cropLabel && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Leaf size={10} strokeWidth={2} />{cropLabel}</span>}
+                          {project.field && <span style={{ display:"flex", alignItems:"center", gap:3 }}><MapPin size={10} strokeWidth={2} />{project.field}</span>}
+                          {project.end_date && <span style={{ display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={10} strokeWidth={2} />〜{project.end_date}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                        <span style={{ fontSize:11, fontWeight:700, background:doneCount === projTickets.length && projTickets.length > 0 ? C.primary3 : C.bg, color:doneCount === projTickets.length && projTickets.length > 0 ? C.primary : C.textMuted, borderRadius:8, padding:"3px 9px", border:`1px solid ${doneCount === projTickets.length && projTickets.length > 0 ? C.primary4 : C.border}` }}>
+                          {doneCount}/{projTickets.length} 完了
+                        </span>
+                        {isAdmin && (
+                          <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                            <button onClick={() => setOpenMenuId(openMenuId === `prj${project.id}` ? null : `prj${project.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", borderRadius:6, color:C.textMuted, display:"flex" }}>
+                              <MoreVertical size={15} strokeWidth={2} />
+                            </button>
+                            {openMenuId === `prj${project.id}` && (
+                              <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                                <button onClick={() => { setOpenMenuId(null); deleteProject(project.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                                  <Trash2 size={13} strokeWidth={2} />削除
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* チケット一覧 */}
+                    {projTickets.length > 0 && (
+                      <div style={{ marginBottom:8 }}>
+                        {[...projTickets].sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? "")).map(ticket => (
+                          <div key={ticket.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:9, background: ticket.status === "done" ? C.primary3 : C.bg, marginBottom:4 }}>
+                            <button onClick={() => toggleTicketStatus(ticket)} style={{ background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", flexShrink:0 }}>
+                              {ticket.status === "done"
+                                ? <PackageCheck size={15} color={C.primary} strokeWidth={2} />
+                                : <Clock size={15} color={C.textMuted} strokeWidth={2} />}
+                            </button>
+                            <span style={{ flex:1, fontSize:13, color: ticket.status === "done" ? C.textMuted : C.text, textDecoration: ticket.status === "done" ? "line-through" : "none", minWidth:0 }}>{ticket.title}</span>
+                            {ticket.work_type && <span style={{ fontSize:10, color:C.primary, background:C.primary3, borderRadius:5, padding:"1px 6px", flexShrink:0 }}>{ticket.work_type}</span>}
+                            <span style={{ fontSize:11, color:C.textMuted, flexShrink:0 }}>{users.find(u => u.id === ticket.assigned_user_id)?.name ?? "未割当"}</span>
+                            {ticket.due_date && <span style={{ fontSize:10, color:C.textMuted, flexShrink:0 }}>{ticket.due_date}</span>}
+                            {isAdmin && (
+                              <button onClick={() => deleteTicket(ticket.id)} style={{ background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", flexShrink:0, color:C.textMuted }}>
+                                <X size={13} strokeWidth={2} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* チケット追加フォーム */}
+                    {isAdmin && (
+                      addingTicketProjectId === project.id ? (
+                        <div style={{ background:C.bg, borderRadius:10, padding:"10px 12px", border:`1px solid ${C.border}` }}>
+                          <input style={{ ...S.input, marginBottom:8 }} placeholder="チケットのタイトル *" value={tForm.title} onChange={e => setTForm(f => ({ ...f, title:e.target.value }))} />
+                          <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                            <select style={{ ...S.select, marginBottom:0, flex:1 }} value={tForm.work_type} onChange={e => setTForm(f => ({ ...f, work_type:e.target.value }))}>
+                              <option value="">作業種別（任意）</option>
+                              {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                            <select style={{ ...S.select, marginBottom:0, flex:1 }} value={tForm.assigned_user_id} onChange={e => setTForm(f => ({ ...f, assigned_user_id:Number(e.target.value) }))}>
+                              <option value={0}>担当者（任意）</option>
+                              {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </select>
+                          </div>
+                          <div style={{ display:"flex", gap:8 }}>
+                            <input type="date" style={{ ...S.input, marginBottom:0, flex:1, maxWidth:"100%" }} value={tForm.due_date} onChange={e => setTForm(f => ({ ...f, due_date:e.target.value }))} />
+                            <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
+                              {submitting ? <RefreshCw size={14} strokeWidth={2} /> : <Save size={14} strokeWidth={2} />}
+                            </button>
+                            <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
+                              <X size={14} strokeWidth={2} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setAddingTicketProjectId(project.id); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, color:C.primary, background:"none", border:`1px solid ${C.primary4}`, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontWeight:600 }}>
+                          <Plus size={13} strokeWidth={2.5} />チケット追加
+                        </button>
+                      )
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {manageSubTab === "progress" && isAdmin && (() => {
             const weeklyProgress = getWeeklyProgress(progressWeekStart);
             const weekEnd = new Date(progressWeekStart);
