@@ -1927,7 +1927,7 @@ export default function App() {
               </button>
             ))}
             <button onClick={() => setManageSubTab("backlog")} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "backlog" ? C.card : "transparent", color: manageSubTab === "backlog" ? C.primary : C.textMuted, boxShadow: manageSubTab === "backlog" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-              案件
+              計画
             </button>
             <button
               onClick={() => isAdmin && setManageSubTab("progress")}
@@ -2200,7 +2200,7 @@ export default function App() {
           </>}
 
           {/* 進捗 */}
-          {/* 案件（バックログ） */}
+          {/* 計画 */}
           {manageSubTab === "backlog" && (
             <div>
               {/* プロジェクト追加フォーム（管理者のみ） */}
@@ -2247,8 +2247,8 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => setShowAddProject(true)} style={{ ...S.btn, marginBottom:14 }}>
-                      <PlusCircle size={16} strokeWidth={2} />プロジェクトを追加
+                    <button onClick={() => setShowAddProject(true)} style={{ background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:5, fontSize:13, fontWeight:700, color:C.primary, padding:"2px 0", marginBottom:10 }}>
+                      <PlusCircle size={14} strokeWidth={2} />プロジェクトを追加
                     </button>
                   )}
                 </>
