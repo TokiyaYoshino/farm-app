@@ -2125,18 +2125,18 @@ export default function App() {
                         <tr key={user.id}>
                           <td style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, color:C.text, fontWeight:700, whiteSpace:"nowrap" as const }}>{user.name}</td>
                           {userDays.map(({ date, schedules: ds, reports: rs, matched }) => (
-                            <td key={date} style={{ padding:"6px 4px", borderBottom:`1px solid ${C.border}`, textAlign:"center" as const, fontSize:16 }}>
+                            <td key={date} style={{ padding:"6px 4px", borderBottom:`1px solid ${C.border}`, textAlign:"center" as const }}>
                               {ds.length === 0 && rs.length === 0 && (
-                                <span style={{ color:C.border }}>─</span>
+                                <span style={{ color:C.border, fontSize:12 }}>─</span>
                               )}
                               {ds.length > 0 && matched.length === ds.length && (
-                                <span title="予定あり・完了">✅</span>
+                                <span title="予定あり・完了" style={{ display:"inline-block", background:"#e8f5e9", color:C.primary, borderRadius:5, fontSize:10, fontWeight:700, padding:"2px 5px" }}>完了</span>
                               )}
                               {ds.length > 0 && matched.length < ds.length && (
-                                <span title={`予定${ds.length}件・完了${matched.length}件`}>📋</span>
+                                <span title={`予定${ds.length}件・完了${matched.length}件`} style={{ display:"inline-block", background:"#fff8e1", color:"#f57f17", borderRadius:5, fontSize:10, fontWeight:700, padding:"2px 5px" }}>{matched.length}/{ds.length}</span>
                               )}
                               {ds.length === 0 && rs.length > 0 && (
-                                <span title="予定外の作業あり">📝</span>
+                                <span title="予定外の作業あり" style={{ display:"inline-block", background:C.bg, color:C.textMuted, borderRadius:5, fontSize:10, fontWeight:700, padding:"2px 5px" }}>記録</span>
                               )}
                             </td>
                           ))}
@@ -2146,11 +2146,11 @@ export default function App() {
                   </table>
                 </div>
 
-                <div style={{ display:"flex", gap:14, fontSize:11, color:C.textMuted, paddingLeft:2 }}>
-                  <span>✅ 完了</span>
-                  <span>📋 未完了</span>
-                  <span>📝 予定外</span>
-                  <span style={{ color:C.border }}>─ なし</span>
+                <div style={{ display:"flex", gap:10, fontSize:11, color:C.textMuted, paddingLeft:2, flexWrap:"wrap" as const }}>
+                  <span><span style={{ background:"#e8f5e9", color:C.primary, borderRadius:4, padding:"1px 5px", fontWeight:700 }}>完了</span> 全予定済み</span>
+                  <span><span style={{ background:"#fff8e1", color:"#f57f17", borderRadius:4, padding:"1px 5px", fontWeight:700 }}>0/2</span> 一部未完了</span>
+                  <span><span style={{ background:C.bg, color:C.textMuted, borderRadius:4, padding:"1px 5px", fontWeight:700 }}>記録</span> 予定外作業</span>
+                  <span><span style={{ color:C.border }}>─</span> なし</span>
                 </div>
               </div>
             );
