@@ -215,7 +215,7 @@ export default function App() {
   const recognitionRef                    = useRef<any>(null);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
-  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
+  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides"|"progress">("crops");
   const [inlineOpen, setInlineOpen]           = useState(false);
   const [inlineMode, setInlineMode]           = useState<null | "schedule" | "report">(null);
   const [inlineSchedForm, setInlineSchedForm] = useState({ date: new Date().toISOString().slice(0,10), work_type:"収穫", assigned_user_id:0, crop:"", note:"" });
@@ -224,6 +224,11 @@ export default function App() {
   const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
   const [datePickerTarget, setDatePickerTarget] = useState<{ cropId: number; field: "start_date" | "last_work_date"; value: string } | null>(null);
   const [openMenuId, setOpenMenuId]       = useState<string | null>(null);
+  const [progressWeekStart, setProgressWeekStart] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // 月曜始まり
+    return d;
+  });
   const [copySource, setCopySource]       = useState<Report | null>(null);
   const [chartYear, setChartYear]         = useState(() => new Date().getFullYear());
   const [editingTargetYield, setEditingTargetYield] = useState(false);
@@ -963,6 +968,38 @@ export default function App() {
       lastDate:  [...g.dates].sort().slice(-1)[0],
       count:     g.count,
     })).sort((a, b) => b.lastDate.localeCompare(a.lastDate));
+  };
+
+  // 予定と実績のマッチング
+  const matchReportToSchedule = (schedule: Schedule): Report | null =>
+    reports.find(r =>
+      r.user_id === (schedule.assigned_user_id ?? schedule.user_id) &&
+      r.date === schedule.date &&
+      r.work_type === schedule.work_type
+    ) ?? null;
+
+  // 週次進捗データ生成
+  const getWeeklyProgress = (weekStart: Date) => {
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      return d.toISOString().split("T")[0];
+    });
+    return users.filter(u => u.role !== "viewer").map(user => ({
+      user,
+      days: days.map(date => {
+        const daySchedules = schedules.filter(s =>
+          (s.assigned_user_id ?? s.user_id) === user.id && s.date === date
+        );
+        const dayReports = reports.filter(r => r.user_id === user.id && r.date === date);
+        return {
+          date,
+          schedules: daySchedules,
+          reports: dayReports,
+          matched: daySchedules.filter(s => matchReportToSchedule(s) !== null),
+        };
+      }),
+    }));
   };
 
   // ─── スタイル ─────────────────────────────────────────
@@ -1779,6 +1816,11 @@ export default function App() {
                 {k === "crops" ? "作物" : k === "fields" ? "圃場" : "農薬"}
               </button>
             ))}
+            {isAdmin && (
+              <button onClick={() => setManageSubTab("progress")} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "progress" ? C.card : "transparent", color: manageSubTab === "progress" ? C.primary : C.textMuted, boxShadow: manageSubTab === "progress" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+                進捗
+              </button>
+            )}
           </div>
 
           {/* 作物 */}
@@ -2041,6 +2083,78 @@ export default function App() {
               </div>
             ))}
           </>}
+
+          {/* 進捗 */}
+          {manageSubTab === "progress" && isAdmin && (() => {
+            const weeklyProgress = getWeeklyProgress(progressWeekStart);
+            const weekEnd = new Date(progressWeekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            const weekLabel = `${progressWeekStart.getMonth()+1}/${progressWeekStart.getDate()} 〜 ${weekEnd.getMonth()+1}/${weekEnd.getDate()}`;
+            const weekDays = ["月","火","水","木","金","土","日"];
+            return (
+              <div>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.textSub, display:"flex", alignItems:"center", gap:6 }}>
+                    <Users size={14} strokeWidth={2} />担当者進捗
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <button
+                      onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() - 7); setProgressWeekStart(d); }}
+                      style={{ background:C.primary3, border:"none", borderRadius:7, padding:"4px 8px", cursor:"pointer", color:C.primary, display:"flex", alignItems:"center" }}
+                    ><ChevronLeft size={14} strokeWidth={2.5} /></button>
+                    <span style={{ fontSize:12, fontWeight:600, color:C.text, minWidth:110, textAlign:"center" as const }}>{weekLabel}</span>
+                    <button
+                      onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }}
+                      style={{ background:C.primary3, border:"none", borderRadius:7, padding:"4px 8px", cursor:"pointer", color:C.primary, display:"flex", alignItems:"center" }}
+                    ><ChevronRight size={14} strokeWidth={2.5} /></button>
+                  </div>
+                </div>
+
+                <div style={{ overflowX:"auto" as const, background:C.card, borderRadius:14, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", marginBottom:10 }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse" as const, fontSize:12 }}>
+                    <thead>
+                      <tr style={{ background:C.bg }}>
+                        <th style={{ textAlign:"left" as const, padding:"8px 12px", borderBottom:`1px solid ${C.border}`, color:C.textSub, fontWeight:600, whiteSpace:"nowrap" as const, minWidth:64 }}>担当者</th>
+                        {weekDays.map((d, i) => (
+                          <th key={d} style={{ padding:"8px 6px", borderBottom:`1px solid ${C.border}`, color: i >= 5 ? C.danger : C.textSub, fontWeight:600, textAlign:"center" as const, minWidth:40 }}>{d}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weeklyProgress.map(({ user, days: userDays }) => (
+                        <tr key={user.id}>
+                          <td style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, color:C.text, fontWeight:700, whiteSpace:"nowrap" as const }}>{user.name}</td>
+                          {userDays.map(({ date, schedules: ds, reports: rs, matched }) => (
+                            <td key={date} style={{ padding:"6px 4px", borderBottom:`1px solid ${C.border}`, textAlign:"center" as const, fontSize:16 }}>
+                              {ds.length === 0 && rs.length === 0 && (
+                                <span style={{ color:C.border }}>─</span>
+                              )}
+                              {ds.length > 0 && matched.length === ds.length && (
+                                <span title="予定あり・完了">✅</span>
+                              )}
+                              {ds.length > 0 && matched.length < ds.length && (
+                                <span title={`予定${ds.length}件・完了${matched.length}件`}>📋</span>
+                              )}
+                              {ds.length === 0 && rs.length > 0 && (
+                                <span title="予定外の作業あり">📝</span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display:"flex", gap:14, fontSize:11, color:C.textMuted, paddingLeft:2 }}>
+                  <span>✅ 完了</span>
+                  <span>📋 未完了</span>
+                  <span>📝 予定外</span>
+                  <span style={{ color:C.border }}>─ なし</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
