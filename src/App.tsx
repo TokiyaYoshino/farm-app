@@ -1816,11 +1816,13 @@ export default function App() {
                 {k === "crops" ? "作物" : k === "fields" ? "圃場" : "農薬"}
               </button>
             ))}
-            {isAdmin && (
-              <button onClick={() => setManageSubTab("progress")} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "progress" ? C.card : "transparent", color: manageSubTab === "progress" ? C.primary : C.textMuted, boxShadow: manageSubTab === "progress" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-                進捗
-              </button>
-            )}
+            <button
+              onClick={() => isAdmin && setManageSubTab("progress")}
+              style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, transition:"all 0.15s", background: manageSubTab === "progress" ? C.card : "transparent", color: manageSubTab === "progress" ? C.primary : C.textMuted, boxShadow: manageSubTab === "progress" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", cursor: isAdmin ? "pointer" : "default", opacity: isAdmin ? 1 : 0.45 }}
+              title={isAdmin ? undefined : "管理者のみ閲覧できます"}
+            >
+              進捗
+            </button>
           </div>
 
           {/* 作物 */}
