@@ -945,6 +945,26 @@ export default function App() {
   const cropDataYears = (cropId: number) =>
     [...new Set(reports.filter(r => r.crop_id === cropId && r.quantity).map(r => Number(r.date.slice(0,4))))].sort();
 
+  // 圃場ごとの作付け履歴集計
+  const getFieldCropHistory = (fieldName: string) => {
+    const grouped = reports
+      .filter(r => r.field === fieldName)
+      .reduce((acc, r) => {
+        if (!acc[r.crop_id]) acc[r.crop_id] = { crop_id: r.crop_id, dates: [], count: 0 };
+        acc[r.crop_id].dates.push(r.date);
+        acc[r.crop_id].count += 1;
+        return acc;
+      }, {} as Record<number, { crop_id: number; dates: string[]; count: number }>);
+
+    return Object.values(grouped).map(g => ({
+      crop_id:   g.crop_id,
+      cropName:  crops.find(c => c.id === g.crop_id)?.name ?? "不明",
+      firstDate: [...g.dates].sort()[0],
+      lastDate:  [...g.dates].sort().slice(-1)[0],
+      count:     g.count,
+    })).sort((a, b) => b.lastDate.localeCompare(a.lastDate));
+  };
+
   // ─── スタイル ─────────────────────────────────────────
   const S = {
     wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:80 }),
@@ -1871,6 +1891,38 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                {(() => {
+                  const history = getFieldCropHistory(f.name);
+                  return (
+                    <div style={{ borderTop:`1px solid ${C.border}`, marginTop:10, paddingTop:10 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6, display:"flex", alignItems:"center", gap:4 }}>
+                        <Leaf size={11} strokeWidth={2} />作付け履歴
+                      </div>
+                      {history.length === 0 ? (
+                        <div style={{ fontSize:11, color:C.textMuted }}>記録なし</div>
+                      ) : (
+                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign:"left", color:C.textMuted, fontWeight:600, paddingBottom:4 }}>作物</th>
+                              <th style={{ textAlign:"left", color:C.textMuted, fontWeight:600, paddingBottom:4 }}>最終作業</th>
+                              <th style={{ textAlign:"right", color:C.textMuted, fontWeight:600, paddingBottom:4 }}>作業回数</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {history.map(h => (
+                              <tr key={h.crop_id} style={{ borderTop:`1px solid ${C.border}` }}>
+                                <td style={{ padding:"4px 0", color:C.text, fontWeight:600 }}>{h.cropName}</td>
+                                <td style={{ padding:"4px 0", color:C.textSub }}>{h.lastDate}</td>
+                                <td style={{ padding:"4px 0", textAlign:"right", color:C.primary, fontWeight:700 }}>{h.count}回</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </>}
@@ -2118,6 +2170,38 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                {(() => {
+                  const history = getFieldCropHistory(f.name);
+                  return (
+                    <div style={{ borderTop:`1px solid ${C.border}`, marginTop:10, paddingTop:10 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6, display:"flex", alignItems:"center", gap:4 }}>
+                        <Leaf size={11} strokeWidth={2} />作付け履歴
+                      </div>
+                      {history.length === 0 ? (
+                        <div style={{ fontSize:11, color:C.textMuted }}>記録なし</div>
+                      ) : (
+                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign:"left", color:C.textMuted, fontWeight:600, paddingBottom:4 }}>作物</th>
+                              <th style={{ textAlign:"left", color:C.textMuted, fontWeight:600, paddingBottom:4 }}>最終作業</th>
+                              <th style={{ textAlign:"right", color:C.textMuted, fontWeight:600, paddingBottom:4 }}>作業回数</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {history.map(h => (
+                              <tr key={h.crop_id} style={{ borderTop:`1px solid ${C.border}` }}>
+                                <td style={{ padding:"4px 0", color:C.text, fontWeight:600 }}>{h.cropName}</td>
+                                <td style={{ padding:"4px 0", color:C.textSub }}>{h.lastDate}</td>
+                                <td style={{ padding:"4px 0", textAlign:"right", color:C.primary, fontWeight:700 }}>{h.count}回</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </>}
