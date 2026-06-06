@@ -969,7 +969,7 @@ export default function App() {
     if (data) setProjects(prev => [data as Project, ...prev]);
     setPrjForm({ name:"", crop_id:0, field:"", start_date:"", end_date:"" });
     setShowAddProject(false);
-    showToast("プロジェクトを追加しました");
+    showToast("計画を追加しました");
   };
 
   const addTicket = async (projectId: string) => {
@@ -1005,11 +1005,11 @@ export default function App() {
     });
 
   const deleteProject = (id: string) =>
-    confirmDelete("このプロジェクトと全チケットを削除しますか？", async () => {
+    confirmDelete("この計画と全チケットを削除しますか？", async () => {
       await supabase.from("projects").delete().eq("id", id);
       setProjects(prev => prev.filter(p => p.id !== id));
       setTickets(prev => prev.filter(t => t.project_id !== id));
-      showToast("プロジェクトを削除しました");
+      showToast("計画を削除しました");
     });
 
   const updateCropDate = async (cropId: number, field: "start_date" | "last_work_date", value: string) => {
@@ -2203,13 +2203,13 @@ export default function App() {
           {/* 計画 */}
           {manageSubTab === "backlog" && (
             <div>
-              {/* プロジェクト追加フォーム（管理者のみ） */}
+              {/* 計画追加フォーム（管理者のみ） */}
               {isAdmin && (
                 <>
-                  <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />プロジェクトを追加</div>
+                  <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />計画を追加</div>
                   {showAddProject ? (
                     <div style={S.card}>
-                      <div style={S.lbl}><ClipboardList size={13} strokeWidth={2} />プロジェクト名 *</div>
+                      <div style={S.lbl}><ClipboardList size={13} strokeWidth={2} />計画名 *</div>
                       <input style={S.input} placeholder="例: 2024年 ぶどう栽培" value={prjForm.name} onChange={e => setPrjForm(f => ({ ...f, name:e.target.value }))} />
                       <div style={{ display:"flex", gap:10 }}>
                         <div style={{ flex:1, minWidth:0 }}>
@@ -2248,17 +2248,17 @@ export default function App() {
                     </div>
                   ) : (
                     <button onClick={() => setShowAddProject(true)} style={{ background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:5, fontSize:13, fontWeight:700, color:C.primary, padding:"2px 0", marginBottom:10 }}>
-                      <PlusCircle size={14} strokeWidth={2} />プロジェクトを追加
+                      <PlusCircle size={14} strokeWidth={2} />計画を追加
                     </button>
                   )}
                 </>
               )}
 
-              <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />プロジェクト一覧</div>
+              <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />計画一覧</div>
               {projects.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
                   <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><ClipboardList size={22} color={C.primary} strokeWidth={1.5} /></div>
-                  <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>プロジェクトがありません</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>計画がありません</div>
                   {isAdmin && <div style={{ fontSize:12, color:C.textMuted }}>上のボタンから追加できます</div>}
                 </div>
               ) : projects.map(project => {
@@ -2267,7 +2267,7 @@ export default function App() {
                 const cropLabel   = crops.find(c => c.id === project.crop_id)?.name;
                 return (
                   <div key={project.id} style={{ ...S.card, marginBottom:12 }}>
-                    {/* プロジェクトヘッダー */}
+                    {/* 計画ヘッダー */}
                     <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{project.name}</div>
