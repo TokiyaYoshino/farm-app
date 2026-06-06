@@ -11,7 +11,7 @@ import {
   Play, Square, Mic, MicOff, Timer, Map as MapIcon,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
   LeafyGreen, Grape, Apple, MoreVertical,
-  ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings,
+  ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings, Copy,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -224,6 +224,7 @@ export default function App() {
   const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
   const [datePickerTarget, setDatePickerTarget] = useState<{ cropId: number; field: "start_date" | "last_work_date"; value: string } | null>(null);
   const [openMenuId, setOpenMenuId]       = useState<string | null>(null);
+  const [copySource, setCopySource]       = useState<Report | null>(null);
   const [chartYear, setChartYear]         = useState(() => new Date().getFullYear());
   const [editingTargetYield, setEditingTargetYield] = useState(false);
   const [targetYieldInput, setTargetYieldInput]     = useState("");
@@ -713,6 +714,35 @@ export default function App() {
     showToast("目標収穫量を更新しました");
   };
 
+  const handleCopyReport = (report: Report) => {
+    setCopySource(report);
+    setRForm({
+      user_id:          report.user_id,
+      crop_id:          report.crop_id,
+      field:            report.field,
+      date:             new Date().toISOString().slice(0, 10),
+      work_type:        report.work_type,
+      quantity:         "",
+      work_time:        report.work_time,
+      note:             report.note,
+      pesticide_id:     "",
+      pesticide_amount: "",
+    });
+    if (report.pesticides_used && report.pesticides_used.length > 0) {
+      setSelectedPesticides(report.pesticides_used.map(p => p.id));
+      const amounts: Record<string, string> = {};
+      report.pesticides_used.forEach(p => { if (p.amount) amounts[p.id] = p.amount; });
+      setPesticideAmounts(amounts);
+    } else {
+      setSelectedPesticides([]);
+      setPesticideAmounts({});
+    }
+    setSoilPh(report.soil_ph ? String(report.soil_ph) : "");
+    setTab("report");
+    setInlineOpen(true);
+    setInlineMode("report");
+  };
+
   const addField = async () => {
     if (!fForm.name.trim()) return;
     setSubmitting(true);
@@ -848,6 +878,7 @@ export default function App() {
     if (data) setReports(p => [data[0] as Report, ...p]);
     setInlineMode(null);
     setInlineOpen(false);
+    setCopySource(null);
     setSelectedPesticides([]);
     setPesticideAmounts({});
     setSoilPh("");
@@ -1270,6 +1301,12 @@ export default function App() {
               {r.image_url && (
                 <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:8, marginTop:8, maxHeight:180, objectFit:"cover", display:"block" }} />
               )}
+              <button
+                onClick={() => handleCopyReport(r)}
+                style={{ marginTop:10, display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
+              >
+                <Copy size={12} strokeWidth={2} />コピーして作成
+              </button>
             </div>
           ))}
         </div>
@@ -1464,13 +1501,13 @@ export default function App() {
                   <div className="anim-slideDown" style={{ background:C.card, borderRadius:14, padding:16, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <button onClick={() => setInlineMode(null)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><ChevronLeft size={18} strokeWidth={2.5} /></button>
+                        <button onClick={() => { setInlineMode(null); setCopySource(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><ChevronLeft size={18} strokeWidth={2.5} /></button>
                         <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                           <ClipboardList size={15} color={C.primary} strokeWidth={2} />
-                          <span style={{ fontWeight:700, fontSize:15, color:C.text }}>作業報告</span>
+                          <span style={{ fontWeight:700, fontSize:15, color:C.text }}>{copySource ? "コピーして作成" : "作業報告"}</span>
                         </div>
                       </div>
-                      <button onClick={() => { setInlineOpen(false); setInlineMode(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><X size={16} strokeWidth={2} /></button>
+                      <button onClick={() => { setInlineOpen(false); setInlineMode(null); setCopySource(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><X size={16} strokeWidth={2} /></button>
                     </div>
 
                     <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
@@ -2391,6 +2428,12 @@ export default function App() {
                   {r.image_url && (
                     <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:8, marginTop:8, maxHeight:160, objectFit:"cover", display:"block" }} />
                   )}
+                  <button
+                    onClick={() => { setSelectedCropId(null); handleCopyReport(r); }}
+                    style={{ marginTop:10, display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
+                  >
+                    <Copy size={12} strokeWidth={2} />コピーして作成
+                  </button>
                 </div>
               ))}
             </div>
