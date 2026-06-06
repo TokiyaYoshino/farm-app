@@ -2132,13 +2132,20 @@ export default function App() {
                                 <span style={{ color:C.border, fontSize:12 }}>─</span>
                               )}
                               {ds.length > 0 && matched.length === ds.length && (
-                                <span title="予定あり・完了" style={{ display:"inline-block", background:"#e8f5e9", color:C.primary, borderRadius:5, fontSize:10, fontWeight:700, padding:"2px 5px" }}>完了</span>
+                                <span title="予定あり・完了" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                                  <PackageCheck size={15} color={C.primary} strokeWidth={2} />
+                                </span>
                               )}
                               {ds.length > 0 && matched.length < ds.length && (
-                                <span title={`予定${ds.length}件・完了${matched.length}件`} style={{ display:"inline-block", background:"#fff8e1", color:"#f57f17", borderRadius:5, fontSize:10, fontWeight:700, padding:"2px 5px" }}>{matched.length}/{ds.length}</span>
+                                <span title={`予定${ds.length}件・完了${matched.length}件`} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", gap:2 }}>
+                                  <Clock size={13} color="#f57f17" strokeWidth={2} />
+                                  <span style={{ fontSize:10, color:"#f57f17", fontWeight:700 }}>{matched.length}/{ds.length}</span>
+                                </span>
                               )}
                               {ds.length === 0 && rs.length > 0 && (
-                                <span title="予定外の作業あり" style={{ display:"inline-block", background:C.bg, color:C.textMuted, borderRadius:5, fontSize:10, fontWeight:700, padding:"2px 5px" }}>記録</span>
+                                <span title="予定外の作業あり" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                                  <PenLine size={13} color={C.textMuted} strokeWidth={2} />
+                                </span>
                               )}
                             </td>
                           ))}
@@ -2148,11 +2155,11 @@ export default function App() {
                   </table>
                 </div>
 
-                <div style={{ display:"flex", gap:10, fontSize:11, color:C.textMuted, paddingLeft:2, flexWrap:"wrap" as const }}>
-                  <span><span style={{ background:"#e8f5e9", color:C.primary, borderRadius:4, padding:"1px 5px", fontWeight:700 }}>完了</span> 全予定済み</span>
-                  <span><span style={{ background:"#fff8e1", color:"#f57f17", borderRadius:4, padding:"1px 5px", fontWeight:700 }}>0/2</span> 一部未完了</span>
-                  <span><span style={{ background:C.bg, color:C.textMuted, borderRadius:4, padding:"1px 5px", fontWeight:700 }}>記録</span> 予定外作業</span>
-                  <span><span style={{ color:C.border }}>─</span> なし</span>
+                <div style={{ display:"flex", gap:12, fontSize:11, color:C.textMuted, paddingLeft:2, flexWrap:"wrap" as const, alignItems:"center" }}>
+                  <span style={{ display:"flex", alignItems:"center", gap:4 }}><PackageCheck size={13} color={C.primary} strokeWidth={2} /> 全予定完了</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:4 }}><Clock size={12} color="#f57f17" strokeWidth={2} /> 一部未完了</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:4 }}><PenLine size={12} color={C.textMuted} strokeWidth={2} /> 予定外作業</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ color:C.border }}>─</span> なし</span>
                 </div>
               </div>
             );
