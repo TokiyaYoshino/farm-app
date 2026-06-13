@@ -8,7 +8,7 @@ import {
   PackageCheck, CalendarDays, Clock, Wheat,
   UserCircle, Trash2, PlusCircle, ClipboardList,
   Wind, Camera, X, Navigation, Search, Save,
-  Play, Mic, MicOff, Timer, Map as MapIcon,
+  Mic, MicOff, Timer,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
   LeafyGreen, Grape, Apple, MoreVertical,
   ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings, Copy,
@@ -291,7 +291,6 @@ export default function App() {
   // 作業セッション
   const [workSession, setWorkSession]     = useState<Session | null>(null);
   const [workElapsed, setWorkElapsed]     = useState(0);
-  const [sessionField, setSessionField]   = useState<number | null>(null);
   // 音声入力
   const [isListening, setIsListening]     = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
@@ -300,7 +299,7 @@ export default function App() {
   const noteRecRef                        = useRef<any>(null);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
-  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides"|"progress"|"backlog">("crops");
+  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides"|"progress"|"backlog"|"map">("crops");
   const [inlineOpen, setInlineOpen]           = useState(false);
   const [inlineMode, setInlineMode]           = useState<null | "schedule" | "report">(null);
   const [inlineSchedForm, setInlineSchedForm] = useState({ date: new Date().toISOString().slice(0,10), work_type:"収穫", assigned_user_id:0, crop:"", note:"" });
@@ -664,16 +663,6 @@ export default function App() {
   const fmtElapsed = (s: number) => {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
-  };
-
-  const startWork = async () => {
-    const { data, error } = await supabase.from("sessions").insert([{
-      user_id: currentUser?.id, field_id: sessionField || null, started_at: new Date().toISOString(), voice_memo: "",
-    }]).select();
-    if (error) return showToast(error.message, "err");
-    setWorkSession(data![0] as Session);
-    setVoiceTranscript("");
-    showToast("作業を開始しました");
   };
 
   const stopWork = async () => {
@@ -1178,11 +1167,10 @@ export default function App() {
   // ─── ダッシュボード統計 ───────────────────────────────
   const sevenAgo      = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
   const weekStart     = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return d.toISOString().slice(0,10); })();
-  const workCount7d   = reports.filter(r => r.date >= sevenAgo).length;
-  const weekHarvest   = reports.filter(r => r.date >= weekStart).reduce((s,r) => s+(Number(r.quantity)||0), 0);
-  const sortedReports = [...reports].sort((a,b) => b.date.localeCompare(a.date));
-  const lastWorkDate  = sortedReports[0]?.date ?? null;
-  const daysSinceWork = lastWorkDate ? Math.floor((Date.now()-new Date(lastWorkDate).getTime())/86400000) : null;
+  const workCount7d        = reports.filter(r => r.date >= sevenAgo).length;
+  const weekHarvest        = reports.filter(r => r.date >= weekStart).reduce((s,r) => s+(Number(r.quantity)||0), 0);
+  const todayStr           = new Date().toISOString().slice(0,10);
+  const todayScheduleCount = schedules.filter(s => s.date === todayStr).length;
 
   // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）
   const monthlyHarvest = (cropId: number, year: number) => {
@@ -1330,7 +1318,6 @@ export default function App() {
     { key:"home",      Icon:Home,      label:"ホーム" },
     { key:"report",    Icon:PenLine,   label:"記録" },
     { key:"analytics", Icon:BarChart2, label:"分析" },
-    { key:"map",       Icon:MapIcon,   label:"圃場" },
     { key:"manage",    Icon:Settings,  label:"管理" },
   ];
 
@@ -1415,13 +1402,15 @@ export default function App() {
           農作業レポート
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:6, flex:"0 0 auto", flexShrink:0 }}>
-          <button
-            onClick={() => setShowQuickReport(true)}
-            style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", borderRadius:20, padding:"5px 11px 5px 8px", border:"none", cursor:"pointer", color:C.primary, fontWeight:700, fontSize:13, flexShrink:0 }}
-          >
-            <Plus size={14} strokeWidth={2.5} />
-            作業記録
-          </button>
+          {tab !== "manage" && (
+            <button
+              onClick={() => setShowQuickReport(true)}
+              style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", borderRadius:20, padding:"5px 11px 5px 8px", border:"none", cursor:"pointer", color:C.primary, fontWeight:700, fontSize:13, flexShrink:0 }}
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              作業記録
+            </button>
+          )}
           {currentUser && (
             <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", padding:"5px 7px", background:"rgba(255,255,255,0.15)", borderRadius:20, border:"none", cursor:"pointer", color:"#fff", flexShrink:0 }}>
               <UserCircle size={18} strokeWidth={1.8} />
@@ -1433,25 +1422,8 @@ export default function App() {
       {/* ───── HOME ───── */}
       {tab === "home" && (
         <div style={S.page}>
-          {/* 作業セッション */}
-          {!workSession ? (
-            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
-              <select
-                style={{ flex:1, padding:"10px 12px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:14, background:"#fafcfa", color:C.text }}
-                value={sessionField ?? ""}
-                onChange={e => setSessionField(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">圃場を選択</option>
-                {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-              <button
-                onClick={startWork}
-                style={{ flex:2, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 0", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontWeight:700, fontSize:15, cursor:"pointer", boxShadow:`0 2px 8px rgba(45,106,45,0.35)`, whiteSpace:"nowrap" as const, flexShrink:0, minWidth:0 }}
-              >
-                <Play size={16} strokeWidth={2} style={{ flexShrink:0 }} />作業を開始する
-              </button>
-            </div>
-          ) : (
+          {/* 作業セッション（作業中のみ表示） */}
+          {workSession && (
             <div style={{ background:"#fff3e0", borderRadius:12, padding:"12px 14px", marginBottom:4, border:"1px solid #ffe0b2" }}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <div style={{ width:8, height:8, borderRadius:"50%", background:"#e53935", animation:"pulse 1s infinite", flexShrink:0 }} />
@@ -1506,7 +1478,7 @@ export default function App() {
             {/* 7日間作業数 */}
             <div style={{ background:C.card, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.border}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
               <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                <CalendarDays size={11} color={C.primary} strokeWidth={2} />直近7日間
+                <CalendarDays size={11} color={C.primary} strokeWidth={2} />直近7日（全体）
               </div>
               <div style={{ fontSize:30, fontWeight:800, color:C.text, lineHeight:1.1 }}>{workCount7d}</div>
               <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>件の作業報告</div>
@@ -1519,15 +1491,15 @@ export default function App() {
               <div style={{ fontSize:30, fontWeight:800, color:C.text, lineHeight:1.1 }}>{weekHarvest > 0 ? weekHarvest : "—"}</div>
               <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{weekHarvest > 0 ? "kg 収穫" : "収穫なし"}</div>
             </div>
-            {/* 最終作業からの日数 */}
+            {/* 今日の予定 */}
             <div style={{ background:C.card, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.border}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
               <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                <Clock size={11} color={C.primary} strokeWidth={2} />最終作業
+                <CalendarDays size={11} color={C.primary} strokeWidth={2} />今日の予定
               </div>
-              <div style={{ fontSize:30, fontWeight:800, color: daysSinceWork !== null && daysSinceWork > 7 ? "#e07020" : C.text, lineHeight:1.1 }}>
-                {daysSinceWork !== null ? daysSinceWork : "—"}
+              <div style={{ fontSize:30, fontWeight:800, color: todayScheduleCount > 0 ? C.primary : C.text, lineHeight:1.1 }}>
+                {todayScheduleCount}
               </div>
-              <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{daysSinceWork !== null ? "日前" : "記録なし"}</div>
+              <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{todayScheduleCount > 0 ? "件" : "予定なし"}</div>
             </div>
           </div>
 
@@ -1559,7 +1531,9 @@ export default function App() {
                       {c.growDays}日目
                     </span>
                   )}
-                  <span style={{ marginLeft:4, fontSize:12, color:C.textMuted, flexShrink:0 }}>{expanded ? "▲" : "▼"}</span>
+                  <span style={{ marginLeft:4, fontSize:11, color:C.primary, background:C.primary3, borderRadius:6, padding:"3px 9px", fontWeight:700, flexShrink:0, border:`1px solid ${C.primary4}` }}>
+                    {expanded ? "閉じる" : "詳細を開く"}
+                  </span>
                 </button>
                 {expanded && (
                   <>
@@ -1579,10 +1553,10 @@ export default function App() {
                       </div>
                     </div>
                     <button
-                      onClick={e => { e.stopPropagation(); setSelectedCropId(c.id); }}
+                      onClick={e => { e.stopPropagation(); setTab("analytics"); }}
                       style={{ width:"100%", padding:"9px 0", borderRadius:10, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
                     >
-                      <BarChart2 size={14} strokeWidth={2} />詳細を見る
+                      <BarChart2 size={14} strokeWidth={2} />分析で見る →
                     </button>
                   </>
                 )}
@@ -1681,38 +1655,6 @@ export default function App() {
       )}
 
       {/* ───── MAP ───── */}
-      {tab === "map" && (
-        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:60, display:"flex", flexDirection:"column" }}>
-          {/* ⑪ マップタイトル */}
-          <div style={{ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", padding:"10px 16px", display:"flex", alignItems:"center", gap:8, zIndex:10, flexShrink:0 }}>
-            <MapIcon size={16} strokeWidth={2} />
-            <span style={{ fontSize:15, fontWeight:700 }}>農場マップ</span>
-          </div>
-          {/* Leaflet マップ */}
-          <MapContainer
-            center={userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]}
-            zoom={15}
-            style={{ flex:1, width:"100%", height:"100%" }}
-            zoomControl={false}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            />
-            {userPos && (
-              <Marker position={userPos} icon={PIN_BLUE}>
-                <Popup><b>現在地</b></Popup>
-              </Marker>
-            )}
-            {fields.filter(f => f.lat && f.lng).map(f => (
-              <Marker key={f.id} position={[f.lat!, f.lng!]} icon={PIN_GREEN}>
-                <Popup><b>{f.name}</b></Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-
-        </div>
-      )}
 
       {/* ───── REPORT ───── */}
       {tab === "report" && (
@@ -1730,16 +1672,17 @@ export default function App() {
             onEditComment={editComment}
           />
 
-          {/* ── 記録を追加エリア ── */}
-          <div style={{ marginBottom:16 }}>
-            {!inlineOpen ? (
-              <button
-                onClick={() => setInlineOpen(true)}
-                style={{ width:"100%", padding:"12px 0", borderRadius:12, border:`2px dashed ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
-              >
-                <Plus size={16} strokeWidth={2.5} />記録を追加
-              </button>
-            ) : (
+          {/* ── 記録を追加（削除済み：ヘッダーの＋ボタンからモーダルで追加） ── */}
+          {false && (
+            <div style={{ marginBottom:16 }}>
+              {!inlineOpen ? (
+                <button
+                  onClick={() => setInlineOpen(true)}
+                  style={{ width:"100%", padding:"12px 0", borderRadius:12, border:`2px dashed ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                >
+                  <Plus size={16} strokeWidth={2.5} />記録を追加
+                </button>
+              ) : (
               <>
                 {/* 2択セレクター */}
                 {!inlineMode && (
@@ -1879,10 +1822,10 @@ export default function App() {
                     </div>
                     {periodWeather && (
                       <div style={{ background:"#f0faf0", borderRadius:9, padding:"8px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, fontSize:12, color:C.textSub, display:"flex", alignItems:"center", gap:8 }}>
-                        <span style={{ fontWeight:700, color:C.primary }}>{periodWeather.weather}</span>
-                        {periodWeather.temp && <span>{periodWeather.temp}°C</span>}
-                        {periodWeather.humidity && <span>湿度{periodWeather.humidity}%</span>}
-                        {parseFloat(periodWeather.rain) > 0 && <span>雨量{periodWeather.rain}mm</span>}
+                        <span style={{ fontWeight:700, color:C.primary }}>{periodWeather?.weather}</span>
+                        {periodWeather?.temp && <span>{periodWeather?.temp}°C</span>}
+                        {periodWeather?.humidity && <span>湿度{periodWeather?.humidity}%</span>}
+                        {parseFloat(periodWeather?.rain ?? "0") > 0 && <span>雨量{periodWeather?.rain}mm</span>}
                         <span style={{ marginLeft:"auto", fontSize:11, color:C.textMuted }}>自動取得</span>
                       </div>
                     )}
@@ -1948,7 +1891,8 @@ export default function App() {
                 )}
               </>
             )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2106,18 +2050,21 @@ export default function App() {
       {tab === "manage" && (
         <div style={S.page}>
           {/* サブタブ */}
-          <div style={{ display:"flex", background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
+          <div style={{ display:"flex", flexWrap:"wrap" as const, background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}`, gap:2 }}>
             {(["crops","fields","pesticides"] as const).map(k => (
-              <button key={k} onClick={() => setManageSubTab(k)} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === k ? C.card : "transparent", color: manageSubTab === k ? C.primary : C.textMuted, boxShadow: manageSubTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+              <button key={k} onClick={() => setManageSubTab(k)} style={{ flex:1, minWidth:0, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === k ? C.card : "transparent", color: manageSubTab === k ? C.primary : C.textMuted, boxShadow: manageSubTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
                 {k === "crops" ? "作物" : k === "fields" ? "圃場" : "農薬"}
               </button>
             ))}
-            <button onClick={() => setManageSubTab("backlog")} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "backlog" ? C.card : "transparent", color: manageSubTab === "backlog" ? C.primary : C.textMuted, boxShadow: manageSubTab === "backlog" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+            <button onClick={() => setManageSubTab("backlog")} style={{ flex:1, minWidth:0, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "backlog" ? C.card : "transparent", color: manageSubTab === "backlog" ? C.primary : C.textMuted, boxShadow: manageSubTab === "backlog" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
               計画
+            </button>
+            <button onClick={() => setManageSubTab("map")} style={{ flex:1, minWidth:0, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "map" ? C.card : "transparent", color: manageSubTab === "map" ? C.primary : C.textMuted, boxShadow: manageSubTab === "map" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+              マップ
             </button>
             <button
               onClick={() => isAdmin && setManageSubTab("progress")}
-              style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, transition:"all 0.15s", background: manageSubTab === "progress" ? C.card : "transparent", color: manageSubTab === "progress" ? C.primary : C.textMuted, boxShadow: manageSubTab === "progress" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", cursor: isAdmin ? "pointer" : "default", opacity: isAdmin ? 1 : 0.45 }}
+              style={{ flex:1, minWidth:0, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:700, transition:"all 0.15s", background: manageSubTab === "progress" ? C.card : "transparent", color: manageSubTab === "progress" ? C.primary : C.textMuted, boxShadow: manageSubTab === "progress" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", cursor: isAdmin ? "pointer" : "default", opacity: isAdmin ? 1 : 0.45 }}
               title={isAdmin ? undefined : "管理者のみ閲覧できます"}
             >
               進捗
@@ -2622,6 +2569,33 @@ export default function App() {
               </div>
             );
           })()}
+
+          {/* マップ */}
+          {manageSubTab === "map" && (
+            <div style={{ borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}`, height:"60vh", marginBottom:16 }}>
+              <MapContainer
+                center={userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]}
+                zoom={15}
+                style={{ width:"100%", height:"100%" }}
+                zoomControl={false}
+              >
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                />
+                {userPos && (
+                  <Marker position={userPos} icon={PIN_BLUE}>
+                    <Popup><b>現在地</b></Popup>
+                  </Marker>
+                )}
+                {fields.filter(f => f.lat && f.lng).map(f => (
+                  <Marker key={f.id} position={[f.lat!, f.lng!]} icon={PIN_GREEN}>
+                    <Popup><b>{f.name}</b></Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
+            </div>
+          )}
         </div>
       )}
 

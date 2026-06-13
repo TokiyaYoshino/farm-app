@@ -99,15 +99,42 @@ export default function CalendarView({
   const [filterUserId, setFilterUserId]   = useState<number>(0);
   const [currentSort, setCurrentSort]     = useState<"date-desc"|"date-asc"|"user"|"work_type">("date-desc");
   const [showSortMenu, setShowSortMenu]   = useState(false);
+  const [calView, setCalView]             = useState<"week"|"month">("week");
+  const [weekStart, setWeekStart]         = useState<string>(() => {
+    const d = new Date();
+    const dow = d.getDay();
+    const mon = new Date(d);
+    mon.setDate(d.getDate() - ((dow + 6) % 7));
+    return mon.toISOString().slice(0, 10);
+  });
 
   const goPrev = () => {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
-    else setViewMonth(m => m - 1);
+    if (calView === "week") {
+      const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d.toISOString().slice(0, 10));
+    } else {
+      if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
+      else setViewMonth(m => m - 1);
+    }
   };
   const goNext = () => {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
-    else setViewMonth(m => m + 1);
+    if (calView === "week") {
+      const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d.toISOString().slice(0, 10));
+    } else {
+      if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
+      else setViewMonth(m => m + 1);
+    }
   };
+
+  const weekDays = useMemo(() => {
+    const days: string[] = [];
+    const start = new Date(weekStart);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      days.push(d.toISOString().slice(0, 10));
+    }
+    return days;
+  }, [weekStart]);
 
   const days = useMemo((): (string | null)[] => {
     const firstDow = new Date(viewYear, viewMonth, 1).getDay();
@@ -266,14 +293,24 @@ export default function CalendarView({
     <>
       {/* ── カレンダー本体 ── */}
       <div style={css({ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" })}>
-        {/* Month nav */}
+        {/* nav */}
         <div style={css({ background: `linear-gradient(135deg,${C.primary} 0%,${C.primary2} 100%)`, color: "#fff", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" })}>
           <button onClick={goPrev} style={css({ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "5px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" })}>
             <ChevronLeft size={16} strokeWidth={2.5} />
           </button>
-          <div style={css({ display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15 })}>
-            <CalendarDays size={15} strokeWidth={2} />
-            {viewYear}年{viewMonth + 1}月
+          <div style={css({ display: "flex", alignItems: "center", gap: 8 })}>
+            <div style={css({ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 14 })}>
+              <CalendarDays size={14} strokeWidth={2} />
+              {calView === "week"
+                ? `${weekDays[0].slice(5).replace("-","/")} 〜 ${weekDays[6].slice(5).replace("-","/")} `
+                : `${viewYear}年${viewMonth + 1}月`}
+            </div>
+            <button
+              onClick={() => setCalView(v => v === "week" ? "month" : "week")}
+              style={css({ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: 6, padding: "3px 9px", color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700 })}
+            >
+              {calView === "week" ? "月表示" : "週表示"}
+            </button>
           </div>
           <button onClick={goNext} style={css({ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "5px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" })}>
             <ChevronRight size={16} strokeWidth={2.5} />
@@ -289,7 +326,44 @@ export default function CalendarView({
           ))}
         </div>
 
-        {/* Grid cells */}
+        {/* 週表示グリッド */}
+        {calView === "week" && (
+          <div style={css({ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: "1px", background: C.border })}>
+            {weekDays.map((date) => {
+              const isToday = date === today;
+              const isSel   = date === selectedDate;
+              const dow     = new Date(date + "T00:00:00").getDay();
+              const { items, extra } = cellItems(date);
+              return (
+                <div
+                  key={date}
+                  onClick={() => setSelectedDate(isSel ? null : date)}
+                  style={css({ background: isSel ? C.primary3 : C.card, minHeight: 80, padding: "4px 2px 3px", cursor: "pointer", userSelect: "none" as const, overflow: "hidden" })}
+                >
+                  <div style={css({
+                    fontSize: 12, fontWeight: isToday ? 800 : 500,
+                    color: isToday ? "#fff" : dow === 0 ? C.danger : dow === 6 ? C.blue : C.text,
+                    background: isToday ? C.primary : "transparent",
+                    borderRadius: "50%", width: 22, height: 22,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    margin: "0 auto 2px",
+                  })}>
+                    {Number(date.slice(8))}
+                  </div>
+                  {items.map((it, i) => (
+                    <div key={i} style={css({ fontSize: 9, padding: "1px 2px", borderRadius: 3, marginBottom: 1, overflow: "hidden", whiteSpace: "nowrap" as const, textOverflow: "ellipsis", background: it.type === "r" ? C.primary3 : C.blueBg, color: it.type === "r" ? C.primary : C.blue, fontWeight: 600 })}>
+                      {it.label}
+                    </div>
+                  ))}
+                  {extra > 0 && <div style={css({ fontSize: 9, color: C.textMuted, textAlign: "center" as const })}>+{extra}</div>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 月表示グリッド */}
+        {calView === "month" && (
         <div style={css({ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: "1px", background: C.border })}>
           {days.map((date, idx) => {
             const isToday = date === today;
@@ -337,6 +411,7 @@ export default function CalendarView({
             );
           })}
         </div>
+        )}
 
         {/* Filter row */}
         <div style={css({ borderTop: `1px solid ${C.border}`, background: C.bg })}>
