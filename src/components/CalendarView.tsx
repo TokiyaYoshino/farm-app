@@ -35,6 +35,7 @@ type ReportRow = {
   work_type: string; quantity: string; work_time: string; note: string;
   field: string; image_url?: string; weather?: string; temp?: string;
   humidity?: string; rain?: string; pesticide_id?: string; pesticide_amount?: string;
+  work_start?: string | null; work_end?: string | null;
 };
 type CropRow = { id: number; name: string };
 type UserRow = { id: number; name: string; role?: string };
@@ -459,7 +460,9 @@ export default function CalendarView({
                         <span style={css({ display: "flex", alignItems: "center", gap: 4, color: C.textSub })}><UserCircle size={12} strokeWidth={2} />{userName(r.user_id)}</span>
                         <span style={css({ display: "flex", alignItems: "center", gap: 4, color: C.textSub })}><Leaf size={12} strokeWidth={2} />{cropName(r.crop_id)}</span>
                         {r.quantity  && <span style={css({ display: "flex", alignItems: "center", gap: 4, color: C.textSub })}><PackageCheck size={12} strokeWidth={2} />{r.quantity}kg</span>}
-                        {r.work_time && <span style={css({ display: "flex", alignItems: "center", gap: 4, color: C.textSub })}><Clock size={12} strokeWidth={2} />{r.work_time}h</span>}
+                        {(r.work_start && r.work_end)
+                          ? <span style={css({ display: "flex", alignItems: "center", gap: 4, color: C.textSub })}><Clock size={12} strokeWidth={2} />{r.work_start}〜{r.work_end}</span>
+                          : r.work_time ? <span style={css({ display: "flex", alignItems: "center", gap: 4, color: C.textSub })}><Clock size={12} strokeWidth={2} />{r.work_time}h</span> : null}
                       </div>
                       {r.pesticide_id && (
                         <div style={css({ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#7b1fa2", background: "#f3e5f5", borderRadius: 7, padding: "4px 8px", marginBottom: 8, width: "fit-content" })}>
@@ -707,7 +710,9 @@ export default function CalendarView({
                         <div style={css({ display: "flex", gap: 8, fontSize: 11, color: C.textMuted, alignItems: "center", flexWrap: "wrap" as const })}>
                           <span style={{ display: "flex", alignItems: "center", gap: 3 }}><UserCircle size={10} strokeWidth={2} />{userName(r.user_id)}</span>
                           {r.quantity  && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><PackageCheck size={10} strokeWidth={2} />{r.quantity}kg</span>}
-                          {r.work_time && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Clock size={10} strokeWidth={2} />{r.work_time}h</span>}
+                          {(r.work_start && r.work_end)
+                            ? <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Clock size={10} strokeWidth={2} />{r.work_start}〜{r.work_end}</span>
+                            : r.work_time ? <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Clock size={10} strokeWidth={2} />{r.work_time}h</span> : null}
                           {r.image_url && <span style={{ display: "flex", alignItems: "center", gap: 3, color: C.primary }}>📷 写真あり</span>}
                         </div>
                         {r.note && (

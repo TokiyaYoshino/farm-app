@@ -66,6 +66,40 @@ const WMO_MAP: Record<number, string> = {
   61:"雨",63:"雨",65:"雨",71:"雪",73:"雪",75:"雪",
   80:"雨",81:"雨",82:"雷雨",95:"雷雨",99:"雷雨",
 };
+const wmoToLabel = (code: number): string => WMO_MAP[code] || "曇り";
+
+async function fetchWeatherForPeriod(
+  lat: number, lng: number, date: string, startTime: string, endTime: string
+): Promise<{ temp: string; humidity: string; rain: string; weather: string }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const baseUrl = date < today
+    ? "https://archive-api.open-meteo.com/v1/archive"
+    : "https://api.open-meteo.com/v1/forecast";
+  const url = `${baseUrl}?latitude=${lat}&longitude=${lng}` +
+    `&hourly=temperature_2m,relative_humidity_2m,precipitation,weathercode` +
+    `&start_date=${date}&end_date=${date}&timezone=Asia%2FTokyo`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const hours: string[]  = data.hourly?.time ?? [];
+  const temps: number[]  = data.hourly?.temperature_2m ?? [];
+  const hums: number[]   = data.hourly?.relative_humidity_2m ?? [];
+  const rains: number[]  = data.hourly?.precipitation ?? [];
+  const codes: number[]  = data.hourly?.weathercode ?? [];
+  const sh = parseInt(startTime.split(":")[0]);
+  const eh = parseInt(endTime.split(":")[0]);
+  const idx: number[] = [];
+  hours.forEach((h, i) => {
+    const hr = parseInt(h.substring(11, 13));
+    if (hr >= sh && hr <= eh) idx.push(i);
+  });
+  if (idx.length === 0) return { temp: "", humidity: "", rain: "", weather: "" };
+  const avg = (arr: number[]) => (idx.reduce((s, i) => s + arr[i], 0) / idx.length).toFixed(1);
+  const totalRain = idx.reduce((s, i) => s + (rains[i] ?? 0), 0).toFixed(1);
+  const codeCount: Record<number, number> = {};
+  idx.forEach(i => { codeCount[codes[i]] = (codeCount[codes[i]] ?? 0) + 1; });
+  const dominant = parseInt(Object.entries(codeCount).sort((a, b) => b[1] - a[1])[0][0]);
+  return { temp: avg(temps), humidity: avg(hums), rain: totalRain, weather: wmoToLabel(dominant) };
+}
 
 // 作物別アイコン設定
 type CropIconDef = { Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; color: string; bg: string; };
@@ -105,6 +139,8 @@ interface Report {
   pesticide_id?: string; pesticide_amount?: string;
   pesticides_used?: { id: string; amount: string | null }[];
   soil_ph?: number | null;
+  work_start?: string | null;
+  work_end?: string | null;
 }
 interface WeatherInfo {
   label: string;
@@ -217,7 +253,8 @@ export default function App() {
   const [wxLoading, setWxLoading]         = useState(true);
   const [wxAuto, setWxAuto]               = useState<WeatherInfo | null>(null);
   const [wxManual, setWxManual]           = useState<WeatherInfo>({ label:"晴れ", Icon:Sun, temp:"" });
-  const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", note:"", pesticide_id:"", pesticide_amount:"" });
+  const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", work_start:"", work_end:"", note:"", pesticide_id:"", pesticide_amount:"" });
+  const [periodWeather, setPeriodWeather] = useState<{ temp:string; humidity:string; rain:string; weather:string } | null>(null);
   const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"" });
   const [fForm, setFForm]                 = useState({ name:"" });
   const [cropListTab, setCropListTab]     = useState<"crops"|"fields">("crops");
@@ -419,6 +456,18 @@ export default function App() {
     setTargetYieldInput("");
   }, [selectedCropId]);
 
+  // 開始・終了時刻が揃ったら選択圃場（なければ設定座標）の気象を自動取得
+  useEffect(() => {
+    if (!rForm.work_start || !rForm.work_end || !rForm.date) { setPeriodWeather(null); return; }
+    const selectedField = fields.find(f => f.name === rForm.field);
+    const lat = selectedField?.lat ?? weatherCoords?.lat;
+    const lng = selectedField?.lng ?? weatherCoords?.lng;
+    if (!lat || !lng) return;
+    fetchWeatherForPeriod(lat, lng, rForm.date, rForm.work_start, rForm.work_end)
+      .then(result => setPeriodWeather(result))
+      .catch(() => setPeriodWeather(null));
+  }, [rForm.work_start, rForm.work_end, rForm.date, rForm.field]);
+
   const showToast = (msg: string, type: "ok"|"err" = "ok") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), type === "err" ? 5000 : 2500);
@@ -513,20 +562,23 @@ export default function App() {
       if (imageFile) {
         imageUrl = await uploadImage(imageFile);
       }
-      const w = wxAuto || (wxManual.temp ? wxManual : null);
+      const pw = periodWeather;
+      const w = pw ? null : (wxAuto || (wxManual.temp ? wxManual : null));
       const { data, error } = await supabase.from("reports").insert([{
         ...rForm, image_url: imageUrl, org: currentOrg,
-        weather:      w?.label || "",
+        weather:      pw?.weather  ?? w?.label    ?? "",
         weather_icon: "",
-        temp:         w?.temp     ? String(w.temp)     : "",
-        humidity:     w?.humidity !== undefined ? String(w.humidity) : "",
-        rain:         w?.rain     !== undefined ? String(w.rain)     : "",
+        temp:         pw?.temp     ?? (w?.temp     ? String(w.temp)     : ""),
+        humidity:     pw?.humidity ?? (w?.humidity !== undefined ? String(w.humidity) : ""),
+        rain:         pw?.rain     ?? (w?.rain     !== undefined ? String(w.rain)     : ""),
         pesticide_id:     rForm.pesticide_id     || null,
         pesticide_amount: rForm.pesticide_amount || null,
         pesticides_used: selectedPesticides.length > 0
           ? selectedPesticides.map(id => ({ id, amount: pesticideAmounts[id] || null }))
           : null,
         soil_ph: soilPh ? parseFloat(soilPh) : null,
+        work_start: rForm.work_start || null,
+        work_end:   rForm.work_end   || null,
       }]).select();
       if (error) { showToast(error.message || "登録に失敗しました", "err"); return; }
       const newReport = data?.[0] as Report | undefined;
@@ -536,20 +588,24 @@ export default function App() {
       setSelectedPesticides([]);
       setPesticideAmounts({});
       setSoilPh("");
+      setPeriodWeather(null);
       showToast("作業報告を登録しました");
       setTab("home");
 
       // LINE グループに通知（失敗しても報告登録には影響させない）
       const r = data?.[0] as Report | undefined;
       if (r) {
+        const workTimeLabel = r.work_start && r.work_end
+          ? `${r.work_start} 〜 ${r.work_end}`
+          : r.work_time ? `${r.work_time}h` : null;
         const lines = [
           `【作業報告】`,
           `作業者: ${currentUser?.name}`,
           `作物: ${cropName(r.crop_id)}`,
           `圃場: ${r.field || "未設定"}`,
           `作業: ${r.work_type}`,
-          ...(r.quantity  ? [`収穫量: ${r.quantity}kg`] : []),
-          ...(r.work_time ? [`作業時間: ${r.work_time}h`] : []),
+          ...(r.quantity     ? [`収穫量: ${r.quantity}kg`] : []),
+          ...(workTimeLabel  ? [`作業時間: ${workTimeLabel}`] : []),
           `日付: ${r.date}`,
           ...(r.weather ? [`天気: ${r.weather}${r.temp ? ` / ${r.temp}°C` : ""}${r.humidity ? ` / 湿度${r.humidity}%` : ""}${r.rain ? ` / 雨量${r.rain}mm` : ""}`] : []),
           ...(r.note ? [`メモ: ${r.note}`] : []),
@@ -767,6 +823,8 @@ export default function App() {
       work_type:        report.work_type,
       quantity:         "",
       work_time:        report.work_time,
+      work_start:       report.work_start ?? "",
+      work_end:         report.work_end   ?? "",
       note:             report.note,
       pesticide_id:     "",
       pesticide_amount: "",
@@ -901,23 +959,26 @@ export default function App() {
   const addReportInline = async () => {
     if (!rForm.date || !rForm.work_type || !currentUser) return;
     setSubmitting(true);
-    const w = wxAuto || (wxManual.temp ? wxManual : null);
+    const pw = periodWeather;
+    const w = pw ? null : (wxAuto || (wxManual.temp ? wxManual : null));
     const { data, error } = await supabase.from("reports").insert([{
       ...rForm, image_url: "", org: currentOrg,
-      weather:      w?.label || "",
+      weather:      pw?.weather  ?? w?.label    ?? "",
       weather_icon: "",
-      temp:         w?.temp     ? String(w.temp)     : "",
-      humidity:     w?.humidity !== undefined ? String(w.humidity) : "",
-      rain:         w?.rain     !== undefined ? String(w.rain)     : "",
+      temp:         pw?.temp     ?? (w?.temp     ? String(w.temp)     : ""),
+      humidity:     pw?.humidity ?? (w?.humidity !== undefined ? String(w.humidity) : ""),
+      rain:         pw?.rain     ?? (w?.rain     !== undefined ? String(w.rain)     : ""),
       pesticide_id:     rForm.pesticide_id     || null,
       pesticide_amount: rForm.pesticide_amount || null,
       pesticides_used: selectedPesticides.length > 0
         ? selectedPesticides.map(id => ({ id, amount: pesticideAmounts[id] || null }))
         : null,
       soil_ph: soilPh ? parseFloat(soilPh) : null,
+      work_start: rForm.work_start || null,
+      work_end:   rForm.work_end   || null,
     }]).select();
     setSubmitting(false);
-    if (error) return showToast("登録に失敗しました", "err");
+    if (error) return showToast(error.message || "登録に失敗しました", "err");
     const newReport = data?.[0] as Report | undefined;
     if (newReport) { setReports(p => [newReport, ...p]); await autoMatchTicket(newReport); }
     setInlineMode(null);
@@ -926,6 +987,7 @@ export default function App() {
     setSelectedPesticides([]);
     setPesticideAmounts({});
     setSoilPh("");
+    setPeriodWeather(null);
     showToast("作業報告を登録しました");
   };
 
@@ -1449,7 +1511,9 @@ export default function App() {
               <div style={{ display:"flex", flexWrap:"wrap", gap:8, fontSize:12 }}>
                 <span style={{ color:C.textSub, fontWeight:600 }}>{r.work_type}</span>
                 {r.quantity  && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><PackageCheck size={11} strokeWidth={2}/>{r.quantity}kg</span>}
-                {r.work_time && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span>}
+                {(r.work_start && r.work_end)
+                  ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_start}〜{r.work_end}</span>
+                  : r.work_time ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span> : null}
                 {r.pesticide_id && (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? <span style={{ color:"#7b1fa2", display:"flex", alignItems:"center", gap:3, background:"#f3e5f5", borderRadius:6, padding:"1px 7px", fontWeight:600 }}><FlaskConical size={10} strokeWidth={2}/>{ps.name}{r.pesticide_amount ? ` ${r.pesticide_amount}` : ""}</span> : null; })()}
               </div>
               <div style={{ ...S.row, marginTop:8 }}>
@@ -1717,6 +1781,22 @@ export default function App() {
 
                     <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />実績数量 (kg)</div>
                     <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
+
+                    <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時刻</div>
+                    <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
+                      <input type="time" style={{ ...S.input, marginBottom:0, flex:1 }} value={rForm.work_start} onChange={e => setRForm(f => ({ ...f, work_start:e.target.value }))} />
+                      <span style={{ color:C.textMuted, flexShrink:0, fontSize:13 }}>〜</span>
+                      <input type="time" style={{ ...S.input, marginBottom:0, flex:1 }} value={rForm.work_end} onChange={e => setRForm(f => ({ ...f, work_end:e.target.value }))} />
+                    </div>
+                    {periodWeather && (
+                      <div style={{ background:"#f0faf0", borderRadius:9, padding:"8px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, fontSize:12, color:C.textSub, display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ fontWeight:700, color:C.primary }}>{periodWeather.weather}</span>
+                        {periodWeather.temp && <span>{periodWeather.temp}°C</span>}
+                        {periodWeather.humidity && <span>湿度{periodWeather.humidity}%</span>}
+                        {parseFloat(periodWeather.rain) > 0 && <span>雨量{periodWeather.rain}mm</span>}
+                        <span style={{ marginLeft:"auto", fontSize:11, color:C.textMuted }}>自動取得</span>
+                      </div>
+                    )}
 
                     <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />使用農薬（任意）</div>
                     {pesticides.length === 0 ? (
@@ -2756,12 +2836,17 @@ export default function App() {
                       <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{r.quantity} kg</div>
                     </div>
                   )}
-                  {r.work_time && (
+                  {(r.work_start && r.work_end) ? (
+                    <div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業時刻</div>
+                      <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{r.work_start} 〜 {r.work_end}</div>
+                    </div>
+                  ) : r.work_time ? (
                     <div>
                       <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業時間</div>
                       <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{r.work_time} h</div>
                     </div>
-                  )}
+                  ) : null}
                   {r.soil_ph != null && (
                     <div>
                       <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>土壌pH</div>
@@ -3040,7 +3125,9 @@ export default function App() {
                   </div>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8, fontSize:12 }}>
                     {r.quantity  && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><PackageCheck size={11} strokeWidth={2}/>{r.quantity}kg</span>}
-                    {r.work_time && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span>}
+                    {(r.work_start && r.work_end)
+                      ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_start}〜{r.work_end}</span>
+                      : r.work_time ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span> : null}
                     <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2}/>{userName(r.user_id)}</span>
                   </div>
                   {r.note && (
@@ -3160,17 +3247,26 @@ export default function App() {
                     {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
 
-                  {/* 収穫量・作業時間 */}
-                  <div style={{ display:"flex", gap:12 }}>
-                    <div style={{ flex:1 }}>
-                      <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />収穫量 (kg)</div>
-                      <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
-                    </div>
-                    <div style={{ flex:1 }}>
-                      <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時間 (h)</div>
-                      <input type="number" style={S.input} placeholder="例: 2" value={rForm.work_time} onChange={e => setRForm(f => ({ ...f, work_time:e.target.value }))} />
-                    </div>
+                  {/* 収穫量 */}
+                  <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />収穫量 (kg)</div>
+                  <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
+
+                  {/* 作業時刻 */}
+                  <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時刻</div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
+                    <input type="time" style={{ ...S.input, marginBottom:0, flex:1 }} value={rForm.work_start} onChange={e => setRForm(f => ({ ...f, work_start:e.target.value }))} />
+                    <span style={{ color:C.textMuted, flexShrink:0, fontSize:13 }}>〜</span>
+                    <input type="time" style={{ ...S.input, marginBottom:0, flex:1 }} value={rForm.work_end} onChange={e => setRForm(f => ({ ...f, work_end:e.target.value }))} />
                   </div>
+                  {periodWeather && (
+                    <div style={{ background:"#f0faf0", borderRadius:9, padding:"8px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, fontSize:12, color:C.textSub, display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontWeight:700, color:C.primary }}>{periodWeather.weather}</span>
+                      {periodWeather.temp && <span>{periodWeather.temp}°C</span>}
+                      {periodWeather.humidity && <span>湿度{periodWeather.humidity}%</span>}
+                      {parseFloat(periodWeather.rain) > 0 && <span>雨量{periodWeather.rain}mm</span>}
+                      <span style={{ marginLeft:"auto", fontSize:11, color:C.textMuted }}>自動取得</span>
+                    </div>
+                  )}
 
                   {/* 写真 */}
                   <div style={S.lbl}><Camera size={13} strokeWidth={2} />写真</div>
