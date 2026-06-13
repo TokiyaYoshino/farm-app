@@ -69,6 +69,14 @@ const WMO_MAP: Record<number, string> = {
 };
 const wmoToLabel = (code: number): string => WMO_MAP[code] || "曇り";
 
+const calcWorkMinutes = (start: string | null | undefined, end: string | null | undefined): number | null => {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  const diff = (eh * 60 + em) - (sh * 60 + sm);
+  return diff > 0 ? diff : null;
+};
+
 async function fetchWeatherForPeriod(
   lat: number, lng: number, date: string, startTime: string, endTime: string
 ): Promise<{ temp: string; humidity: string; rain: string; weather: string }> {
@@ -132,6 +140,7 @@ interface Pesticide {
   dilution_rate: string; notes: string; created_at: string;
   master_id?: string;
 }
+interface WorkCategory { id: number; name: string; unit: string | null; }
 interface Report {
   id: number; user_id: number; crop_id: number; field: string; date: string;
   work_type: string; quantity: string; work_time: string; note: string;
@@ -142,6 +151,10 @@ interface Report {
   soil_ph?: number | null;
   work_start?: string | null;
   work_end?: string | null;
+  work_category_id?: number | null;
+  quantity_value?: number | null;
+  quantity_unit?: string | null;
+  work_minutes?: number | null;
 }
 interface WeatherInfo {
   label: string;
@@ -254,7 +267,8 @@ export default function App() {
   const [wxLoading, setWxLoading]         = useState(true);
   const [wxAuto, setWxAuto]               = useState<WeatherInfo | null>(null);
   const [wxManual, setWxManual]           = useState<WeatherInfo>({ label:"晴れ", Icon:Sun, temp:"" });
-  const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", quantity:"", work_time:"", work_start:"", work_end:"", note:"", pesticide_id:"", pesticide_amount:"" });
+  const [workCategories, setWorkCategories] = useState<WorkCategory[]>([]);
+  const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", work_category_id:0, quantity:"", quantity_value:"", quantity_unit:"", work_time:"", work_start:"", work_end:"", note:"", pesticide_id:"", pesticide_amount:"" });
   const [periodWeather, setPeriodWeather] = useState<{ temp:string; humidity:string; rain:string; weather:string } | null>(null);
   const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"" });
   const [fForm, setFForm]                 = useState({ name:"" });
@@ -342,7 +356,7 @@ export default function App() {
 
       // org でフィルタしてデータ取得
       const orgUserIds = userList.filter(x => x.org === org).map(u => u.id);
-      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: tkt }] = await Promise.all([
+      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: tkt }, { data: wc }] = await Promise.all([
         supabase.from("crops").select("*").eq("org", org).order("id"),
         supabase.from("fields").select("*").eq("org", org).order("id"),
         supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
@@ -353,6 +367,7 @@ export default function App() {
         supabase.from("pesticides").select("*").eq("org", org).order("name"),
         supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
         supabase.from("tickets").select("*").eq("org", org),
+        supabase.from("work_categories").select("*").order("id"),
       ]);
       if (cErr)  console.error("crops fetch error:",   cErr);
       if (fdErr) console.error("fields fetch error:",  fdErr);
@@ -370,6 +385,7 @@ export default function App() {
       if (ps) setPesticides(ps as Pesticide[]);
       if (prj) setProjects(prj as Project[]);
       if (tkt) setTickets(tkt as Ticket[]);
+      if (wc) setWorkCategories(wc as WorkCategory[]);
       setLoading(false);
       } catch (e) {
         console.error("Startup error:", e);
@@ -580,6 +596,11 @@ export default function App() {
         soil_ph: soilPh ? parseFloat(soilPh) : null,
         work_start: rForm.work_start || null,
         work_end:   rForm.work_end   || null,
+        work_category_id: rForm.work_category_id || null,
+        quantity_value:   rForm.quantity_value ? parseFloat(rForm.quantity_value) : null,
+        quantity_unit:    rForm.quantity_unit || null,
+        quantity:         rForm.quantity_value || rForm.quantity,
+        work_minutes:     calcWorkMinutes(rForm.work_start, rForm.work_end),
       }]).select();
       if (error) { showToast(error.message || "登録に失敗しました", "err"); return; }
       const newReport = data?.[0] as Report | undefined;
@@ -836,7 +857,10 @@ export default function App() {
       field:            report.field,
       date:             new Date().toISOString().slice(0, 10),
       work_type:        report.work_type,
+      work_category_id: report.work_category_id ?? 0,
       quantity:         "",
+      quantity_value:   "",
+      quantity_unit:    report.quantity_unit ?? "",
       work_time:        report.work_time,
       work_start:       report.work_start ?? "",
       work_end:         report.work_end   ?? "",
@@ -991,6 +1015,11 @@ export default function App() {
       soil_ph: soilPh ? parseFloat(soilPh) : null,
       work_start: rForm.work_start || null,
       work_end:   rForm.work_end   || null,
+      work_category_id: rForm.work_category_id || null,
+      quantity_value:   rForm.quantity_value ? parseFloat(rForm.quantity_value) : null,
+      quantity_unit:    rForm.quantity_unit || null,
+      quantity:         rForm.quantity_value || rForm.quantity,
+      work_minutes:     calcWorkMinutes(rForm.work_start, rForm.work_end),
     }]).select();
     setSubmitting(false);
     if (error) return showToast(error.message || "登録に失敗しました", "err");
@@ -1786,17 +1815,31 @@ export default function App() {
                     </div>
 
                     <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業種別</div>
-                    <select style={S.select} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
-                      {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    {workCategories.length > 0 ? (
+                      <select style={S.select} value={rForm.work_category_id}
+                        onChange={e => {
+                          const cat = workCategories.find(c => c.id === Number(e.target.value));
+                          setRForm(f => ({ ...f, work_category_id: Number(e.target.value), work_type: cat?.name ?? f.work_type, quantity_unit: cat?.unit ?? f.quantity_unit }));
+                        }}>
+                        <option value={0}>選択してください</option>
+                        {workCategories.map(c => <option key={c.id} value={c.id}>{c.name}{c.unit ? `（${c.unit}）` : ""}</option>)}
+                      </select>
+                    ) : (
+                      <select style={S.select} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
+                        {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    )}
 
                     <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />担当者</div>
                     <select style={S.select} value={rForm.user_id} onChange={e => setRForm(f => ({ ...f, user_id:Number(e.target.value) }))}>
                       {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
 
-                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />実績数量 (kg)</div>
-                    <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
+                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
+                    <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
+                      <input type="number" style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: 20" value={rForm.quantity_value} onChange={e => setRForm(f => ({ ...f, quantity_value:e.target.value, quantity:e.target.value }))} />
+                      <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:13, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
+                    </div>
 
                     <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時刻</div>
                     <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
@@ -3248,9 +3291,20 @@ export default function App() {
 
               {/* 作業種別 */}
               <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業の種類</div>
-              <select style={S.select} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
-                {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              {workCategories.length > 0 ? (
+                <select style={S.select} value={rForm.work_category_id}
+                  onChange={e => {
+                    const cat = workCategories.find(c => c.id === Number(e.target.value));
+                    setRForm(f => ({ ...f, work_category_id: Number(e.target.value), work_type: cat?.name ?? f.work_type, quantity_unit: cat?.unit ?? f.quantity_unit }));
+                  }}>
+                  <option value={0}>選択してください</option>
+                  {workCategories.map(c => <option key={c.id} value={c.id}>{c.name}{c.unit ? `（${c.unit}）` : ""}</option>)}
+                </select>
+              ) : (
+                <select style={S.select} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
+                  {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
 
               {/* 詳細アコーディオン */}
               <button
@@ -3268,9 +3322,12 @@ export default function App() {
                     {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
 
-                  {/* 収穫量 */}
-                  <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />収穫量 (kg)</div>
-                  <input type="number" style={S.input} placeholder="例: 20" value={rForm.quantity} onChange={e => setRForm(f => ({ ...f, quantity:e.target.value }))} />
+                  {/* 実績数量 */}
+                  <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
+                    <input type="number" style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: 20" value={rForm.quantity_value} onChange={e => setRForm(f => ({ ...f, quantity_value:e.target.value, quantity:e.target.value }))} />
+                    <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:13, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
+                  </div>
 
                   {/* 作業時刻 */}
                   <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時刻</div>
