@@ -268,6 +268,7 @@ export default function App() {
   const [pesticideAmounts, setPesticideAmounts]     = useState<Record<string, string>>({});
   const [soilPh, setSoilPh]                         = useState("");
   const [submitting, setSubmitting]       = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
@@ -507,61 +508,62 @@ export default function App() {
   const addReport = async () => {
     if (!rForm.date || !rForm.work_type || !currentUser) return;
     setImgUploading(true);
-    let imageUrl = "";
-    if (imageFile) {
-      try { imageUrl = await uploadImage(imageFile); }
-      catch (e: unknown) {
-        setImgUploading(false);
-        return showToast((e as Error).message, "err");
+    try {
+      let imageUrl = "";
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile);
       }
-    }
-    const w = wxAuto || (wxManual.temp ? wxManual : null);
-    const { data, error } = await supabase.from("reports").insert([{
-      ...rForm, image_url: imageUrl, org: currentOrg,
-      weather:      w?.label || "",
-      weather_icon: "",
-      temp:         w?.temp     ? String(w.temp)     : "",
-      humidity:     w?.humidity !== undefined ? String(w.humidity) : "",
-      rain:         w?.rain     !== undefined ? String(w.rain)     : "",
-      pesticide_id:     rForm.pesticide_id     || null,
-      pesticide_amount: rForm.pesticide_amount || null,
-      pesticides_used: selectedPesticides.length > 0
-        ? selectedPesticides.map(id => ({ id, amount: pesticideAmounts[id] || null }))
-        : null,
-      soil_ph: soilPh ? parseFloat(soilPh) : null,
-    }]).select();
-    setImgUploading(false);
-    if (error) return showToast("登録に失敗しました", "err");
-    const newReport = data?.[0] as Report | undefined;
-    if (newReport) { setReports(p => [newReport, ...p]); await autoMatchTicket(newReport); }
-    setImageFile(null);
-    setImagePreview("");
-    setSelectedPesticides([]);
-    setPesticideAmounts({});
-    setSoilPh("");
-    showToast("作業報告を登録しました");
-    setTab("home");
+      const w = wxAuto || (wxManual.temp ? wxManual : null);
+      const { data, error } = await supabase.from("reports").insert([{
+        ...rForm, image_url: imageUrl, org: currentOrg,
+        weather:      w?.label || "",
+        weather_icon: "",
+        temp:         w?.temp     ? String(w.temp)     : "",
+        humidity:     w?.humidity !== undefined ? String(w.humidity) : "",
+        rain:         w?.rain     !== undefined ? String(w.rain)     : "",
+        pesticide_id:     rForm.pesticide_id     || null,
+        pesticide_amount: rForm.pesticide_amount || null,
+        pesticides_used: selectedPesticides.length > 0
+          ? selectedPesticides.map(id => ({ id, amount: pesticideAmounts[id] || null }))
+          : null,
+        soil_ph: soilPh ? parseFloat(soilPh) : null,
+      }]).select();
+      if (error) { showToast(error.message || "登録に失敗しました", "err"); return; }
+      const newReport = data?.[0] as Report | undefined;
+      if (newReport) { setReports(p => [newReport, ...p]); await autoMatchTicket(newReport); }
+      setImageFile(null);
+      setImagePreview("");
+      setSelectedPesticides([]);
+      setPesticideAmounts({});
+      setSoilPh("");
+      showToast("作業報告を登録しました");
+      setTab("home");
 
-    // LINE グループに通知（失敗しても報告登録には影響させない）
-    const r = data?.[0] as Report | undefined;
-    if (r) {
-      const lines = [
-        `【作業報告】`,
-        `作業者: ${currentUser?.name}`,
-        `作物: ${cropName(r.crop_id)}`,
-        `圃場: ${r.field || "未設定"}`,
-        `作業: ${r.work_type}`,
-        ...(r.quantity  ? [`収穫量: ${r.quantity}kg`] : []),
-        ...(r.work_time ? [`作業時間: ${r.work_time}h`] : []),
-        `日付: ${r.date}`,
-        ...(r.weather ? [`天気: ${r.weather}${r.temp ? ` / ${r.temp}°C` : ""}${r.humidity ? ` / 湿度${r.humidity}%` : ""}${r.rain ? ` / 雨量${r.rain}mm` : ""}`] : []),
-        ...(r.note ? [`メモ: ${r.note}`] : []),
-      ];
-      fetch("/api/notify-line", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: lines.join("\n") }),
-      }).catch(e => console.error("LINE notify error:", e));
+      // LINE グループに通知（失敗しても報告登録には影響させない）
+      const r = data?.[0] as Report | undefined;
+      if (r) {
+        const lines = [
+          `【作業報告】`,
+          `作業者: ${currentUser?.name}`,
+          `作物: ${cropName(r.crop_id)}`,
+          `圃場: ${r.field || "未設定"}`,
+          `作業: ${r.work_type}`,
+          ...(r.quantity  ? [`収穫量: ${r.quantity}kg`] : []),
+          ...(r.work_time ? [`作業時間: ${r.work_time}h`] : []),
+          `日付: ${r.date}`,
+          ...(r.weather ? [`天気: ${r.weather}${r.temp ? ` / ${r.temp}°C` : ""}${r.humidity ? ` / 湿度${r.humidity}%` : ""}${r.rain ? ` / 雨量${r.rain}mm` : ""}`] : []),
+          ...(r.note ? [`メモ: ${r.note}`] : []),
+        ];
+        fetch("/api/notify-line", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: lines.join("\n") }),
+        }).catch(e => console.error("LINE notify error:", e));
+      }
+    } catch (e: unknown) {
+      showToast((e as Error).message || "登録に失敗しました", "err");
+    } finally {
+      setImgUploading(false);
     }
   };
 
@@ -1468,12 +1470,20 @@ export default function App() {
               {r.image_url && (
                 <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:8, marginTop:8, maxHeight:180, objectFit:"cover", display:"block" }} />
               )}
-              <button
-                onClick={() => handleCopyReport(r)}
-                style={{ marginTop:10, display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
-              >
-                <Copy size={12} strokeWidth={2} />コピーして作成
-              </button>
+              <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                <button
+                  onClick={() => setSelectedReport(r)}
+                  style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:12, fontWeight:600, cursor:"pointer" }}
+                >
+                  <ClipboardList size={12} strokeWidth={2} />詳細を見る
+                </button>
+                <button
+                  onClick={() => handleCopyReport(r)}
+                  style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
+                >
+                  <Copy size={12} strokeWidth={2} />コピーして作成
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -2699,6 +2709,140 @@ export default function App() {
 
         </div>
       )}
+
+      {/* ───── レポート詳細モーダル ───── */}
+      {selectedReport && (() => {
+        const r = selectedReport;
+        const ci = getCropIcon(cropName(r.crop_id));
+        return (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:300, display:"flex", alignItems:"flex-end" }}
+            onClick={() => setSelectedReport(null)}>
+            <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"90vh", overflowY:"auto", paddingBottom:40 }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"12px auto 0" }} />
+              {/* ヘッダー */}
+              <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ background:ci.bg, borderRadius:9, padding:7, flexShrink:0 }}>
+                    <ci.Icon size={16} color={ci.color} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{cropName(r.crop_id)}</div>
+                    <div style={{ fontSize:12, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
+                      <CalendarDays size={11} strokeWidth={2} />{r.date}
+                      {r.field && <><span style={{ color:C.border }}>·</span><span>{r.field}</span></>}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedReport(null)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 8px", cursor:"pointer", display:"flex", color:C.textMuted }}>
+                  <X size={16} strokeWidth={2} />
+                </button>
+              </div>
+
+              <div style={{ padding:"0 16px" }}>
+                {/* 基本情報 */}
+                <div style={{ background:C.bg, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div>
+                    <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業種別</div>
+                    <div style={{ fontWeight:700, fontSize:14, color:C.primary }}>{r.work_type}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>担当者</div>
+                    <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{userName(r.user_id)}</div>
+                  </div>
+                  {r.quantity && (
+                    <div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>収穫量</div>
+                      <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{r.quantity} kg</div>
+                    </div>
+                  )}
+                  {r.work_time && (
+                    <div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業時間</div>
+                      <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{r.work_time} h</div>
+                    </div>
+                  )}
+                  {r.soil_ph != null && (
+                    <div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>土壌pH</div>
+                      <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{r.soil_ph}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 天気 */}
+                {r.weather && (
+                  <div style={{ background:"#f0faf0", borderRadius:10, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" as const }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{r.weather}</span>
+                    {r.temp && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Thermometer size={13} color="#e07020" strokeWidth={2}/>{r.temp}°C</span>}
+                    {r.humidity && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Droplets size={13} color="#1976d2" strokeWidth={2}/>{r.humidity}%</span>}
+                    {r.rain && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><CloudRain size={13} color="#0288d1" strokeWidth={2}/>{r.rain}mm</span>}
+                  </div>
+                )}
+
+                {/* 農薬 */}
+                {(r.pesticides_used && r.pesticides_used.length > 0) && (
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:C.textSub, marginBottom:6, display:"flex", alignItems:"center", gap:4 }}>
+                      <FlaskConical size={12} strokeWidth={2} />使用農薬
+                    </div>
+                    {r.pesticides_used.map(pu => {
+                      const ps = pesticides.find(p => p.id === pu.id);
+                      return ps ? (
+                        <div key={pu.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:"#f3e5f5", borderRadius:8, marginBottom:4 }}>
+                          <FlaskConical size={12} color="#7b1fa2" strokeWidth={2} />
+                          <span style={{ fontWeight:600, fontSize:13, color:"#7b1fa2", flex:1 }}>{ps.name}</span>
+                          {pu.amount && <span style={{ fontSize:12, color:C.textMuted }}>{pu.amount}</span>}
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+                {(!r.pesticides_used || r.pesticides_used.length === 0) && r.pesticide_id && (() => {
+                  const ps = pesticides.find(p => p.id === r.pesticide_id);
+                  return ps ? (
+                    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:"#f3e5f5", borderRadius:8, marginBottom:12 }}>
+                      <FlaskConical size={12} color="#7b1fa2" strokeWidth={2} />
+                      <span style={{ fontWeight:600, fontSize:13, color:"#7b1fa2", flex:1 }}>{ps.name}</span>
+                      {r.pesticide_amount && <span style={{ fontSize:12, color:C.textMuted }}>{r.pesticide_amount}</span>}
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* メモ */}
+                {r.note && (
+                  <div style={{ fontSize:13, color:C.textSub, padding:"10px 12px", background:C.bg, borderRadius:10, borderLeft:`3px solid ${C.primary4}`, marginBottom:12 }}>
+                    {r.note}
+                  </div>
+                )}
+
+                {/* 写真 */}
+                {r.image_url && (
+                  <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:12, marginBottom:12, maxHeight:240, objectFit:"cover", display:"block" }} />
+                )}
+
+                {/* アクション */}
+                <div style={{ display:"flex", gap:8 }}>
+                  <button
+                    onClick={() => { setSelectedReport(null); handleCopyReport(r); }}
+                    style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 0", borderRadius:10, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                  >
+                    <Copy size={14} strokeWidth={2} />コピーして作成
+                  </button>
+                  {(isAdmin || r.user_id === currentUser?.id) && (
+                    <button
+                      onClick={() => { setSelectedReport(null); deleteReport(r.id); }}
+                      style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 16px", borderRadius:10, border:`1.5px solid ${C.danger}22`, background:C.dangerBg, color:C.danger, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                    >
+                      <Trash2 size={14} strokeWidth={2} />削除
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ───── 作物詳細 ───── */}
       {selectedCropId !== null && (() => {
