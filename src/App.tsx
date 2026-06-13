@@ -17,6 +17,7 @@ import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, L
 import CalendarView from "./components/CalendarView";
 import type { Schedule, Comment } from "./components/CalendarView";
 import DatePicker from "./components/DatePicker";
+import AnalyticsView from "./components/AnalyticsView";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 
@@ -1263,10 +1264,11 @@ export default function App() {
   if (!isAdmin && tab === "users") setTab("home");
 
   const navItems = [
-    { key:"home",   Icon:Home,     label:"ホーム" },
-    { key:"report", Icon:PenLine,  label:"記録" },
-    { key:"map",    Icon:MapIcon,  label:"圃場" },
-    { key:"manage", Icon:Settings, label:"管理" },
+    { key:"home",      Icon:Home,      label:"ホーム" },
+    { key:"report",    Icon:PenLine,   label:"記録" },
+    { key:"analytics", Icon:BarChart2, label:"分析" },
+    { key:"map",       Icon:MapIcon,   label:"圃場" },
+    { key:"manage",    Icon:Settings,  label:"管理" },
   ];
 
   // ─── Auth ゲート ─────────────────────────────────────────
@@ -3164,6 +3166,11 @@ export default function App() {
           </div>
         );
       })()}
+
+      {/* ── 分析タブ ── */}
+      {tab === "analytics" && (
+        <AnalyticsView currentOrg={currentOrg} />
+      )}
 
       {/* ナビゲーション */}
       <nav style={S.nav}>
