@@ -296,6 +296,8 @@ export default function App() {
   const [isListening, setIsListening]     = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const recognitionRef                    = useRef<any>(null);
+  const [noteListening, setNoteListening] = useState(false);
+  const noteRecRef                        = useRef<any>(null);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides"|"progress"|"backlog">("crops");
@@ -755,6 +757,38 @@ export default function App() {
       recognitionRef.current = null;
     }
   };
+
+  const toggleNoteVoice = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    if (noteListening) {
+      const r = noteRecRef.current;
+      noteRecRef.current = null;
+      setNoteListening(false);
+      try { r?.stop(); } catch { /* ignore */ }
+      return;
+    }
+    const rec = new SR();
+    rec.lang           = "ja-JP";
+    rec.continuous     = false;
+    rec.interimResults = false;
+    noteRecRef.current = rec;
+    rec.onstart  = () => setNoteListening(true);
+    rec.onresult = (e: any) => {
+      const text = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
+      if (text) setRForm(f => ({ ...f, note: f.note ? f.note + "　" + text : text }));
+    };
+    rec.onerror  = (e: any) => {
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      noteRecRef.current = null;
+      setNoteListening(false);
+    };
+    rec.onend    = () => { noteRecRef.current = null; setNoteListening(false); };
+    try { rec.start(); } catch { noteRecRef.current = null; }
+  };
+
+  const hasSpeech = typeof window !== "undefined" &&
+    !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
   const setFieldLocation = async (fieldId: number) => {
     if (!userPos) return showToast("GPS位置を取得中です", "err");
@@ -1418,19 +1452,33 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <div style={{ background:"#fff3e0", borderRadius:12, padding:"12px 14px", marginBottom:12, border:"1px solid #ffe0b2", display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ width:8, height:8, borderRadius:"50%", background:"#e53935", animation:"pulse 1s infinite", flexShrink:0 }} />
-              <span style={{ fontSize:14, fontWeight:700, color:"#e07020", flex:1 }}>作業中</span>
-              <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(224,112,32,0.12)", borderRadius:8, padding:"4px 10px" }}>
-                <Timer size={13} color="#e07020" strokeWidth={2} />
-                <span style={{ fontSize:16, fontWeight:700, color:"#e07020", fontVariantNumeric:"tabular-nums" as const, letterSpacing:0.5 }}>{fmtElapsed(workElapsed)}</span>
+            <div style={{ background:"#fff3e0", borderRadius:12, padding:"12px 14px", marginBottom:4, border:"1px solid #ffe0b2" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:"#e53935", animation:"pulse 1s infinite", flexShrink:0 }} />
+                <span style={{ fontSize:14, fontWeight:700, color:"#e07020", flex:1 }}>作業中</span>
+                <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(224,112,32,0.12)", borderRadius:8, padding:"4px 10px" }}>
+                  <Timer size={13} color="#e07020" strokeWidth={2} />
+                  <span style={{ fontSize:16, fontWeight:700, color:"#e07020", fontVariantNumeric:"tabular-nums" as const, letterSpacing:0.5 }}>{fmtElapsed(workElapsed)}</span>
+                </div>
+                <button
+                  onClick={toggleVoice}
+                  style={{ display:"flex", alignItems:"center", gap:4, padding:"6px 10px", borderRadius:20, border:`1.5px solid ${isListening ? "#e53935" : "#ffe0b2"}`, background: isListening ? "#fdecea" : "#fff", color: isListening ? "#e53935" : "#e07020", fontWeight:700, fontSize:12, cursor:"pointer", flexShrink:0 }}
+                >
+                  {isListening ? <MicOff size={13} strokeWidth={2} /> : <Mic size={13} strokeWidth={2} />}
+                  {isListening ? "停止" : "音声"}
+                </button>
+                <button
+                  onClick={stopWork}
+                  style={{ padding:"7px 14px", borderRadius:8, border:"1.5px solid #e07020", background:"#fff", color:"#e07020", fontWeight:700, fontSize:13, cursor:"pointer", flexShrink:0 }}
+                >
+                  終了する
+                </button>
               </div>
-              <button
-                onClick={stopWork}
-                style={{ padding:"7px 14px", borderRadius:8, border:"1.5px solid #e07020", background:"#fff", color:"#e07020", fontWeight:700, fontSize:13, cursor:"pointer", flexShrink:0 }}
-              >
-                終了する
-              </button>
+              {voiceTranscript && (
+                <div style={{ marginTop:8, background:"rgba(255,255,255,0.7)", borderRadius:8, padding:"6px 10px", fontSize:11, color:"#7a4000", borderLeft:"3px solid #ffe0b2" }}>
+                  {voiceTranscript}
+                </div>
+              )}
             </div>
           )}
           {/* サマリーカード横スクロール */}
@@ -1663,33 +1711,6 @@ export default function App() {
             ))}
           </MapContainer>
 
-          {/* 作業セッションバー */}
-          <div style={{ background:"#fff", borderTop:`1px solid ${C.border}`, padding:"12px 16px", flexShrink:0 }}>
-            {workSession && (
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <div style={{ width:8, height:8, borderRadius:"50%", background:"#e53935", animation:"pulse 1s infinite" }} />
-                  <span style={{ fontSize:12, fontWeight:700, color:C.textSub }}>作業中</span>
-                </div>
-                <div style={{ display:"flex", alignItems:"center", gap:6, background:C.primary3, borderRadius:8, padding:"4px 12px" }}>
-                  <Timer size={14} color={C.primary} strokeWidth={2} />
-                  <span style={{ fontSize:20, fontWeight:700, color:C.primary, fontVariantNumeric:"tabular-nums", letterSpacing:1 }}>{fmtElapsed(workElapsed)}</span>
-                </div>
-                <button
-                  onClick={toggleVoice}
-                  style={{ display:"flex", alignItems:"center", gap:4, padding:"6px 12px", borderRadius:20, border:`1.5px solid ${isListening ? "#e53935" : C.border}`, background: isListening ? "#fdecea" : "#fff", color: isListening ? "#e53935" : C.textSub, fontWeight:700, fontSize:12, cursor:"pointer" }}
-                >
-                  {isListening ? <MicOff size={14} strokeWidth={2} /> : <Mic size={14} strokeWidth={2} />}
-                  {isListening ? "停止" : "音声"}
-                </button>
-              </div>
-            )}
-            {workSession && voiceTranscript && (
-              <div style={{ background:C.bg, borderRadius:8, padding:"6px 10px", marginBottom:8, fontSize:11, color:C.textSub, borderLeft:`3px solid ${C.primary4}` }}>
-                {voiceTranscript}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
@@ -1911,7 +1932,14 @@ export default function App() {
                     />
 
                     <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
-                    <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
+                    <div style={{ position:"relative", marginBottom:12 }}>
+                      <input style={{ ...S.input, marginBottom:0, paddingRight: hasSpeech ? 44 : 14 }} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
+                      {hasSpeech && (
+                        <button onClick={toggleNoteVoice} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background: noteListening ? "#fdecea" : "transparent", border:`1.5px solid ${noteListening ? "#e53935" : C.border}`, borderRadius:6, padding:"4px 6px", cursor:"pointer", display:"flex", alignItems:"center", color: noteListening ? "#e53935" : C.textMuted, animation: noteListening ? "pulse 1s infinite" : "none" }}>
+                          {noteListening ? <MicOff size={14} strokeWidth={2} /> : <Mic size={14} strokeWidth={2} />}
+                        </button>
+                      )}
+                    </div>
 
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addReportInline} disabled={submitting}>
                       {submitting ? <><RefreshCw size={16} strokeWidth={2} />登録中...</> : <><ClipboardList size={16} strokeWidth={2} />作業報告を保存する</>}
@@ -3429,7 +3457,14 @@ export default function App() {
 
                   {/* メモ */}
                   <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
-                  <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
+                  <div style={{ position:"relative", marginBottom:12 }}>
+                    <input style={{ ...S.input, marginBottom:0, paddingRight: hasSpeech ? 44 : 14 }} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
+                    {hasSpeech && (
+                      <button onClick={toggleNoteVoice} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background: noteListening ? "#fdecea" : "transparent", border:`1.5px solid ${noteListening ? "#e53935" : C.border}`, borderRadius:6, padding:"4px 6px", cursor:"pointer", display:"flex", alignItems:"center", color: noteListening ? "#e53935" : C.textMuted, animation: noteListening ? "pulse 1s infinite" : "none" }}>
+                        {noteListening ? <MicOff size={14} strokeWidth={2} /> : <Mic size={14} strokeWidth={2} />}
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
 
