@@ -598,12 +598,26 @@ export default function App() {
         const workTimeLabel = r.work_start && r.work_end
           ? `${r.work_start} 〜 ${r.work_end}`
           : r.work_time ? `${r.work_time}h` : null;
+        const pesticideLines: string[] = [];
+        if (r.work_type === "防除") {
+          const usedList = r.pesticides_used && r.pesticides_used.length > 0
+            ? r.pesticides_used
+            : r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : [];
+          usedList.forEach(pu => {
+            const ps = pesticides.find(p => p.id === pu.id);
+            if (ps) {
+              pesticideLines.push(`農薬: ${ps.name}`);
+              if (pu.amount) pesticideLines.push(`散布量: ${pu.amount}`);
+            }
+          });
+        }
         const lines = [
           `【作業報告】`,
           `作業者: ${currentUser?.name}`,
           `作物: ${cropName(r.crop_id)}`,
           `圃場: ${r.field || "未設定"}`,
           `作業: ${r.work_type}`,
+          ...pesticideLines,
           ...(r.quantity     ? [`収穫量: ${r.quantity}kg`] : []),
           ...(workTimeLabel  ? [`作業時間: ${workTimeLabel}`] : []),
           `日付: ${r.date}`,
