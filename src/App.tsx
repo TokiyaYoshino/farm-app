@@ -8,7 +8,7 @@ import {
   PackageCheck, CalendarDays, Clock, Wheat,
   UserCircle, Trash2, PlusCircle, ClipboardList,
   Wind, Camera, X, Navigation, Search, Save,
-  Play, Square, Mic, MicOff, Timer, Map as MapIcon,
+  Play, Mic, MicOff, Timer, Map as MapIcon,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
   LeafyGreen, Grape, Apple, MoreVertical,
   ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings, Copy,
@@ -1399,6 +1399,40 @@ export default function App() {
       {/* ───── HOME ───── */}
       {tab === "home" && (
         <div style={S.page}>
+          {/* 作業セッション */}
+          {!workSession ? (
+            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
+              <select
+                style={{ flex:1, padding:"10px 12px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:14, background:"#fafcfa", color:C.text }}
+                value={sessionField ?? ""}
+                onChange={e => setSessionField(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">圃場を選択</option>
+                {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+              <button
+                onClick={startWork}
+                style={{ flex:2, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 0", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontWeight:700, fontSize:15, cursor:"pointer", boxShadow:`0 2px 8px rgba(45,106,45,0.35)`, whiteSpace:"nowrap" as const, flexShrink:0, minWidth:0 }}
+              >
+                <Play size={16} strokeWidth={2} style={{ flexShrink:0 }} />作業を開始する
+              </button>
+            </div>
+          ) : (
+            <div style={{ background:"#fff3e0", borderRadius:12, padding:"12px 14px", marginBottom:12, border:"1px solid #ffe0b2", display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ width:8, height:8, borderRadius:"50%", background:"#e53935", animation:"pulse 1s infinite", flexShrink:0 }} />
+              <span style={{ fontSize:14, fontWeight:700, color:"#e07020", flex:1 }}>作業中</span>
+              <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(224,112,32,0.12)", borderRadius:8, padding:"4px 10px" }}>
+                <Timer size={13} color="#e07020" strokeWidth={2} />
+                <span style={{ fontSize:16, fontWeight:700, color:"#e07020", fontVariantNumeric:"tabular-nums" as const, letterSpacing:0.5 }}>{fmtElapsed(workElapsed)}</span>
+              </div>
+              <button
+                onClick={stopWork}
+                style={{ padding:"7px 14px", borderRadius:8, border:"1.5px solid #e07020", background:"#fff", color:"#e07020", fontWeight:700, fontSize:13, cursor:"pointer", flexShrink:0 }}
+              >
+                終了する
+              </button>
+            </div>
+          )}
           {/* サマリーカード横スクロール */}
           <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4, marginBottom:4, scrollSnapType:"x mandatory", WebkitOverflowScrolling:"touch" as any, msOverflowStyle:"none" as any, scrollbarWidth:"none" as any }}>
             {/* 天気カード */}
@@ -1654,31 +1688,6 @@ export default function App() {
               <div style={{ background:C.bg, borderRadius:8, padding:"6px 10px", marginBottom:8, fontSize:11, color:C.textSub, borderLeft:`3px solid ${C.primary4}` }}>
                 {voiceTranscript}
               </div>
-            )}
-            {!workSession ? (
-              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                <select
-                  style={{ flex:1, padding:"10px 12px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:14, background:"#fafcfa", color:C.text }}
-                  value={sessionField ?? ""}
-                  onChange={e => setSessionField(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">圃場を選択</option>
-                  {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                </select>
-                <button
-                  onClick={startWork}
-                  style={{ flex:2, display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontWeight:700, fontSize:15, cursor:"pointer", boxShadow:`0 2px 8px rgba(45,106,45,0.35)`, whiteSpace:"nowrap" as const, flexShrink:0, minWidth:0 }}
-                >
-                  <Play size={18} strokeWidth={2} style={{ flexShrink:0 }} />農作業を開始する
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={stopWork}
-                style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"13px 0", borderRadius:10, border:"none", background:`linear-gradient(135deg,#c0392b,#e53935)`, color:"#fff", fontWeight:700, fontSize:15, cursor:"pointer", boxShadow:"0 2px 8px rgba(192,57,43,0.35)" }}
-              >
-                <Square size={18} strokeWidth={2} />農作業を終了する
-              </button>
             )}
           </div>
         </div>
