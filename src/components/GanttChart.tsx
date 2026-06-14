@@ -397,9 +397,9 @@ export default function GanttChart({
                             overflow:     "visible",
                           }}
                         >
-                          {/* バー本体 div */}
+                          {/* バー本体 div — height:"100%" はtd内で0pxになるため明示 */}
                           <div style={{
-                            height:       "100%",
+                            height:       ROW_H - 8,
                             background:   bar.color,
                             borderRadius: barRadius,
                           }} />
