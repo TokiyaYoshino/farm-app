@@ -1419,7 +1419,9 @@ export default function App() {
           {(tab === "home" || tab === "report") && (
             <button
               onClick={() => setShowQuickReport(true)}
-              style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", borderRadius:20, padding:"5px 11px 5px 8px", border:"none", cursor:"pointer", color:C.primary, fontWeight:700, fontSize:13, flexShrink:0 }}
+              style={{ display:"flex", alignItems:"center", gap:4, background:"#EA8C00", borderRadius:20, padding:"5px 11px 5px 8px", border:"none", cursor:"pointer", color:"#fff", fontWeight:700, fontSize:13, flexShrink:0 }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#C97A00")}
+              onMouseLeave={e => (e.currentTarget.style.background = "#EA8C00")}
             >
               <Plus size={14} strokeWidth={2.5} />
               作業記録
