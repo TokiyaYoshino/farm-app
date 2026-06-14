@@ -1556,7 +1556,7 @@ export default function App() {
                     </span>
                   )}
                   <span style={{ marginLeft:4, fontSize:11, color:C.primary, background:C.primary3, borderRadius:6, padding:"3px 9px", fontWeight:700, flexShrink:0, border:`1px solid ${C.primary4}` }}>
-                    {expanded ? "閉じる" : "詳細を開く"}
+                    {expanded ? "▲ 閉じる" : "▼ 詳細を開く"}
                   </span>
                 </button>
                 {expanded && (
@@ -1668,7 +1668,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleCopyReport(r)}
-                  style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
+                  style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.primary}`, background:"transparent", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
                 >
                   <Copy size={12} strokeWidth={2} />コピーして作成
                 </button>
@@ -1734,6 +1734,80 @@ export default function App() {
             onAddComment={addComment}
             onEditComment={editComment}
           />
+
+          {/* ── 今日の予定 ── */}
+          {(() => {
+            const todayScheds = schedules.filter(s => s.date === todayStr);
+            return (
+              <div style={{ marginTop:16 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
+                  <CalendarDays size={14} color={C.primary} strokeWidth={2} />今日の予定
+                </div>
+                {todayScheds.length === 0 ? (
+                  <div style={{ background:C.card, borderRadius:12, padding:"12px 16px", border:`1px solid ${C.border}`, fontSize:13, color:C.textMuted, textAlign:"center" as const }}>
+                    今日の予定はありません
+                  </div>
+                ) : todayScheds.map(s => {
+                  const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
+                  return (
+                    <div key={s.id} style={{ background:C.card, borderRadius:12, padding:"10px 14px", border:`1px solid ${C.border}`, marginBottom:6, display:"flex", alignItems:"center", gap:10 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{s.title}</div>
+                        <div style={{ fontSize:11, color:C.textSub, marginTop:2, display:"flex", gap:8, flexWrap:"wrap" as const }}>
+                          {s.crop && <span>🌱 {s.crop}</span>}
+                          {assignedUser && <span>👤 {assignedUser.name}</span>}
+                          {s.work_type && <span>{s.work_type}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* ── 未報告の作業 ── */}
+          {(() => {
+            const unreported = schedules.filter(s => s.date < todayStr && !matchReportToSchedule(s));
+            if (unreported.length === 0) return null;
+            return (
+              <div style={{ marginTop:16 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
+                  <ClipboardList size={14} color="#c0392b" strokeWidth={2} />未報告の作業
+                </div>
+                {unreported.map(s => {
+                  const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        const cropId = crops.find(c => c.name === s.crop)?.id ?? rForm.crop_id;
+                        setCopySource(null);
+                        setRForm(f => ({ ...f, user_id: s.assigned_user_id ?? s.user_id, crop_id: cropId, date: s.date, work_type: s.work_type ?? f.work_type, note: s.note ?? "" }));
+                        setInlineOpen(true);
+                        setInlineMode("report");
+                      }}
+                      style={{ width:"100%", background:C.card, borderRadius:12, padding:"10px 14px", border:`1px solid #f5c6c6`, marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
+                    >
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+                          <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
+                          <span style={{ fontSize:10, fontWeight:700, color:"#c0392b", background:"#fdecea", borderRadius:5, padding:"2px 7px", flexShrink:0 }}>未報告</span>
+                        </div>
+                        <div style={{ fontSize:11, color:C.textSub, display:"flex", gap:8, flexWrap:"wrap" as const }}>
+                          <span>📅 {s.date}</span>
+                          {s.crop && <span>🌱 {s.crop}</span>}
+                          {assignedUser && <span>👤 {assignedUser.name}</span>}
+                          {s.work_type && <span>{s.work_type}</span>}
+                        </div>
+                      </div>
+                      <ChevronRight size={16} color={C.textMuted} strokeWidth={2} />
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* ── 記録を追加（削除済み：ヘッダーの＋ボタンからモーダルで追加） ── */}
           {false && (
