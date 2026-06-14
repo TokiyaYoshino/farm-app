@@ -299,7 +299,9 @@ export default function App() {
   const noteRecRef                        = useRef<any>(null);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
-  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides"|"progress"|"backlog"|"map">("crops");
+  const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<"report"|"backlog">("report");
+  const [showMapModal, setShowMapModal]       = useState(false);
   const [inlineOpen, setInlineOpen]           = useState(false);
   const [inlineMode, setInlineMode]           = useState<null | "schedule" | "report">(null);
   const [inlineSchedForm, setInlineSchedForm] = useState({ date: new Date().toISOString().slice(0,10), work_type:"収穫", assigned_user_id:0, crop:"", note:"" });
@@ -1248,7 +1250,8 @@ export default function App() {
     wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:80 }),
     header:  css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", padding:"8px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, boxShadow:"0 2px 8px rgba(45,106,45,0.25)", minHeight:0 }),
     headerTitle: css({ fontSize:14, fontWeight:700, letterSpacing:0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
-    headerSub: css({ display:"none" }),
+    headerSub: css({ background:"#fff", borderBottom:`1px solid ${C.border}`, display:"flex", paddingLeft:4, paddingRight:4, gap:0 }),
+    subTabBtn: (active: boolean) => ({ flex:1, padding:"10px 8px", border:"none", borderBottom: active ? `2.5px solid ${C.primary}` : "2.5px solid transparent", background:"transparent", color: active ? C.primary : C.textMuted, fontSize:13, fontWeight: active ? 700 : 600, cursor:"pointer", transition:"all 0.15s" } as const),
     page:    css({ padding:"16px 16px 0" }),
     sec:     css({ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:10, marginTop:16, display:"flex", alignItems:"center", gap:6, textTransform:"uppercase" as const, letterSpacing:0.5, whiteSpace:"nowrap" as const }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
@@ -1399,11 +1402,13 @@ export default function App() {
       {/* ヘッダー */}
       <div style={S.header}>
         <div style={S.headerTitle}>
-          <Leaf size={17} strokeWidth={1.8} />
-          農作業レポート
+          {tab === "home" ? <><Leaf size={17} strokeWidth={1.8} />農作業レポート</> :
+           tab === "report" ? "記録" :
+           tab === "analytics" ? "分析" :
+           tab === "manage" ? "管理" : <><Leaf size={17} strokeWidth={1.8} />農作業レポート</>}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:6, flex:"0 0 auto", flexShrink:0 }}>
-          {tab !== "manage" && (
+          {(tab === "home" || tab === "report") && (
             <button
               onClick={() => setShowQuickReport(true)}
               style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", borderRadius:20, padding:"5px 11px 5px 8px", border:"none", cursor:"pointer", color:C.primary, fontWeight:700, fontSize:13, flexShrink:0 }}
@@ -1419,6 +1424,20 @@ export default function App() {
           )}
         </div>
       </div>
+      {/* サブタブバー（分析・管理のみ） */}
+      {tab === "analytics" && (
+        <div style={S.headerSub}>
+          <button style={S.subTabBtn(analyticsSubTab === "report")} onClick={() => setAnalyticsSubTab("report")}>レポート</button>
+          <button style={S.subTabBtn(analyticsSubTab === "backlog")} onClick={() => setAnalyticsSubTab("backlog")}>計画</button>
+        </div>
+      )}
+      {tab === "manage" && (
+        <div style={S.headerSub}>
+          <button style={S.subTabBtn(manageSubTab === "crops")} onClick={() => setManageSubTab("crops")}>作物</button>
+          <button style={S.subTabBtn(manageSubTab === "fields")} onClick={() => setManageSubTab("fields")}>圃場</button>
+          <button style={S.subTabBtn(manageSubTab === "pesticides")} onClick={() => setManageSubTab("pesticides")}>農薬</button>
+        </div>
+      )}
 
       {/* ───── HOME ───── */}
       {tab === "home" && (
@@ -1652,10 +1671,49 @@ export default function App() {
               </div>
             </div>
           ))}
+          {/* マップカード */}
+          <div style={{ ...S.card, display:"flex", alignItems:"center", gap:12, marginTop:4 }}>
+            <div style={{ background:C.primary3, borderRadius:10, padding:10, flexShrink:0 }}>
+              <MapPin size={20} color={C.primary} strokeWidth={1.8} />
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:C.text }}>圃場マップ</div>
+              <div style={{ fontSize:12, color:C.textMuted }}>登録圃場の場所を地図で確認</div>
+            </div>
+            <button onClick={() => setShowMapModal(true)} style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", border:"none", borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+              マップを開く
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ───── MAP ───── */}
+      {/* マップモーダル */}
+      {showMapModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:450, display:"flex", alignItems:"flex-end" }}
+          onClick={() => setShowMapModal(false)}>
+          <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", height:"75vh", overflow:"hidden", display:"flex", flexDirection:"column" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+              <span style={{ fontWeight:700, fontSize:15, color:C.text, display:"flex", alignItems:"center", gap:6 }}><MapPin size={16} color={C.primary} strokeWidth={2} />圃場マップ</span>
+              <button onClick={() => setShowMapModal(false)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 14px", cursor:"pointer", fontSize:13, color:C.textSub, fontWeight:600 }}>閉じる</button>
+            </div>
+            <div style={{ flex:1, overflow:"hidden" }}>
+              <MapContainer
+                center={(userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]) as [number,number]}
+                zoom={15}
+                style={{ width:"100%", height:"100%" }}
+                zoomControl={false}
+              >
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
+                {userPos && <Marker position={userPos} icon={PIN_BLUE}><Popup><b>現在地</b></Popup></Marker>}
+                {fields.filter(f => f.lat && f.lng).map(f => (
+                  <Marker key={f.id} position={[f.lat!, f.lng!]} icon={PIN_GREEN}><Popup><b>{f.name}</b></Popup></Marker>
+                ))}
+              </MapContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ───── REPORT ───── */}
       {tab === "report" && (
@@ -2050,28 +2108,6 @@ export default function App() {
       {/* ───── MANAGE ───── */}
       {tab === "manage" && (
         <div style={S.page}>
-          {/* サブタブ */}
-          <div style={{ display:"flex", flexWrap:"wrap" as const, background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}`, gap:2 }}>
-            {(["crops","fields","pesticides"] as const).map(k => (
-              <button key={k} onClick={() => setManageSubTab(k)} style={{ flex:1, minWidth:0, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === k ? C.card : "transparent", color: manageSubTab === k ? C.primary : C.textMuted, boxShadow: manageSubTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-                {k === "crops" ? "作物" : k === "fields" ? "圃場" : "農薬"}
-              </button>
-            ))}
-            <button onClick={() => setManageSubTab("backlog")} style={{ flex:1, minWidth:0, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "backlog" ? C.card : "transparent", color: manageSubTab === "backlog" ? C.primary : C.textMuted, boxShadow: manageSubTab === "backlog" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-              計画
-            </button>
-            <button onClick={() => setManageSubTab("map")} style={{ flex:1, minWidth:0, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: manageSubTab === "map" ? C.card : "transparent", color: manageSubTab === "map" ? C.primary : C.textMuted, boxShadow: manageSubTab === "map" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-              マップ
-            </button>
-            <button
-              onClick={() => isAdmin && setManageSubTab("progress")}
-              style={{ flex:1, minWidth:0, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:700, transition:"all 0.15s", background: manageSubTab === "progress" ? C.card : "transparent", color: manageSubTab === "progress" ? C.primary : C.textMuted, boxShadow: manageSubTab === "progress" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", cursor: isAdmin ? "pointer" : "default", opacity: isAdmin ? 1 : 0.45 }}
-              title={isAdmin ? undefined : "管理者のみ閲覧できます"}
-            >
-              進捗
-            </button>
-          </div>
-
           {/* 作物 */}
           {manageSubTab === "crops" && <>
             {isAdmin && (
@@ -2333,9 +2369,7 @@ export default function App() {
             ))}
           </>}
 
-          {/* 進捗 */}
-          {/* 計画 */}
-          {manageSubTab === "backlog" && (
+          {false && false && (
             <div>
               {/* 計画追加フォーム（管理者のみ） */}
               {isAdmin && (
@@ -2493,7 +2527,7 @@ export default function App() {
             </div>
           )}
 
-          {manageSubTab === "progress" && isAdmin && (() => {
+          {false && isAdmin && (() => {
             const weeklyProgress = getWeeklyProgress(progressWeekStart);
             const weekEnd = new Date(progressWeekStart);
             weekEnd.setDate(weekEnd.getDate() + 6);
@@ -2572,7 +2606,7 @@ export default function App() {
           })()}
 
           {/* マップ */}
-          {manageSubTab === "map" && (
+          {false && (
             <div style={{ borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}`, height:"60vh", marginBottom:16 }}>
               <MapContainer
                 center={userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]}
@@ -2585,7 +2619,7 @@ export default function App() {
                   attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 />
                 {userPos && (
-                  <Marker position={userPos} icon={PIN_BLUE}>
+                  <Marker position={userPos as [number,number]} icon={PIN_BLUE}>
                     <Popup><b>現在地</b></Popup>
                   </Marker>
                 )}
@@ -3224,7 +3258,216 @@ export default function App() {
 
       {/* ── 分析タブ ── */}
       {tab === "analytics" && (
-        <AnalyticsView currentOrg={currentOrg} />
+        analyticsSubTab === "report" ? (
+          <AnalyticsView currentOrg={currentOrg} />
+        ) : (
+          <div style={S.page}>
+            {/* 計画追加フォーム（管理者のみ） */}
+            {isAdmin && (
+              <>
+                {showAddProject ? (
+                  <div style={S.card}>
+                    <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}><PlusCircle size={15} strokeWidth={2} color={C.primary} />新しい計画を登録</div>
+                    <div style={S.lbl}><ClipboardList size={13} strokeWidth={2} />計画名 *</div>
+                    <input style={S.input} placeholder="例: 2024年 ぶどう栽培" value={prjForm.name} onChange={e => setPrjForm(f => ({ ...f, name:e.target.value }))} />
+                    <div style={{ display:"flex", gap:10 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物（任意）</div>
+                        <select style={S.select} value={prjForm.crop_id} onChange={e => setPrjForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
+                          <option value={0}>未指定</option>
+                          {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場（任意）</div>
+                        <select style={S.select} value={prjForm.field} onChange={e => setPrjForm(f => ({ ...f, field:e.target.value }))}>
+                          <option value="">未指定</option>
+                          {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", gap:10 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />開始日</div>
+                        <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={prjForm.start_date} onChange={e => setPrjForm(f => ({ ...f, start_date:e.target.value }))} />
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />終了予定日</div>
+                        <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={prjForm.end_date} onChange={e => setPrjForm(f => ({ ...f, end_date:e.target.value }))} />
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button style={{ ...S.btn, flex:1, width:"auto", opacity:submitting?0.7:1 }} onClick={addProject} disabled={submitting}>
+                        {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />追加する</>}
+                      </button>
+                      <button onClick={() => setShowAddProject(false)} style={{ flex:1, padding:"12px 0", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:600, cursor:"pointer" }}>
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowAddProject(true)} style={{ background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:5, fontSize:13, fontWeight:700, color:C.primary, padding:"2px 0", marginBottom:10 }}>
+                    <PlusCircle size={14} strokeWidth={2} />計画を追加
+                  </button>
+                )}
+              </>
+            )}
+
+            <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />計画一覧</div>
+            {projects.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><ClipboardList size={22} color={C.primary} strokeWidth={1.5} /></div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>計画がありません</div>
+                {isAdmin && <div style={{ fontSize:12, color:C.textMuted }}>上のボタンから追加できます</div>}
+              </div>
+            ) : projects.map(project => {
+              const projTickets = tickets.filter(t => t.project_id === project.id);
+              const doneCount   = projTickets.filter(t => t.status === "done").length;
+              const cropLabel   = crops.find(c => c.id === project.crop_id)?.name;
+              return (
+                <div key={project.id} style={{ ...S.card, marginBottom:12 }}>
+                  <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{project.name}</div>
+                      <div style={{ fontSize:11, color:C.textMuted, display:"flex", flexWrap:"wrap" as const, gap:6 }}>
+                        {cropLabel && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Leaf size={10} strokeWidth={2} />{cropLabel}</span>}
+                        {project.field && <span style={{ display:"flex", alignItems:"center", gap:3 }}><MapPin size={10} strokeWidth={2} />{project.field}</span>}
+                        {project.end_date && <span style={{ display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={10} strokeWidth={2} />〜{project.end_date}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                      <span style={{ fontSize:11, fontWeight:700, background:doneCount === projTickets.length && projTickets.length > 0 ? C.primary3 : C.bg, color:doneCount === projTickets.length && projTickets.length > 0 ? C.primary : C.textMuted, borderRadius:8, padding:"3px 9px", border:`1px solid ${doneCount === projTickets.length && projTickets.length > 0 ? C.primary4 : C.border}` }}>
+                        {doneCount}/{projTickets.length} 完了
+                      </span>
+                      {isAdmin && (
+                        <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                          <button onClick={() => setOpenMenuId(openMenuId === `prj${project.id}` ? null : `prj${project.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", borderRadius:6, color:C.textMuted, display:"flex" }}>
+                            <MoreVertical size={15} strokeWidth={2} />
+                          </button>
+                          {openMenuId === `prj${project.id}` && (
+                            <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                              <button onClick={() => { setOpenMenuId(null); deleteProject(project.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                                <Trash2 size={13} strokeWidth={2} />削除
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {projTickets.length > 0 && (
+                    <div style={{ marginBottom:8 }}>
+                      {[...projTickets].sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? "")).map(ticket => (
+                        <div key={ticket.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:9, background: ticket.status === "done" ? C.primary3 : C.bg, marginBottom:4 }}>
+                          <button onClick={() => toggleTicketStatus(ticket)} style={{ background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", flexShrink:0 }}>
+                            {ticket.status === "done"
+                              ? <PackageCheck size={15} color={C.primary} strokeWidth={2} />
+                              : <Clock size={15} color={C.textMuted} strokeWidth={2} />}
+                          </button>
+                          <span style={{ flex:1, fontSize:13, color: ticket.status === "done" ? C.textMuted : C.text, textDecoration: ticket.status === "done" ? "line-through" : "none", minWidth:0 }}>{ticket.title}</span>
+                          {ticket.work_type && <span style={{ fontSize:10, color:C.primary, background:C.primary3, borderRadius:5, padding:"1px 6px", flexShrink:0 }}>{ticket.work_type}</span>}
+                          <span style={{ fontSize:11, color:C.textMuted, flexShrink:0 }}>{users.find(u => u.id === ticket.assigned_user_id)?.name ?? "未割当"}</span>
+                          {ticket.due_date && <span style={{ fontSize:10, color:C.textMuted, flexShrink:0 }}>{ticket.due_date}</span>}
+                          {isAdmin && (
+                            <button onClick={() => deleteTicket(ticket.id)} style={{ background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", flexShrink:0, color:C.textMuted }}>
+                              <X size={13} strokeWidth={2} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {isAdmin && (
+                    addingTicketProjectId === project.id ? (
+                      <div style={{ background:C.bg, borderRadius:10, padding:"10px 12px", border:`1px solid ${C.border}` }}>
+                        <input style={{ ...S.input, marginBottom:8 }} placeholder="チケットのタイトル *" value={tForm.title} onChange={e => setTForm(f => ({ ...f, title:e.target.value }))} />
+                        <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                          <select style={{ ...S.select, marginBottom:0, flex:1 }} value={tForm.work_type} onChange={e => setTForm(f => ({ ...f, work_type:e.target.value }))}>
+                            <option value="">作業種別（任意）</option>
+                            {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <select style={{ ...S.select, marginBottom:0, flex:1 }} value={tForm.assigned_user_id} onChange={e => setTForm(f => ({ ...f, assigned_user_id:Number(e.target.value) }))}>
+                            <option value={0}>担当者（任意）</option>
+                            {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ display:"flex", gap:8 }}>
+                          <input type="date" style={{ ...S.input, marginBottom:0, flex:1, maxWidth:"100%" }} value={tForm.due_date} onChange={e => setTForm(f => ({ ...f, due_date:e.target.value }))} />
+                          <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
+                            {submitting ? <RefreshCw size={14} strokeWidth={2} /> : <Save size={14} strokeWidth={2} />}
+                          </button>
+                          <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
+                            <X size={14} strokeWidth={2} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setAddingTicketProjectId(project.id); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, color:C.primary, background:"none", border:`1px solid ${C.primary4}`, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontWeight:600 }}>
+                        <Plus size={13} strokeWidth={2.5} />チケット追加
+                      </button>
+                    )
+                  )}
+                </div>
+              );
+            })}
+
+            {/* 担当者進捗（管理者のみ） */}
+            {isAdmin && (() => {
+              const weeklyProgress = getWeeklyProgress(progressWeekStart);
+              const weekEnd = new Date(progressWeekStart);
+              weekEnd.setDate(weekEnd.getDate() + 6);
+              const weekLabel = `${progressWeekStart.getMonth()+1}/${progressWeekStart.getDate()} 〜 ${weekEnd.getMonth()+1}/${weekEnd.getDate()}`;
+              const weekDays = ["月","火","水","木","金","土","日"];
+              return (
+                <div style={{ marginTop:20 }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.textSub, display:"flex", alignItems:"center", gap:6 }}>
+                      <Users size={14} strokeWidth={2} />担当者進捗
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() - 7); setProgressWeekStart(d); }} style={{ background:C.primary3, border:"none", borderRadius:7, padding:"4px 8px", cursor:"pointer", color:C.primary, display:"flex", alignItems:"center" }}><ChevronLeft size={14} strokeWidth={2.5} /></button>
+                      <span style={{ fontSize:12, fontWeight:600, color:C.text, minWidth:110, textAlign:"center" as const }}>{weekLabel}</span>
+                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }} style={{ background:C.primary3, border:"none", borderRadius:7, padding:"4px 8px", cursor:"pointer", color:C.primary, display:"flex", alignItems:"center" }}><ChevronRight size={14} strokeWidth={2.5} /></button>
+                    </div>
+                  </div>
+                  <div style={{ overflowX:"auto" as const, background:C.card, borderRadius:14, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", marginBottom:10 }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse" as const, fontSize:12 }}>
+                      <thead>
+                        <tr style={{ background:C.bg }}>
+                          <th style={{ textAlign:"left" as const, padding:"8px 12px", borderBottom:`1px solid ${C.border}`, color:C.textSub, fontWeight:600, whiteSpace:"nowrap" as const, minWidth:64 }}>担当者</th>
+                          {weekDays.map((d, i) => (
+                            <th key={d} style={{ padding:"8px 6px", borderBottom:`1px solid ${C.border}`, color: i >= 5 ? C.danger : C.textSub, fontWeight:600, textAlign:"center" as const, minWidth:40 }}>{d}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {weeklyProgress.map(({ user, days: userDays }) => (
+                          <tr key={user.id}>
+                            <td style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, color:C.text, fontWeight:700, whiteSpace:"nowrap" as const }}>{user.name}</td>
+                            {userDays.map(({ date, schedules: ds, reports: rs, matched }) => (
+                              <td key={date} style={{ padding:"6px 4px", borderBottom:`1px solid ${C.border}`, textAlign:"center" as const }}>
+                                {ds.length === 0 && rs.length === 0 && <span style={{ color:C.border, fontSize:12 }}>─</span>}
+                                {ds.length > 0 && matched.length === ds.length && <span title="予定あり・完了" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center" }}><PackageCheck size={15} color={C.primary} strokeWidth={2} /></span>}
+                                {ds.length > 0 && matched.length < ds.length && <span title={`予定${ds.length}件・完了${matched.length}件`} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", gap:2 }}><Clock size={13} color="#f57f17" strokeWidth={2} /><span style={{ fontSize:10, color:"#f57f17", fontWeight:700 }}>{matched.length}/{ds.length}</span></span>}
+                                {ds.length === 0 && rs.length > 0 && <span title="予定外の作業あり" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center" }}><PenLine size={13} color={C.textMuted} strokeWidth={2} /></span>}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ display:"flex", gap:12, fontSize:11, color:C.textMuted, paddingLeft:2, flexWrap:"wrap" as const, alignItems:"center" }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:4 }}><PackageCheck size={13} color={C.primary} strokeWidth={2} /> 全予定完了</span>
+                    <span style={{ display:"flex", alignItems:"center", gap:4 }}><Clock size={12} color="#f57f17" strokeWidth={2} /> 一部未完了</span>
+                    <span style={{ display:"flex", alignItems:"center", gap:4 }}><PenLine size={12} color={C.textMuted} strokeWidth={2} /> 予定外作業</span>
+                    <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ color:C.border }}>─</span> なし</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )
       )}
 
       {/* ナビゲーション */}
