@@ -18,6 +18,7 @@ import CalendarView from "./components/CalendarView";
 import type { Schedule, Comment } from "./components/CalendarView";
 import DatePicker from "./components/DatePicker";
 import AnalyticsView from "./components/AnalyticsView";
+import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 
@@ -1145,6 +1146,9 @@ export default function App() {
       setTickets(prev => prev.filter(t => t.project_id !== id));
       showToast("計画を削除しました");
     });
+
+  const handleProjectUpdate = (updated: Project) =>
+    setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
 
   const updateCropDate = async (cropId: number, field: "start_date" | "last_work_date", value: string) => {
     const { error } = await supabase.from("crops").update({ [field]: value || null }).eq("id", cropId);
@@ -3261,6 +3265,20 @@ export default function App() {
         analyticsSubTab === "report" ? (
           <AnalyticsView currentOrg={currentOrg} />
         ) : (
+          <GanttChart
+            projects={projects}
+            crops={crops}
+            fields={fields}
+            currentOrg={currentOrg}
+            currentUserId={currentUser?.id}
+            isAdmin={isAdmin}
+            onAdd={p => setProjects(prev => [p as Project, ...prev])}
+            onUpdate={handleProjectUpdate}
+            onDelete={id => { setProjects(prev => prev.filter(p => p.id !== id)); setTickets(prev => prev.filter(t => t.project_id !== id)); }}
+          />
+        )
+      )}
+      {false && tab === "analytics_dead" && (
           <div style={S.page}>
             {/* 計画追加フォーム（管理者のみ） */}
             {isAdmin && (
@@ -3468,7 +3486,7 @@ export default function App() {
             })()}
           </div>
         )
-      )}
+      }
 
       {/* ナビゲーション */}
       <nav style={S.nav}>
