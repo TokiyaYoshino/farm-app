@@ -2340,9 +2340,9 @@ export default function App() {
               {/* 計画追加フォーム（管理者のみ） */}
               {isAdmin && (
                 <>
-                  <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />計画を追加</div>
                   {showAddProject ? (
                     <div style={S.card}>
+                      <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}><PlusCircle size={15} strokeWidth={2} color={C.primary} />新しい計画を登録</div>
                       <div style={S.lbl}><ClipboardList size={13} strokeWidth={2} />計画名 *</div>
                       <input style={S.input} placeholder="例: 2024年 ぶどう栽培" value={prjForm.name} onChange={e => setPrjForm(f => ({ ...f, name:e.target.value }))} />
                       <div style={{ display:"flex", gap:10 }}>
