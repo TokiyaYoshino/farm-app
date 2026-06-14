@@ -3178,8 +3178,7 @@ export default function App() {
                     setSelectedSchedule(null);
                     setCopySource(null);
                     setRForm(f => ({ ...f, user_id: s.assigned_user_id ?? s.user_id, crop_id: cropObj?.id ?? f.crop_id, date: s.date, work_type: s.work_type ?? f.work_type, note: s.note ?? "" }));
-                    setInlineOpen(true);
-                    setInlineMode("report");
+                    setShowQuickReport(true);
                   }}
                   style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"14px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}
                 >
