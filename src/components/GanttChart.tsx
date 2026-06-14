@@ -54,7 +54,7 @@ interface Props {
 // ── レイアウト定数 ──────────────────────────────────────────
 const COL_W   = 28;   // 日付列 1日あたりの幅 (px)
 const LABEL_W = 150;  // 左固定列の幅 (px)
-const ROW_H   = 44;   // データ行の高さ (px)
+const ROW_H   = 56;   // データ行の高さ (px)
 const MONTH_H = 28;   // 月名ヘッダー行の高さ (px)
 const DAY_H   = 24;   // 日付ヘッダー行の高さ (px)
 
@@ -130,16 +130,17 @@ export default function GanttChart({
     if (!p.start_date || !p.end_date) return null;
     const startIdx = diffDays(viewStart, parseISO(p.start_date));
     const endIdx   = diffDays(viewStart, parseISO(p.end_date));
-    // 表示範囲外を除く
     if (endIdx < 0 || startIdx >= totalDays) return null;
-    const visStart = Math.max(startIdx, 0);
-    const visEnd   = Math.min(endIdx, totalDays - 1);
+    const visStart   = Math.max(startIdx, 0);
+    const visEnd     = Math.min(endIdx, totalDays - 1);
     if (di < visStart || di > visEnd) return null;
+    const color      = p.crop_id ? (cropColorMap[p.crop_id] ?? C.primary) : C.primary;
+    const barWidthPx = (visEnd - visStart + 1) * COL_W; // バー全体のpx幅
     return {
-      color:        p.crop_id ? (cropColorMap[p.crop_id] ?? C.primary) : C.primary,
-      showLabel:    di === visStart,         // バーの先頭セルにのみラベル表示
-      isFirst:      di === visStart,
-      isLast:       di === visEnd,
+      color,
+      barWidthPx,
+      isFirst: di === visStart,
+      isLast:  di === visEnd,
     };
   };
 
@@ -359,14 +360,27 @@ export default function GanttChart({
                       </div>
                     </td>
 
-                    {/* 日付セル（バーをtd背景で描画） */}
+                    {/* 日付セル */}
                     {dayList.map((d, di) => {
-                      const bar = getBar(p, di);
-                      const bg  = bar
-                        ? bar.color
-                        : d.isToday
-                          ? C.primary3
-                          : rowBg;
+                      const bar   = getBar(p, di);
+                      const cellBg = d.isToday ? C.primary3 : rowBg;
+
+                      // バーなし
+                      if (!bar) {
+                        return (
+                          <td
+                            key={di}
+                            onClick={() => openEdit(p)}
+                            style={{ ...cellBorder, background: cellBg, padding: 0, cursor: "pointer" }}
+                          />
+                        );
+                      }
+
+                      // バーあり: td は透明、内側 div がバー背景
+                      const barRadius =
+                        bar.isFirst && bar.isLast ? 4 :
+                        bar.isFirst               ? "4px 0 0 4px" :
+                        bar.isLast                ? "0 4px 4px 0" : 0;
 
                       return (
                         <td
@@ -374,25 +388,40 @@ export default function GanttChart({
                           onClick={() => openEdit(p)}
                           style={{
                             ...cellBorder,
-                            background:   bg,
-                            padding:      bar ? "0 2px" : 0,
+                            background:   "transparent",
+                            padding:      "4px 0",   // 上下余白でバーを細く見せる
                             cursor:       "pointer",
                             verticalAlign:"middle" as const,
-                            overflow:     "hidden",
-                            // バーの先頭・末尾に角丸（隣接tdなので近似的に）
-                            borderLeft:   bar?.isFirst ? `2px solid ${C.card}` : undefined,
-                            borderRight:  bar?.isLast  ? `2px solid ${C.card}` : `1px solid ${C.border}`,
+                            // 先頭セルのみ position:relative（テキストオーバーレイの基点）
+                            position:     bar.isFirst ? "relative" as const : undefined,
+                            overflow:     "visible",
                           }}
                         >
-                          {bar?.showLabel && (
+                          {/* バー本体 div */}
+                          <div style={{
+                            height:       "100%",
+                            background:   bar.color,
+                            borderRadius: barRadius,
+                          }} />
+
+                          {/* テキストオーバーレイ（先頭セルのみ・バー全体にまたがる） */}
+                          {bar.isFirst && (
                             <span style={{
-                              fontSize:   10,
-                              fontWeight: 700,
-                              color:      "#fff",
-                              whiteSpace: "nowrap" as const,
-                              overflow:   "hidden",
-                              display:    "block",
-                              textOverflow:"ellipsis",
+                              position:     "absolute",
+                              left:         0,
+                              top:          4,          // paddingTop に合わせる
+                              bottom:       4,          // paddingBottom に合わせる
+                              width:        bar.barWidthPx,
+                              overflow:     "hidden",
+                              whiteSpace:   "nowrap" as const,
+                              display:      "flex",
+                              alignItems:   "center",
+                              paddingLeft:  6,
+                              fontSize:     12,
+                              fontWeight:   700,
+                              color:        "#fff",
+                              pointerEvents:"none" as const,
+                              zIndex:       1,
                             }}>
                               {p.name}
                             </span>
