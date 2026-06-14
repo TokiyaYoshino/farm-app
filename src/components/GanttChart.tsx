@@ -25,10 +25,7 @@ const C = {
   border:    "#dde8dd",
 };
 
-const CROP_COLORS = [
-  "#4caf50", "#1976d2", "#f57c00", "#7b1fa2",
-  "#c62828", "#00838f", "#558b2f", "#4527a0",
-];
+const DEFAULT_BAR_COLOR = "#4CAF50";
 
 interface Crop    { id: number; name: string; }
 interface Field   { id: number; name: string; }
@@ -38,6 +35,7 @@ interface Project {
   start_date?: string; end_date?: string;
   status: "active" | "completed" | "archived";
   created_by?: number; created_at: string;
+  color?: string;
 }
 interface Props {
   projects:       Project[];
@@ -120,9 +118,6 @@ export default function GanttChart({
     }
   }
 
-  // ── 作物カラーマップ ────────────────────────────────────────
-  const cropColorMap: Record<number, string> = {};
-  crops.forEach((c, i) => { cropColorMap[c.id] = CROP_COLORS[i % CROP_COLORS.length]; });
   const getCropName = (id?: number) => crops.find(c => c.id === id)?.name ?? "";
 
   // ── 各プロジェクトのバー情報を取得 ─────────────────────────
@@ -134,8 +129,8 @@ export default function GanttChart({
     const visStart   = Math.max(startIdx, 0);
     const visEnd     = Math.min(endIdx, totalDays - 1);
     if (di < visStart || di > visEnd) return null;
-    const color      = p.crop_id ? (cropColorMap[p.crop_id] ?? C.primary) : C.primary;
-    const barWidthPx = (visEnd - visStart + 1) * COL_W; // バー全体のpx幅
+    const color      = p.color ?? DEFAULT_BAR_COLOR;
+    const barWidthPx = (visEnd - visStart + 1) * COL_W;
     return {
       color,
       barWidthPx,
@@ -147,14 +142,14 @@ export default function GanttChart({
   // ── モーダル状態 ─────────────────────────────────────────────
   const [editTarget, setEditTarget] = useState<Project | null>(null);
   const [showAdd,    setShowAdd]    = useState(false);
-  const emptyForm = { name:"", crop_id:0, field:"", start_date:"", end_date:"" };
+  const emptyForm = { name:"", crop_id:0, field:"", start_date:"", end_date:"", color: DEFAULT_BAR_COLOR };
   const [form,       setForm]       = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [errMsg,     setErrMsg]     = useState("");
 
   const openEdit = (p: Project) => {
     setErrMsg("");
-    setForm({ name:p.name, crop_id:p.crop_id??0, field:p.field??"", start_date:p.start_date??"", end_date:p.end_date??"" });
+    setForm({ name:p.name, crop_id:p.crop_id??0, field:p.field??"", start_date:p.start_date??"", end_date:p.end_date??"", color: p.color ?? DEFAULT_BAR_COLOR });
     setEditTarget(p); setShowAdd(false);
   };
   const openAdd = () => {
@@ -169,7 +164,7 @@ export default function GanttChart({
     if (!editTarget || !form.name.trim()) { setErrMsg("計画名を入力してください"); return; }
     setSubmitting(true); setErrMsg("");
     const { data, error } = await supabase.from("projects")
-      .update({ name:form.name.trim(), crop_id:form.crop_id||null, field:form.field||null, start_date:form.start_date||null, end_date:form.end_date||null })
+      .update({ name:form.name.trim(), crop_id:form.crop_id||null, field:form.field||null, start_date:form.start_date||null, end_date:form.end_date||null, color:form.color })
       .eq("id", editTarget.id).select().single();
     setSubmitting(false);
     if (error) { setErrMsg(error.message); return; }
@@ -180,7 +175,7 @@ export default function GanttChart({
     if (!form.name.trim()) { setErrMsg("計画名を入力してください"); return; }
     setSubmitting(true); setErrMsg("");
     const { data, error } = await supabase.from("projects")
-      .insert([{ name:form.name.trim(), crop_id:form.crop_id||null, field:form.field||null, start_date:form.start_date||null, end_date:form.end_date||null, status:"active", org:currentOrg, created_by:currentUserId }])
+      .insert([{ name:form.name.trim(), crop_id:form.crop_id||null, field:form.field||null, start_date:form.start_date||null, end_date:form.end_date||null, status:"active", org:currentOrg, created_by:currentUserId, color:form.color }])
       .select().single();
     setSubmitting(false);
     if (error) { setErrMsg(error.message); return; }
@@ -229,17 +224,6 @@ export default function GanttChart({
         )}
       </div>
 
-      {/* 凡例 */}
-      {crops.length > 0 && (
-        <div style={{ display:"flex", flexWrap:"wrap" as const, gap:8, marginBottom:10 }}>
-          {crops.map((c, i) => (
-            <span key={c.id} style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:C.textSub, fontWeight:600 }}>
-              <span style={{ width:10, height:10, borderRadius:3, background:CROP_COLORS[i % CROP_COLORS.length], display:"inline-block" }} />
-              {c.name}
-            </span>
-          ))}
-        </div>
-      )}
 
       {/* ── ガントチャート本体 ─────────────────────────────────── */}
       <div style={{ overflowX:"auto" as const, border:`1px solid ${C.border}`, borderRadius:12, background:C.card, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
@@ -347,7 +331,7 @@ export default function GanttChart({
                       <div style={{ fontSize:10, color:C.textMuted, display:"flex", gap:4, marginTop:2, flexWrap:"nowrap" as const }}>
                         {p.crop_id && (
                           <span style={{ display:"flex", alignItems:"center", gap:2 }}>
-                            <Leaf size={9} strokeWidth={2} color={cropColorMap[p.crop_id] ?? C.primary} />
+                            <Leaf size={9} strokeWidth={2} color={p.color ?? DEFAULT_BAR_COLOR} />
                             {getCropName(p.crop_id)}
                           </span>
                         )}
@@ -488,6 +472,18 @@ export default function GanttChart({
                   <div style={lbl}><CalendarDays size={13} strokeWidth={2} />終了予定日</div>
                   <input type="date" style={{ ...inp, maxWidth:"100%" }} value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date:e.target.value }))} />
                 </div>
+              </div>
+
+              <div style={lbl}>バーの色</div>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+                <input
+                  type="color"
+                  value={form.color}
+                  onChange={e => setForm(f => ({ ...f, color:e.target.value }))}
+                  style={{ width:44, height:40, padding:3, borderRadius:8, border:`1.5px solid ${C.border}`, cursor:"pointer", background:"#fafcfa" }}
+                />
+                <div style={{ flex:1, height:40, borderRadius:8, background:form.color, border:`1.5px solid ${C.border}` }} />
+                <span style={{ fontSize:12, color:C.textMuted, fontFamily:"monospace", minWidth:64 }}>{form.color}</span>
               </div>
 
               {errMsg && (

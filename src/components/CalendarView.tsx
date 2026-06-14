@@ -18,6 +18,7 @@ export type Schedule = {
   date: string;
   note?: string;
   crop?: string;
+  field?: string;
   created_at: string;
 };
 

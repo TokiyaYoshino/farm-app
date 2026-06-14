@@ -175,6 +175,7 @@ interface Project {
   status: "active" | "completed" | "archived";
   created_by?: number;
   created_at: string;
+  color?: string;
 }
 interface Ticket {
   id: string;
@@ -301,11 +302,12 @@ export default function App() {
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
+  const [showCropAddForm, setShowCropAddForm] = useState(false);
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"report"|"backlog">("report");
   const [showMapModal, setShowMapModal]       = useState(false);
   const [inlineOpen, setInlineOpen]           = useState(false);
   const [inlineMode, setInlineMode]           = useState<null | "schedule" | "report">(null);
-  const [inlineSchedForm, setInlineSchedForm] = useState({ date: new Date().toISOString().slice(0,10), work_type:"収穫", assigned_user_id:0, crop:"", note:"" });
+  const [inlineSchedForm, setInlineSchedForm] = useState({ date: new Date().toISOString().slice(0,10), work_type:"収穫", assigned_user_id:0, crop:"", field:"", note:"" });
   const cropExpandedInit                       = useRef(false);
   const [deleteModal, setDeleteModal]     = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [selectedCropId, setSelectedCropId] = useState<number | null>(null);
@@ -981,7 +983,7 @@ export default function App() {
       showToast("農薬を削除しました");
     });
 
-  const addSchedule = async (date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string): Promise<boolean> => {
+  const addSchedule = async (date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string, field?: string): Promise<boolean> => {
     if (!currentUser) return false;
     try {
       const { data, error } = await supabase.from("schedules").insert([{
@@ -990,6 +992,7 @@ export default function App() {
         date,
         note: note || null,
         crop: crop || null,
+        field: field || null,
         assigned_user_id: assignedUserId || null,
         work_type: workType || null,
       }]).select().single();
@@ -1063,10 +1066,10 @@ export default function App() {
   };
 
   const addScheduleInline = async () => {
-    const { date, work_type, assigned_user_id, crop, note } = inlineSchedForm;
+    const { date, work_type, assigned_user_id, crop, field, note } = inlineSchedForm;
     if (!date || !work_type) return;
     setSubmitting(true);
-    const ok = await addSchedule(date, work_type, note, crop, assigned_user_id || null, work_type);
+    const ok = await addSchedule(date, work_type, note, crop, assigned_user_id || null, work_type, field);
     setSubmitting(false);
     if (!ok) return showToast("登録に失敗しました", "err");
     setInlineMode(null);
@@ -1756,6 +1759,7 @@ export default function App() {
                         <div style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{s.title}</div>
                         <div style={{ fontSize:11, color:C.textSub, marginTop:2, display:"flex", gap:8, flexWrap:"wrap" as const }}>
                           {s.crop && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Leaf size={11} strokeWidth={2} />{s.crop}</span>}
+                          {s.field && <span style={{ display:"flex", alignItems:"center", gap:3 }}><MapPin size={11} strokeWidth={2} />{s.field}</span>}
                           {assignedUser && <span style={{ display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2} />{assignedUser.name}</span>}
                           {s.work_type && <span>{s.work_type}</span>}
                         </div>
@@ -1865,6 +1869,12 @@ export default function App() {
                     <select style={S.select} value={inlineSchedForm.crop} onChange={e => setInlineSchedForm(f => ({ ...f, crop:e.target.value }))}>
                       <option value="">未指定</option>
                       {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+
+                    <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場（任意）</div>
+                    <select style={S.select} value={inlineSchedForm.field} onChange={e => setInlineSchedForm(f => ({ ...f, field:e.target.value }))}>
+                      <option value="">未指定</option>
+                      {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
                     </select>
 
                     <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業種別</div>
@@ -2185,18 +2195,26 @@ export default function App() {
           {manageSubTab === "crops" && <>
             {isAdmin && (
               <>
-                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />作物を追加</div>
-                <div style={S.card}>
-                  <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
-                  <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
-                  <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
-                  <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
-                  <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />目標収穫量（kg/年・任意）</div>
-                  <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
-                  <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
-                    {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowCropAddForm(p => !p)}
+                  style={{ ...S.sec, background:"none", border:"none", cursor:"pointer", width:"100%", justifyContent:"space-between" }}
+                >
+                  <span style={{ display:"flex", alignItems:"center", gap:6 }}><PlusCircle size={14} strokeWidth={2} />作物を追加</span>
+                  <span style={{ fontSize:16, color:C.primary, fontWeight:700 }}>{showCropAddForm ? "−" : "+"}</span>
+                </button>
+                {showCropAddForm && (
+                  <div style={{ ...S.card, animation:"slideDown 0.15s ease" }}>
+                    <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
+                    <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
+                    <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
+                    <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
+                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />目標収穫量（kg/年・任意）</div>
+                    <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
+                    <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
+                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
+                    </button>
+                  </div>
+                )}
               </>
             )}
             <div style={S.sec}><Leaf size={14} strokeWidth={2} />登録作物</div>
@@ -2722,18 +2740,26 @@ export default function App() {
           {cropListTab === "crops" && <>
             {isAdmin && (
               <>
-                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />作物を追加</div>
-                <div style={S.card}>
-                  <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
-                  <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
-                  <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
-                  <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
-                  <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />目標収穫量（kg/年・任意）</div>
-                  <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
-                  <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
-                    {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowCropAddForm(p => !p)}
+                  style={{ ...S.sec, background:"none", border:"none", cursor:"pointer", width:"100%", justifyContent:"space-between" }}
+                >
+                  <span style={{ display:"flex", alignItems:"center", gap:6 }}><PlusCircle size={14} strokeWidth={2} />作物を追加</span>
+                  <span style={{ fontSize:16, color:C.primary, fontWeight:700 }}>{showCropAddForm ? "−" : "+"}</span>
+                </button>
+                {showCropAddForm && (
+                  <div style={{ ...S.card, animation:"slideDown 0.15s ease" }}>
+                    <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
+                    <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
+                    <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
+                    <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
+                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />目標収穫量（kg/年・任意）</div>
+                    <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
+                    <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
+                      {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
+                    </button>
+                  </div>
+                )}
               </>
             )}
             <div style={S.sec}><Leaf size={14} strokeWidth={2} />登録作物</div>
