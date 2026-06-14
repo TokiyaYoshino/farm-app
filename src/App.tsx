@@ -1092,6 +1092,7 @@ export default function App() {
       field: prjForm.field || null,
       start_date: prjForm.start_date || null,
       end_date: prjForm.end_date || null,
+      status: "active",
       org: currentOrg,
       created_by: currentUser?.id,
     }]).select().single();
@@ -2371,7 +2372,7 @@ export default function App() {
                         </div>
                       </div>
                       <div style={{ display:"flex", gap:8 }}>
-                        <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addProject} disabled={submitting}>
+                        <button style={{ ...S.btn, flex:1, width:"auto", opacity:submitting?0.7:1 }} onClick={addProject} disabled={submitting}>
                           {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />追加する</>}
                         </button>
                         <button onClick={() => setShowAddProject(false)} style={{ flex:1, padding:"12px 0", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:600, cursor:"pointer" }}>
