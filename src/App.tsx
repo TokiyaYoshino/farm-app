@@ -1755,8 +1755,8 @@ export default function App() {
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{s.title}</div>
                         <div style={{ fontSize:11, color:C.textSub, marginTop:2, display:"flex", gap:8, flexWrap:"wrap" as const }}>
-                          {s.crop && <span>🌱 {s.crop}</span>}
-                          {assignedUser && <span>👤 {assignedUser.name}</span>}
+                          {s.crop && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Leaf size={11} strokeWidth={2} />{s.crop}</span>}
+                          {assignedUser && <span style={{ display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2} />{assignedUser.name}</span>}
                           {s.work_type && <span>{s.work_type}</span>}
                         </div>
                       </div>
@@ -1790,9 +1790,9 @@ export default function App() {
                           <span style={{ fontSize:10, fontWeight:700, color:"#c0392b", background:"#fdecea", borderRadius:5, padding:"2px 7px", flexShrink:0 }}>未報告</span>
                         </div>
                         <div style={{ fontSize:11, color:C.textSub, display:"flex", gap:8, flexWrap:"wrap" as const }}>
-                          <span>📅 {s.date}</span>
-                          {s.crop && <span>🌱 {s.crop}</span>}
-                          {assignedUser && <span>👤 {assignedUser.name}</span>}
+                          <span style={{ display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={11} strokeWidth={2} />{s.date}</span>
+                          {s.crop && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Leaf size={11} strokeWidth={2} />{s.crop}</span>}
+                          {assignedUser && <span style={{ display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2} />{assignedUser.name}</span>}
                           {s.work_type && <span>{s.work_type}</span>}
                         </div>
                       </div>
