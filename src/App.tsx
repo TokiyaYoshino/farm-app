@@ -325,6 +325,7 @@ export default function App() {
   const [soilPh, setSoilPh]                         = useState("");
   const [submitting, setSubmitting]       = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
@@ -1780,13 +1781,7 @@ export default function App() {
                   return (
                     <button
                       key={s.id}
-                      onClick={() => {
-                        const cropId = crops.find(c => c.name === s.crop)?.id ?? rForm.crop_id;
-                        setCopySource(null);
-                        setRForm(f => ({ ...f, user_id: s.assigned_user_id ?? s.user_id, crop_id: cropId, date: s.date, work_type: s.work_type ?? f.work_type, note: s.note ?? "" }));
-                        setInlineOpen(true);
-                        setInlineMode("report");
-                      }}
+                      onClick={() => setSelectedSchedule(s)}
                       style={{ width:"100%", background:C.card, borderRadius:12, padding:"10px 14px", border:`1px solid #f5c6c6`, marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
                     >
                       <div style={{ flex:1, minWidth:0 }}>
@@ -3106,6 +3101,90 @@ export default function App() {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ───── 予定詳細（未報告） ───── */}
+      {selectedSchedule && (() => {
+        const s = selectedSchedule;
+        const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
+        const cropObj = crops.find(c => c.name === s.crop);
+        const ci = getCropIcon(s.crop ?? "");
+        return (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:300, display:"flex", alignItems:"flex-end" }}
+            onClick={() => setSelectedSchedule(null)}>
+            <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"85vh", overflowY:"auto", paddingBottom:40 }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"12px auto 0" }} />
+
+              {/* ヘッダー */}
+              <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ background:ci.bg, borderRadius:9, padding:7, flexShrink:0 }}>
+                    <ci.Icon size={16} color={ci.color} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{s.title}</div>
+                    <div style={{ fontSize:12, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
+                      <CalendarDays size={11} strokeWidth={2} />{s.date}
+                      {s.crop && <><span style={{ color:C.border }}>·</span><span>{s.crop}</span></>}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:"#c0392b", background:"#fdecea", borderRadius:6, padding:"3px 9px" }}>未報告</span>
+                  <button onClick={() => setSelectedSchedule(null)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 8px", cursor:"pointer", display:"flex", color:C.textMuted }}>
+                    <X size={16} strokeWidth={2} />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ padding:"0 16px" }}>
+                {/* 基本情報 */}
+                <div style={{ background:C.bg, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  {s.work_type && (
+                    <div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業種別</div>
+                      <div style={{ fontWeight:700, fontSize:14, color:C.primary }}>{s.work_type}</div>
+                    </div>
+                  )}
+                  {assignedUser && (
+                    <div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>担当者</div>
+                      <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{assignedUser.name}</div>
+                    </div>
+                  )}
+                  {s.crop && (
+                    <div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作物</div>
+                      <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{s.crop}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* メモ */}
+                {s.note && (
+                  <div style={{ fontSize:13, color:C.textSub, padding:"10px 12px", background:C.bg, borderRadius:10, borderLeft:`3px solid ${C.primary4}`, marginBottom:12 }}>
+                    {s.note}
+                  </div>
+                )}
+
+                {/* アクション */}
+                <button
+                  onClick={() => {
+                    setSelectedSchedule(null);
+                    setCopySource(null);
+                    setRForm(f => ({ ...f, user_id: s.assigned_user_id ?? s.user_id, crop_id: cropObj?.id ?? f.crop_id, date: s.date, work_type: s.work_type ?? f.work_type, note: s.note ?? "" }));
+                    setInlineOpen(true);
+                    setInlineMode("report");
+                  }}
+                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"14px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}
+                >
+                  <ClipboardList size={16} strokeWidth={2} />この予定の報告を入力
+                </button>
               </div>
             </div>
           </div>
