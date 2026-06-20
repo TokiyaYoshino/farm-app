@@ -203,7 +203,7 @@ const C = {
   text:      "#1a2e1a",
   textSub:   "#4a6a4a",
   textMuted: "#8aaa8a",
-  bg:        "#f4f7f2",
+  bg:        "#f3f4f6",
   card:      "#ffffff",
   border:    "#dde8dd",
   navBg:     "#ffffff",
@@ -1261,12 +1261,12 @@ export default function App() {
     headerSub: css({ background:"#fff", borderBottom:`1px solid ${C.border}`, display:"flex", paddingLeft:4, paddingRight:4, gap:0 }),
     subTabBtn: (active: boolean) => ({ flex:1, padding:"10px 8px", border:"none", borderBottom: active ? `2.5px solid ${C.primary}` : "2.5px solid transparent", background:"transparent", color: active ? C.primary : C.textMuted, fontSize:13, fontWeight: active ? 700 : 600, cursor:"pointer", transition:"all 0.15s" } as const),
     page:    css({ padding:"16px 16px 0" }),
-    sec:     css({ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:10, marginTop:16, display:"flex", alignItems:"center", gap:6, textTransform:"uppercase" as const, letterSpacing:0.5, whiteSpace:"nowrap" as const }),
+    sec:     css({ fontSize:12, fontWeight:700, color:"#6b7280", marginBottom:10, marginTop:16, display:"flex", alignItems:"center", gap:6, textTransform:"uppercase" as const, letterSpacing:0.5, whiteSpace:"nowrap" as const }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
     card:    css({ background:C.card, borderRadius:14, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }),
-    input:   css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
-    select:  css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text }),
-    btn:     css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", border:"none", borderRadius:10, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 2px 8px rgba(45,106,45,0.3)", whiteSpace:"nowrap" as const }),
+    input:   css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid #e5e7eb`, fontSize:15, marginBottom:12, background:"#ffffff", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
+    select:  css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid #e5e7eb`, fontSize:15, marginBottom:12, background:"#ffffff", color:C.text }),
+    btn:     css({ background:"#166534", color:"#fff", border:"none", borderRadius:12, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 1px 3px rgba(0,0,0,.10), 0 4px 12px rgba(22,101,52,.25)", whiteSpace:"nowrap" as const, minHeight:52 }),
     btnSm:   css({ background:C.dangerBg, color:C.danger, border:`1.5px solid ${C.danger}22`, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap" as const, minWidth:48, flexShrink:0 }),
     row:     css({ display:"flex", justifyContent:"space-between", alignItems:"center" }),
     wxBox:   css({ background:`linear-gradient(135deg, #f0faf0 0%, #daf0da 100%)`, borderRadius:14, padding:"14px 16px", marginBottom:14, border:`1px solid ${C.primary4}` }),
@@ -1282,10 +1282,11 @@ export default function App() {
   const navBtn = (active: boolean): CSSProperties => ({
     flex:1, padding:"10px 0 8px", border:"none", background:"none", cursor:"pointer",
     display:"flex", flexDirection:"column", alignItems:"center", gap:3,
-    color: active ? C.primary : C.textMuted,
-    fontSize:10, fontWeight: active ? 700 : 400,
-    borderTop: active ? `2px solid ${C.primary}` : "2px solid transparent",
+    color: active ? "#166534" : C.textMuted,
+    fontSize:10, fontWeight: active ? 700 : 500,
+    borderTop: active ? `3px solid #166534` : "3px solid transparent",
     transition:"all 0.15s",
+    minHeight:48,
   });
 
   const tagStyle = (role: Role): CSSProperties => ({
@@ -1483,53 +1484,57 @@ export default function App() {
               )}
             </div>
           )}
-          {/* サマリーカード横スクロール */}
-          <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4, marginBottom:4, scrollSnapType:"x mandatory", WebkitOverflowScrolling:"touch" as any, msOverflowStyle:"none" as any, scrollbarWidth:"none" as any }}>
-            {/* 天気カード */}
-            {wxLoading ? (
-              <div style={{ background:`linear-gradient(135deg,#f0faf0,#daf0da)`, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.primary4}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}>
-                <RefreshCw size={18} color={C.primary} strokeWidth={1.8} />
-                <div style={{ fontSize:11, color:C.textSub, fontWeight:600 }}>取得中...</div>
-              </div>
-            ) : wxAuto ? (
-              <div style={{ background:`linear-gradient(135deg,#f0faf0,#daf0da)`, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.primary4}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4 }}>
+          {/* 天気カード（全幅） */}
+          {wxLoading ? (
+            <div style={{ background:"#f0fdf4", borderRadius:16, padding:"16px 20px", border:`1px solid ${C.primary4}`, marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
+              <RefreshCw size={18} color={C.primary} strokeWidth={1.8} />
+              <div style={{ fontSize:11, color:C.textSub, fontWeight:600 }}>天気取得中...</div>
+            </div>
+          ) : wxAuto ? (
+            <div style={{ background:"#f0fdf4", borderRadius:16, padding:"16px 20px", border:`1px solid ${C.primary4}`, marginBottom:10, display:"flex", alignItems:"center", gap:20 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:4, flexShrink:0 }}>
                 <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
                   <wxAuto.Icon size={11} color={C.primary} strokeWidth={2} />今日の天気
                 </div>
-                <div style={{ fontSize:30, fontWeight:800, color:C.text, lineHeight:1.1 }}>{wxAuto.temp}°</div>
-                <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{wxAuto.label}</div>
+                <div style={{ fontSize:40, fontWeight:800, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</div>
+                <div style={{ fontSize:13, color:C.textSub, fontWeight:700 }}>{wxAuto.label}</div>
+              </div>
+              <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
                 {wxAuto.humidity !== undefined && (
-                  <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3, marginTop:2 }}>
-                    <Droplets size={10} color="#1976d2" strokeWidth={2}/>{wxAuto.humidity}%
+                  <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.7)", borderRadius:8, padding:"5px 10px" }}>
+                    <Droplets size={13} color="#1976d2" strokeWidth={2}/><span style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{wxAuto.humidity}% 湿度</span>
+                  </div>
+                )}
+                {wxAuto.rain !== undefined && (
+                  <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.7)", borderRadius:8, padding:"5px 10px" }}>
+                    <CloudRain size={13} color="#0288d1" strokeWidth={2}/><span style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{wxAuto.rain}mm 降水</span>
                   </div>
                 )}
               </div>
-            ) : null}
-            {/* 7日間作業数 */}
-            <div style={{ background:C.card, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.border}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                <CalendarDays size={11} color={C.primary} strokeWidth={2} />直近7日（全体）
-              </div>
-              <div style={{ fontSize:30, fontWeight:800, color:C.text, lineHeight:1.1 }}>{workCount7d}</div>
-              <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>件の作業報告</div>
             </div>
-            {/* 今週の収穫量 */}
-            <div style={{ background:C.card, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.border}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+          ) : null}
+          {/* 統計3枚（2カラムグリッド） */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:4 }}>
+            <div style={{ background:C.card, borderRadius:16, padding:"16px 14px", border:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                <CalendarDays size={11} color={C.primary} strokeWidth={2} />直近7日
+              </div>
+              <div style={{ fontSize:28, fontWeight:800, color:C.text, lineHeight:1.1 }}>{workCount7d}</div>
+              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600 }}>件の作業</div>
+            </div>
+            <div style={{ background:C.card, borderRadius:16, padding:"16px 14px", border:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
                 <PackageCheck size={11} color={C.primary} strokeWidth={2} />今週の収穫
               </div>
-              <div style={{ fontSize:30, fontWeight:800, color:C.text, lineHeight:1.1 }}>{weekHarvest > 0 ? weekHarvest : "—"}</div>
-              <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{weekHarvest > 0 ? "kg 収穫" : "収穫なし"}</div>
+              <div style={{ fontSize:28, fontWeight:800, color:C.text, lineHeight:1.1 }}>{weekHarvest > 0 ? weekHarvest : "—"}</div>
+              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600 }}>{weekHarvest > 0 ? "kg" : "収穫なし"}</div>
             </div>
-            {/* 今日の予定 */}
-            <div style={{ background:C.card, borderRadius:16, padding:"16px 20px", minWidth:140, flexShrink:0, border:`1px solid ${C.border}`, scrollSnapAlign:"start", display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+            <div style={{ background:C.card, borderRadius:16, padding:"16px 14px", border:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", gridColumn:"span 2" }}>
+              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
                 <CalendarDays size={11} color={C.primary} strokeWidth={2} />今日の予定
               </div>
-              <div style={{ fontSize:30, fontWeight:800, color: todayScheduleCount > 0 ? C.primary : C.text, lineHeight:1.1 }}>
-                {todayScheduleCount}
-              </div>
-              <div style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{todayScheduleCount > 0 ? "件" : "予定なし"}</div>
+              <div style={{ fontSize:28, fontWeight:800, color: todayScheduleCount > 0 ? "#166534" : C.text, lineHeight:1.1 }}>{todayScheduleCount}</div>
+              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600 }}>{todayScheduleCount > 0 ? "件" : "予定なし"}</div>
             </div>
           </div>
 
@@ -1779,8 +1784,8 @@ export default function App() {
             if (unreported.length === 0) return null;
             return (
               <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
-                  <ClipboardList size={14} color="#c0392b" strokeWidth={2} />未報告の作業
+                <div style={{ fontSize:13, fontWeight:700, color:"#c2410c", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
+                  <ClipboardList size={14} color="#c2410c" strokeWidth={2} />未報告の作業
                 </div>
                 {unreported.map(s => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
@@ -1788,12 +1793,12 @@ export default function App() {
                     <button
                       key={s.id}
                       onClick={() => setSelectedSchedule(s)}
-                      style={{ width:"100%", background:C.card, borderRadius:12, padding:"10px 14px", border:`1px solid #f5c6c6`, marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
+                      style={{ width:"100%", background:"#fff7ed", borderRadius:12, padding:"10px 14px", border:`1px solid #fed7aa`, marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
                     >
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
                           <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
-                          <span style={{ fontSize:10, fontWeight:700, color:"#c0392b", background:"#fdecea", borderRadius:5, padding:"2px 7px", flexShrink:0 }}>未報告</span>
+                          <span style={{ fontSize:10, fontWeight:700, color:"#c2410c", background:"#fff7ed", border:`1px solid #fed7aa`, borderRadius:5, padding:"2px 7px", flexShrink:0 }}>未報告</span>
                         </div>
                         <div style={{ fontSize:11, color:C.textSub, display:"flex", gap:8, flexWrap:"wrap" as const }}>
                           <span style={{ display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={11} strokeWidth={2} />{s.date}</span>
@@ -3762,7 +3767,7 @@ export default function App() {
               {/* 詳細アコーディオン */}
               <button
                 onClick={() => setQuickExpanded(p => !p)}
-                style={{ width:"100%", padding:"10px 0", background:"none", border:"none", cursor:"pointer", fontSize:13, color:C.primary, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:4, marginBottom: quickExpanded ? 8 : 0 }}
+                style={{ width:"100%", padding:"14px 0", background:"none", border:"1.5px dashed #d1d5db", borderRadius:10, cursor:"pointer", fontSize:14, color:"#166534", fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:4, marginBottom:quickExpanded ? 8 : 0, marginTop:4 }}
               >
                 {quickExpanded ? "▲ 詳細を閉じる" : "▼ 詳細を入力"}
               </button>

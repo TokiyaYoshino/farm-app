@@ -105,13 +105,17 @@ for (let i = startRow; i < rows.length; i++) {
 
 console.log(`✅  変換完了: ${records.length} 件`);
 
+// ── 重複排除（reg_no で後勝ち） ────────────────────────────
+const deduped = [...new Map(records.map(r => [r.reg_no, r])).values()];
+console.log(`🔁  重複排除後: ${deduped.length} 件`);
+
 // ── Supabase へ upsert（100件ずつ） ────────────────────────
 const CHUNK = 100;
 let inserted = 0;
 let errors   = 0;
 
-for (let i = 0; i < records.length; i += CHUNK) {
-  const chunk = records.slice(i, i + CHUNK);
+for (let i = 0; i < deduped.length; i += CHUNK) {
+  const chunk = deduped.slice(i, i + CHUNK);
   const { error } = await supabase
     .from("pesticides_master")
     .upsert(chunk, { onConflict: "reg_no" });
@@ -121,7 +125,7 @@ for (let i = 0; i < records.length; i += CHUNK) {
     errors++;
   } else {
     inserted += chunk.length;
-    process.stdout.write(`\r📥  投入中... ${inserted}/${records.length}`);
+    process.stdout.write(`\r📥  投入中... ${inserted}/${deduped.length}`);
   }
 }
 
