@@ -1390,7 +1390,7 @@ export default function App() {
         <button
           onClick={handleLogin}
           disabled={loginBusy}
-          style={{ width:"100%", padding:"13px 0", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, opacity:loginBusy?0.7:1, boxShadow:"0 3px 10px rgba(45,106,45,0.35)" }}
+          style={{ width:"100%", padding:"13px 0", borderRadius:10, border:"none", background:"#166534", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, opacity:loginBusy?0.7:1, boxShadow:"0 3px 10px rgba(45,106,45,0.35)" }}
         >
           {loginBusy ? <RefreshCw size={16} strokeWidth={2} /> : <LogIn size={16} strokeWidth={2} />}
           {loginBusy ? "ログイン中..." : "ログイン"}
@@ -1613,7 +1613,7 @@ export default function App() {
               </div>
               <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ作業報告がありません</div>
               <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>最初の報告を登録してみましょう</div>
-              <button style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", border:"none", borderRadius:10, padding:"9px 20px", fontSize:13, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={() => setTab("report")}>
+              <button style={{ background:"#166534", color:"#fff", border:"none", borderRadius:10, padding:"9px 20px", fontSize:13, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={() => setTab("report")}>
                 <PenLine size={14} strokeWidth={2} />報告を登録
               </button>
             </div>
@@ -1695,7 +1695,7 @@ export default function App() {
               <div style={{ fontSize:14, fontWeight:700, color:C.text }}>圃場マップ</div>
               <div style={{ fontSize:12, color:C.textMuted }}>登録圃場の場所を地図で確認</div>
             </div>
-            <button onClick={() => setShowMapModal(true)} style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", border:"none", borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+            <button onClick={() => setShowMapModal(true)} style={{ background:"#166534", color:"#fff", border:"none", borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
               マップを開く
             </button>
           </div>
@@ -2605,7 +2605,7 @@ export default function App() {
                           </div>
                           <div style={{ display:"flex", gap:8 }}>
                             <input type="date" style={{ ...S.input, marginBottom:0, flex:1, maxWidth:"100%" }} value={tForm.due_date} onChange={e => setTForm(f => ({ ...f, due_date:e.target.value }))} />
-                            <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
+                            <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:"#166534", border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
                               {submitting ? <RefreshCw size={14} strokeWidth={2} /> : <Save size={14} strokeWidth={2} />}
                             </button>
                             <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
@@ -3213,7 +3213,7 @@ export default function App() {
                     setRForm(f => ({ ...f, user_id: s.assigned_user_id ?? s.user_id, crop_id: cropObj?.id ?? f.crop_id, date: s.date, work_type: s.work_type ?? f.work_type, note: s.note ?? "" }));
                     setShowQuickReport(true);
                   }}
-                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"14px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}
+                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"14px 0", borderRadius:12, border:"none", background:"#166534", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}
                 >
                   <ClipboardList size={16} strokeWidth={2} />この予定の報告を入力
                 </button>
@@ -3242,7 +3242,7 @@ export default function App() {
         const stat = cropStats.find(c => c.id === selectedCropId);
         return (
           <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:200, overflowY:"auto", paddingBottom:80 }} className="anim-slideUp">
-            <div style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", padding:"10px 12px", display:"flex", alignItems:"center", gap:10, position:"sticky", top:0, zIndex:10 }}>
+            <div style={{ background:"#166534", color:"#fff", padding:"10px 12px", display:"flex", alignItems:"center", gap:10, position:"sticky", top:0, zIndex:10 }}>
               <button onClick={() => setSelectedCropId(null)} style={{ background:"rgba(255,255,255,0.18)", border:"none", borderRadius:20, padding:"6px 8px", color:"#fff", cursor:"pointer", display:"flex", flexShrink:0 }}>
                 <ChevronLeft size={18} strokeWidth={2.5} />
               </button>
@@ -3319,7 +3319,7 @@ export default function App() {
                         onKeyDown={e => e.key === "Enter" && updateTargetYield(crop.id, targetYieldInput)}
                         style={{ width:100, padding:"5px 9px", borderRadius:8, border:`1.5px solid ${C.primary4}`, fontSize:13, background:"#fff", color:C.text, boxSizing:"border-box" as const }}
                       />
-                      <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, border:"none", borderRadius:8, padding:"5px 11px", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>保存</button>
+                      <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={{ background:"#166534", border:"none", borderRadius:8, padding:"5px 11px", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>保存</button>
                       <button onClick={() => setEditingTargetYield(false)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"5px 9px", color:C.textSub, fontSize:12, cursor:"pointer" }}>×</button>
                     </div>
                   ) : (
@@ -3596,7 +3596,7 @@ export default function App() {
                         </div>
                         <div style={{ display:"flex", gap:8 }}>
                           <input type="date" style={{ ...S.input, marginBottom:0, flex:1, maxWidth:"100%" }} value={tForm.due_date} onChange={e => setTForm(f => ({ ...f, due_date:e.target.value }))} />
-                          <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:`linear-gradient(135deg,${C.primary},${C.primary2})`, border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
+                          <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:"#166534", border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
                             {submitting ? <RefreshCw size={14} strokeWidth={2} /> : <Save size={14} strokeWidth={2} />}
                           </button>
                           <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>

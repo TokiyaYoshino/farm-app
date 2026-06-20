@@ -78,7 +78,7 @@ function endOfMonth(y: number, m: number): Date {
 const lbl = { fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 } as const;
 const inp = { width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text, boxSizing:"border-box" } as const;
 const sel = { width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text } as const;
-const btnPrimary = { background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", border:"none", borderRadius:10, padding:"13px 0", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 } as const;
+const btnPrimary = { background:"#166534", color:"#fff", border:"none", borderRadius:10, padding:"13px 0", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 } as const;
 
 // ── テーブルセルの共通ボーダースタイル ──────────────────────
 const cellBorder = { borderBottom:`1px solid ${C.border}`, borderRight:`1px solid ${C.border}` };
@@ -217,7 +217,7 @@ export default function GanttChart({
         {isAdmin && (
           <button
             onClick={openAdd}
-            style={{ display:"flex", alignItems:"center", gap:5, background:`linear-gradient(135deg,${C.primary},${C.primary2})`, color:"#fff", border:"none", borderRadius:9, padding:"7px 13px", fontSize:13, fontWeight:700, cursor:"pointer" }}
+            style={{ display:"flex", alignItems:"center", gap:5, background:"#166534", color:"#fff", border:"none", borderRadius:9, padding:"7px 13px", fontSize:13, fontWeight:700, cursor:"pointer" }}
           >
             <Plus size={14} strokeWidth={2.5} />計画を追加
           </button>
