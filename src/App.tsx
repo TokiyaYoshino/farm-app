@@ -1532,16 +1532,12 @@ export default function App() {
             </div>
           ) : cropStats.map(c => {
             const expanded = expandedCrops.has(c.id);
-            const ci = getCropIcon(c.name);
             return (
               <div key={c.id} style={S.card}>
                 <button
                   onClick={() => setExpandedCrops(prev => { const s = new Set(prev); s.has(c.id) ? s.delete(c.id) : s.add(c.id); return s; })}
                   style={{ width:"100%", background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:10 }}
                 >
-                  <div style={{ background:ci.bg, borderRadius:10, padding:8, flexShrink:0 }}>
-                    <ci.Icon size={18} color={ci.color} strokeWidth={1.8} />
-                  </div>
                   <span style={{ fontWeight:700, fontSize:15, color:C.text, flex:1, textAlign:"left" }}>{c.name}</span>
                   {c.growDays !== null && (
                     <span style={{ fontSize:12, color:C.textMuted, whiteSpace:"nowrap" as const }}>
@@ -2123,20 +2119,13 @@ export default function App() {
           ) : pesticides.map(p => (
             <div key={p.id} style={S.card}>
               <div style={S.row}>
-                <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
-                  <div style={{ background:"#f3e5f5", borderRadius:10, padding:8, flexShrink:0 }}>
-                    <FlaskConical size={18} color="#7b1fa2" strokeWidth={1.8} />
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:15, color:C.text, marginBottom:3 }}>{p.name}</div>
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" as const }}>
+                    <span style={{ fontSize:12, color:C.textMuted }}>{p.type}</span>
+                    {p.dilution_rate && <span style={{ fontSize:12, color:C.textMuted }}>· {p.dilution_rate}</span>}
                   </div>
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <span style={{ fontWeight:700, fontSize:15, color:C.text }}>{p.name}</span>
-                    </div>
-                    <div style={{ display:"flex", gap:6, marginTop:3, flexWrap:"wrap" as const }}>
-                      <span style={{ fontSize:11, background:"#f3e5f5", color:"#7b1fa2", borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{p.type}</span>
-                      {p.dilution_rate && <span style={{ fontSize:11, color:C.textMuted }}>{p.dilution_rate}</span>}
-                    </div>
-                    {p.notes && <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{p.notes}</div>}
-                  </div>
+                  {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{p.notes}</div>}
                 </div>
                 {isAdmin && (
                   <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
@@ -2193,15 +2182,13 @@ export default function App() {
                 <div style={{ fontSize:13, color:C.textMuted }}>作物が登録されていません</div>
               </div>
             ) : crops.map(c => {
-              const ci = getCropIcon(c.name);
               return (
                 <div key={c.id} style={{ ...S.card, cursor:"pointer" }} onClick={() => setSelectedCropId(c.id)}>
                   <div style={S.row}>
                     <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
-                      <div style={{ background:ci.bg, borderRadius:10, padding:8, flexShrink:0 }}><ci.Icon size={18} color={ci.color} strokeWidth={1.8} /></div>
                       <div style={{ minWidth:0 }}>
-                        <div style={{ fontWeight:700, fontSize:15, color:C.text, whiteSpace:"nowrap" as const }}>{c.name}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2, whiteSpace:"nowrap" as const }}><CalendarDays size={11} strokeWidth={2} />{c.start_date}</div>
+                        <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
+                        <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{c.start_date}</div>
                       </div>
                     </div>
                     {isAdmin && (
@@ -2394,16 +2381,13 @@ export default function App() {
             ) : pesticides.map(p => (
               <div key={p.id} style={S.card}>
                 <div style={S.row}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
-                    <div style={{ background:"#f3e5f5", borderRadius:10, padding:8, flexShrink:0 }}><FlaskConical size={18} color="#7b1fa2" strokeWidth={1.8} /></div>
-                    <div style={{ minWidth:0 }}>
-                      <span style={{ fontWeight:700, fontSize:15, color:C.text }}>{p.name}</span>
-                      <div style={{ display:"flex", gap:6, marginTop:3, flexWrap:"wrap" as const }}>
-                        <span style={{ fontSize:11, background:"#f3e5f5", color:"#7b1fa2", borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{p.type}</span>
-                        {p.dilution_rate && <span style={{ fontSize:11, color:C.textMuted }}>{p.dilution_rate}</span>}
-                      </div>
-                      {p.notes && <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{p.notes}</div>}
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:15, color:C.text, marginBottom:3 }}>{p.name}</div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" as const }}>
+                      <span style={{ fontSize:12, color:C.textMuted }}>{p.type}</span>
+                      {p.dilution_rate && <span style={{ fontSize:12, color:C.textMuted }}>· {p.dilution_rate}</span>}
                     </div>
+                    {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{p.notes}</div>}
                   </div>
                   {isAdmin && (
                     <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
@@ -2730,18 +2714,12 @@ export default function App() {
                 <div style={{ fontSize:13, color:C.textMuted }}>作物が登録されていません</div>
               </div>
             ) : crops.map(c => {
-              const ci = getCropIcon(c.name);
               return (
                 <div key={c.id} style={{ ...S.card, cursor:"pointer" }} onClick={() => setSelectedCropId(c.id)}>
                   <div style={S.row}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
-                      <div style={{ background:ci.bg, borderRadius:10, padding:8, flexShrink:0 }}><ci.Icon size={18} color={ci.color} strokeWidth={1.8} /></div>
-                      <div style={{ minWidth:0 }}>
-                        <div style={{ fontWeight:700, fontSize:15, color:C.text, whiteSpace:"nowrap" as const }}>{c.name}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2, whiteSpace:"nowrap" as const }}>
-                          <CalendarDays size={11} strokeWidth={2} />{c.start_date}
-                        </div>
-                      </div>
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
+                      <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{c.start_date}</div>
                     </div>
                     {isAdmin && (
                       <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
