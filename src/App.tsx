@@ -1256,14 +1256,14 @@ export default function App() {
   // ─── スタイル ─────────────────────────────────────────
   const S = {
     wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:80 }),
-    header:  css({ background:`linear-gradient(135deg, ${C.primary} 0%, ${C.primary2} 100%)`, color:"#fff", padding:"8px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, boxShadow:"0 2px 8px rgba(45,106,45,0.25)", minHeight:0 }),
-    headerTitle: css({ fontSize:14, fontWeight:700, letterSpacing:0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
+    header:  css({ background:"#fff", color:C.text, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid #e5e7eb`, position:"sticky" as const, top:0, zIndex:90 }),
+    headerTitle: css({ fontSize:16, fontWeight:700, color:C.text, letterSpacing:-0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
     headerSub: css({ background:"#fff", borderBottom:`1px solid ${C.border}`, display:"flex", paddingLeft:4, paddingRight:4, gap:0 }),
     subTabBtn: (active: boolean) => ({ flex:1, padding:"10px 8px", border:"none", borderBottom: active ? `2.5px solid ${C.primary}` : "2.5px solid transparent", background:"transparent", color: active ? C.primary : C.textMuted, fontSize:13, fontWeight: active ? 700 : 600, cursor:"pointer", transition:"all 0.15s" } as const),
     page:    css({ padding:"16px 16px 0" }),
-    sec:     css({ fontSize:12, fontWeight:700, color:"#6b7280", marginBottom:10, marginTop:16, display:"flex", alignItems:"center", gap:6, textTransform:"uppercase" as const, letterSpacing:0.5, whiteSpace:"nowrap" as const }),
+    sec:     css({ fontSize:13, fontWeight:600, color:C.textSub, marginBottom:8, marginTop:20, display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" as const }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
-    card:    css({ background:C.card, borderRadius:14, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }),
+    card:    css({ background:C.card, borderRadius:12, padding:"14px 16px", marginBottom:8, border:`1px solid #e5e7eb` }),
     input:   css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid #e5e7eb`, fontSize:15, marginBottom:12, background:"#ffffff", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
     select:  css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid #e5e7eb`, fontSize:15, marginBottom:12, background:"#ffffff", color:C.text }),
     btn:     css({ background:"#166534", color:"#fff", border:"none", borderRadius:12, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 1px 3px rgba(0,0,0,.10), 0 4px 12px rgba(22,101,52,.25)", whiteSpace:"nowrap" as const, minHeight:52 }),
@@ -1411,25 +1411,23 @@ export default function App() {
       {/* ヘッダー */}
       <div style={S.header}>
         <div style={S.headerTitle}>
-          {tab === "home" ? <><Leaf size={17} strokeWidth={1.8} />農作業レポート</> :
-           tab === "report" ? "記録" :
+          {tab === "home" ? "農作業レポート" :
+           tab === "report" ? "作業記録" :
            tab === "analytics" ? "分析" :
-           tab === "manage" ? "管理" : <><Leaf size={17} strokeWidth={1.8} />農作業レポート</>}
+           tab === "manage" ? "管理" : "農作業レポート"}
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:6, flex:"0 0 auto", flexShrink:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flex:"0 0 auto", flexShrink:0 }}>
           {(tab === "home" || tab === "report") && (
             <button
               onClick={() => setShowQuickReport(true)}
-              style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", borderRadius:9999, padding:"8px 16px", border:"none", cursor:"pointer", color:"#166534", fontWeight:600, fontSize:13, flexShrink:0, transition:"background-color 0.15s" }}
-              onMouseEnter={e => (e.currentTarget.style.background = "#f0fdf4")}
-              onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+              style={{ display:"flex", alignItems:"center", gap:4, background:"#166534", borderRadius:8, padding:"7px 14px", border:"none", cursor:"pointer", color:"#fff", fontWeight:600, fontSize:13, flexShrink:0 }}
             >
               <Plus size={14} strokeWidth={2.5} />
-              作業記録
+              記録する
             </button>
           )}
           {currentUser && (
-            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", padding:"5px 7px", background:"rgba(255,255,255,0.15)", borderRadius:20, border:"none", cursor:"pointer", color:"#fff", flexShrink:0 }}>
+            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", padding:"5px 6px", background:"#f3f4f6", borderRadius:8, border:"1px solid #e5e7eb", cursor:"pointer", color:C.textSub, flexShrink:0 }}>
               <UserCircle size={18} strokeWidth={1.8} />
             </button>
           )}
@@ -1486,67 +1484,51 @@ export default function App() {
           )}
           {/* 天気カード（全幅） */}
           {wxLoading ? (
-            <div style={{ background:"#f0fdf4", borderRadius:16, padding:"16px 20px", border:`1px solid ${C.primary4}`, marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
-              <RefreshCw size={18} color={C.primary} strokeWidth={1.8} />
-              <div style={{ fontSize:11, color:C.textSub, fontWeight:600 }}>天気取得中...</div>
+            <div style={{ background:"#fff", borderRadius:12, padding:"14px 16px", border:"1px solid #e5e7eb", marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
+              <RefreshCw size={16} color={C.textMuted} strokeWidth={1.8} />
+              <span style={{ fontSize:13, color:C.textMuted }}>天気取得中...</span>
             </div>
           ) : wxAuto ? (
-            <div style={{ background:"#f0fdf4", borderRadius:16, padding:"16px 20px", border:`1px solid ${C.primary4}`, marginBottom:10, display:"flex", alignItems:"center", gap:20 }}>
-              <div style={{ display:"flex", flexDirection:"column", gap:4, flexShrink:0 }}>
-                <div style={{ fontSize:11, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                  <wxAuto.Icon size={11} color={C.primary} strokeWidth={2} />今日の天気
-                </div>
-                <div style={{ fontSize:40, fontWeight:800, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</div>
-                <div style={{ fontSize:13, color:C.textSub, fontWeight:700 }}>{wxAuto.label}</div>
+            <div style={{ background:"#fff", borderRadius:12, padding:"14px 16px", border:"1px solid #e5e7eb", marginBottom:10, display:"flex", alignItems:"center", gap:16 }}>
+              <div style={{ flexShrink:0 }}>
+                <div style={{ fontSize:36, fontWeight:700, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</div>
+                <div style={{ fontSize:13, color:C.textSub, marginTop:2 }}>{wxAuto.label}</div>
               </div>
-              <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
+              <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4, paddingLeft:16, borderLeft:"1px solid #e5e7eb" }}>
                 {wxAuto.humidity !== undefined && (
-                  <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.7)", borderRadius:8, padding:"5px 10px" }}>
-                    <Droplets size={13} color="#1976d2" strokeWidth={2}/><span style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{wxAuto.humidity}% 湿度</span>
-                  </div>
+                  <span style={{ fontSize:12, color:C.textSub }}><Droplets size={11} color="#1976d2" strokeWidth={2} style={{ verticalAlign:"middle", marginRight:4 }}/>{wxAuto.humidity}% 湿度</span>
                 )}
                 {wxAuto.rain !== undefined && (
-                  <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.7)", borderRadius:8, padding:"5px 10px" }}>
-                    <CloudRain size={13} color="#0288d1" strokeWidth={2}/><span style={{ fontSize:12, color:C.textSub, fontWeight:600 }}>{wxAuto.rain}mm 降水</span>
-                  </div>
+                  <span style={{ fontSize:12, color:C.textSub }}><CloudRain size={11} color="#0288d1" strokeWidth={2} style={{ verticalAlign:"middle", marginRight:4 }}/>{wxAuto.rain}mm 降水</span>
                 )}
               </div>
             </div>
           ) : null}
           {/* 統計3枚（2カラムグリッド） */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:4 }}>
-            <div style={{ background:C.card, borderRadius:16, padding:"16px 14px", border:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                <CalendarDays size={11} color={C.primary} strokeWidth={2} />直近7日
-              </div>
-              <div style={{ fontSize:28, fontWeight:800, color:C.text, lineHeight:1.1 }}>{workCount7d}</div>
-              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600 }}>件の作業</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:4 }}>
+            <div style={{ background:"#fff", borderRadius:12, padding:"14px", border:"1px solid #e5e7eb", display:"flex", flexDirection:"column", gap:2 }}>
+              <div style={{ fontSize:11, color:C.textMuted }}>直近7日の作業</div>
+              <div style={{ fontSize:26, fontWeight:700, color:C.text, lineHeight:1.2 }}>{workCount7d}<span style={{ fontSize:13, fontWeight:400, marginLeft:3 }}>件</span></div>
             </div>
-            <div style={{ background:C.card, borderRadius:16, padding:"16px 14px", border:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                <PackageCheck size={11} color={C.primary} strokeWidth={2} />今週の収穫
+            <div style={{ background:"#fff", borderRadius:12, padding:"14px", border:"1px solid #e5e7eb", display:"flex", flexDirection:"column", gap:2 }}>
+              <div style={{ fontSize:11, color:C.textMuted }}>今週の収穫</div>
+              <div style={{ fontSize:26, fontWeight:700, color:C.text, lineHeight:1.2 }}>
+                {weekHarvest > 0 ? <>{weekHarvest}<span style={{ fontSize:13, fontWeight:400, marginLeft:3 }}>kg</span></> : <span style={{ fontSize:16, color:C.textMuted }}>なし</span>}
               </div>
-              <div style={{ fontSize:28, fontWeight:800, color:C.text, lineHeight:1.1 }}>{weekHarvest > 0 ? weekHarvest : "—"}</div>
-              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600 }}>{weekHarvest > 0 ? "kg" : "収穫なし"}</div>
             </div>
-            <div style={{ background:C.card, borderRadius:16, padding:"16px 14px", border:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:4, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", gridColumn:"span 2" }}>
-              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                <CalendarDays size={11} color={C.primary} strokeWidth={2} />今日の予定
+            <div style={{ background:"#fff", borderRadius:12, padding:"14px", border:"1px solid #e5e7eb", display:"flex", flexDirection:"column", gap:2, gridColumn:"span 2" }}>
+              <div style={{ fontSize:11, color:C.textMuted }}>今日の予定</div>
+              <div style={{ fontSize:26, fontWeight:700, color: todayScheduleCount > 0 ? "#166534" : C.text, lineHeight:1.2 }}>
+                {todayScheduleCount > 0 ? <>{todayScheduleCount}<span style={{ fontSize:13, fontWeight:400, marginLeft:3 }}>件</span></> : <span style={{ fontSize:16, color:C.textMuted }}>予定なし</span>}
               </div>
-              <div style={{ fontSize:28, fontWeight:800, color: todayScheduleCount > 0 ? "#166534" : C.text, lineHeight:1.1 }}>{todayScheduleCount}</div>
-              <div style={{ fontSize:11, color:"#6b7280", fontWeight:600 }}>{todayScheduleCount > 0 ? "件" : "予定なし"}</div>
             </div>
           </div>
 
-          <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />作物サマリー</div>
+          <div style={S.sec}>作物サマリー</div>
 
           {cropStats.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-              <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
-                <Sprout size={22} color={C.primary} strokeWidth={1.5} />
-              </div>
-              <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>作物が登録されていません</div>
-              <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>管理者に作物の登録を依頼してください</div>
+            <div style={{ padding:"20px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8, color:C.textMuted, fontSize:13 }}>
+              作物が登録されていません
             </div>
           ) : cropStats.map(c => {
             const expanded = expandedCrops.has(c.id);
@@ -1562,36 +1544,34 @@ export default function App() {
                   </div>
                   <span style={{ fontWeight:700, fontSize:15, color:C.text, flex:1, textAlign:"left" }}>{c.name}</span>
                   {c.growDays !== null && (
-                    <span style={{ fontSize:11, color:C.primary, background:C.primary3, borderRadius:6, padding:"2px 7px", fontWeight:600, whiteSpace:"nowrap" as const }}>
+                    <span style={{ fontSize:12, color:C.textMuted, whiteSpace:"nowrap" as const }}>
                       {c.growDays}日目
                     </span>
                   )}
-                  <span style={{ marginLeft:4, fontSize:11, color:C.primary, background:C.primary3, borderRadius:6, padding:"3px 9px", fontWeight:700, flexShrink:0, border:`1px solid ${C.primary4}` }}>
-                    {expanded ? "▲ 閉じる" : "▼ 詳細を開く"}
-                  </span>
+                  <ChevronRight size={16} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0, transform: expanded ? "rotate(90deg)" : "none", transition:"transform 0.15s" }} />
                 </button>
                 {expanded && (
                   <>
                     <div style={S.divider} />
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
-                      <div style={{ background:C.bg, borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
-                        <div style={{ fontSize:26, fontWeight:800, color:C.primary, lineHeight:1 }}>{c.growDays ?? "—"}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>生育日数</div>
+                      <div style={{ borderRadius:8, padding:"10px 6px", textAlign:"center" }}>
+                        <div style={{ fontSize:22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.growDays ?? "—"}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>生育日数</div>
                       </div>
-                      <div style={{ background:C.bg, borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
-                        <div style={{ fontSize:26, fontWeight:800, color:C.primary, lineHeight:1 }}>{c.count}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>作業回数</div>
+                      <div style={{ borderRadius:8, padding:"10px 6px", textAlign:"center" }}>
+                        <div style={{ fontSize:22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.count}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>作業回数</div>
                       </div>
-                      <div style={{ background:C.bg, borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
-                        <div style={{ fontSize:c.tot > 999 ? 18 : 26, fontWeight:800, color:C.primary, lineHeight:1 }}>{c.tot > 0 ? c.tot : "—"}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>{c.tot > 0 ? "kg収穫" : "収穫なし"}</div>
+                      <div style={{ borderRadius:8, padding:"10px 6px", textAlign:"center" }}>
+                        <div style={{ fontSize:c.tot > 999 ? 16 : 22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.tot > 0 ? c.tot : "—"}</div>
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>{c.tot > 0 ? "kg収穫" : "収穫なし"}</div>
                       </div>
                     </div>
                     <button
                       onClick={e => { e.stopPropagation(); setTab("analytics"); }}
-                      style={{ width:"100%", padding:"9px 0", borderRadius:10, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                      style={{ width:"100%", padding:"8px 0", borderRadius:8, border:"1px solid #e5e7eb", background:"#f9fafb", color:C.textSub, fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
                     >
-                      <BarChart2 size={14} strokeWidth={2} />分析で見る →
+                      分析で見る →
                     </button>
                   </>
                 )}
@@ -1600,33 +1580,25 @@ export default function App() {
           })}
 
           <div style={{ ...S.sec, justifyContent:"space-between" }}>
-            <span style={{ display:"flex", alignItems:"center", gap:6 }}><ClipboardList size={14} strokeWidth={2} />最新の作業報告</span>
+            <span>最新の作業報告</span>
             {reports.length > 2 && (
-              <button onClick={() => setTab("report")} style={{ background:"none", border:"none", cursor:"pointer", fontSize:12, color:C.primary, fontWeight:600, flexShrink:0, whiteSpace:"nowrap" as const }}>もっと見る →</button>
+              <button onClick={() => setTab("report")} style={{ background:"none", border:"none", cursor:"pointer", fontSize:12, color:C.textMuted, fontWeight:500, flexShrink:0, whiteSpace:"nowrap" as const }}>すべて見る</button>
             )}
           </div>
 
           {reports.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-              <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
-                <ClipboardList size={22} color={C.primary} strokeWidth={1.5} />
-              </div>
-              <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ作業報告がありません</div>
-              <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>最初の報告を登録してみましょう</div>
-              <button style={{ background:"#166534", color:"#fff", border:"none", borderRadius:10, padding:"9px 20px", fontSize:13, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={() => setTab("report")}>
-                <PenLine size={14} strokeWidth={2} />報告を登録
-              </button>
+            <div style={{ padding:"20px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8, color:C.textMuted, fontSize:13 }}>
+              まだ作業報告がありません
             </div>
           ) : reports.slice(0,2).map(r => (
             <div key={r.id} style={S.card}>
               <div style={S.row}>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  {(() => { const ci = getCropIcon(cropName(r.crop_id)); return <div style={{ background:ci.bg, borderRadius:7, padding:5, flexShrink:0 }}><ci.Icon size={13} color={ci.color} strokeWidth={2} /></div>; })()}
+                <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0, flex:1 }}>
                   <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{cropName(r.crop_id)}</span>
-                  <span style={{ fontSize:11, color: r.field ? C.primary : C.textMuted, background: r.field ? C.primary3 : C.bg, borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{r.field || "未設定"}</span>
+                  {r.field && <span style={{ fontSize:12, color:C.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>· {r.field}</span>}
                 </div>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={11} strokeWidth={2}/>{r.date}</span>
+                <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                  <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
                   {(isAdmin || r.user_id === currentUser?.id) && (
                     <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
                       <button onClick={() => setOpenMenuId(openMenuId === `hr${r.id}` ? null : `hr${r.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", borderRadius:6, color:C.textMuted, display:"flex" }}>
@@ -1687,18 +1659,13 @@ export default function App() {
             </div>
           ))}
           {/* マップカード */}
-          <div style={{ ...S.card, display:"flex", alignItems:"center", gap:12, marginTop:4 }}>
-            <div style={{ background:C.primary3, borderRadius:10, padding:10, flexShrink:0 }}>
-              <MapPin size={20} color={C.primary} strokeWidth={1.8} />
-            </div>
+          <button onClick={() => setShowMapModal(true)} style={{ ...S.card, display:"flex", alignItems:"center", gap:10, marginTop:4, cursor:"pointer", textAlign:"left" as const, width:"100%" }}>
+            <MapPin size={16} color={C.textMuted} strokeWidth={1.8} style={{ flexShrink:0 }} />
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:C.text }}>圃場マップ</div>
-              <div style={{ fontSize:12, color:C.textMuted }}>登録圃場の場所を地図で確認</div>
+              <div style={{ fontSize:14, fontWeight:600, color:C.text }}>圃場マップ</div>
             </div>
-            <button onClick={() => setShowMapModal(true)} style={{ background:"#166534", color:"#fff", border:"none", borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
-              マップを開く
-            </button>
-          </div>
+            <ChevronRight size={16} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />
+          </button>
         </div>
       )}
 
@@ -2051,7 +2018,7 @@ export default function App() {
 
           {isAdmin && (
             <>
-              <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />農薬を追加</div>
+              <div style={S.sec}>農薬を追加</div>
               <div style={S.card}>
                 {!pManualMode ? (
                   <>
@@ -2148,14 +2115,10 @@ export default function App() {
             </>
           )}
 
-          <div style={S.sec}><FlaskConical size={14} strokeWidth={2} />登録済みの農薬</div>
+          <div style={S.sec}>登録済みの農薬</div>
           {pesticides.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-              <div style={{ background:"#f3e5f5", borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
-                <FlaskConical size={22} color="#7b1fa2" strokeWidth={1.5} />
-              </div>
-              <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>農薬が登録されていません</div>
-              <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+            <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8, fontSize:13, color:C.textMuted }}>
+              農薬が登録されていません
             </div>
           ) : pesticides.map(p => (
             <div key={p.id} style={S.card}>
@@ -2224,12 +2187,10 @@ export default function App() {
                 )}
               </>
             )}
-            <div style={S.sec}><Leaf size={14} strokeWidth={2} />登録作物</div>
+            <div style={S.sec}>登録作物</div>
             {crops.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><Leaf size={22} color={C.primary} strokeWidth={1.5} /></div>
-                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>作物が登録されていません</div>
-                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                <div style={{ fontSize:13, color:C.textMuted }}>作物が登録されていません</div>
               </div>
             ) : crops.map(c => {
               const ci = getCropIcon(c.name);
@@ -2267,7 +2228,7 @@ export default function App() {
           {manageSubTab === "fields" && <>
             {isAdmin && (
               <>
-                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />圃場を追加</div>
+                <div style={S.sec}>圃場を追加</div>
                 <div style={S.card}>
                   <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
                   <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
@@ -2277,12 +2238,10 @@ export default function App() {
                 </div>
               </>
             )}
-            <div style={S.sec}><MapPin size={14} strokeWidth={2} />登録圃場</div>
+            <div style={S.sec}>登録圃場</div>
             {fields.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><MapPin size={22} color={C.primary} strokeWidth={1.5} /></div>
-                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>圃場が登録されていません</div>
-                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                <div style={{ fontSize:13, color:C.textMuted }}>圃場が登録されていません</div>
               </div>
             ) : fields.map(f => (
               <div key={f.id} style={S.card}>
@@ -2356,7 +2315,7 @@ export default function App() {
           {manageSubTab === "pesticides" && <>
             {isAdmin && (
               <>
-                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />農薬を追加</div>
+                <div style={S.sec}>農薬を追加</div>
                 <div style={S.card}>
                   {!pManualMode ? (
                     <>
@@ -2427,12 +2386,10 @@ export default function App() {
                 </div>
               </>
             )}
-            <div style={S.sec}><FlaskConical size={14} strokeWidth={2} />登録済みの農薬</div>
+            <div style={S.sec}>登録済みの農薬</div>
             {pesticides.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-                <div style={{ background:"#f3e5f5", borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><FlaskConical size={22} color="#7b1fa2" strokeWidth={1.5} /></div>
-                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>農薬が登録されていません</div>
-                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                <div style={{ fontSize:13, color:C.textMuted }}>農薬が登録されていません</div>
               </div>
             ) : pesticides.map(p => (
               <div key={p.id} style={S.card}>
@@ -2520,12 +2477,10 @@ export default function App() {
                 </>
               )}
 
-              <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />計画一覧</div>
+              <div style={S.sec}>計画一覧</div>
               {projects.length === 0 ? (
-                <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-                  <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><ClipboardList size={22} color={C.primary} strokeWidth={1.5} /></div>
-                  <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>計画がありません</div>
-                  {isAdmin && <div style={{ fontSize:12, color:C.textMuted }}>上のボタンから追加できます</div>}
+                <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                  <div style={{ fontSize:13, color:C.textMuted }}>計画がありません</div>
                 </div>
               ) : projects.map(project => {
                 const projTickets = tickets.filter(t => t.project_id === project.id);
@@ -2769,14 +2724,10 @@ export default function App() {
                 )}
               </>
             )}
-            <div style={S.sec}><Leaf size={14} strokeWidth={2} />登録作物</div>
+            <div style={S.sec}>登録作物</div>
             {crops.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
-                  <Leaf size={22} color={C.primary} strokeWidth={1.5} />
-                </div>
-                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>作物が登録されていません</div>
-                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                <div style={{ fontSize:13, color:C.textMuted }}>作物が登録されていません</div>
               </div>
             ) : crops.map(c => {
               const ci = getCropIcon(c.name);
@@ -2815,7 +2766,7 @@ export default function App() {
           {cropListTab === "fields" && <>
             {isAdmin && (
               <>
-                <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />圃場を追加</div>
+                <div style={S.sec}>圃場を追加</div>
                 <div style={S.card}>
                   <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
                   <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
@@ -2825,14 +2776,10 @@ export default function App() {
                 </div>
               </>
             )}
-            <div style={S.sec}><MapPin size={14} strokeWidth={2} />登録圃場</div>
+            <div style={S.sec}>登録圃場</div>
             {fields.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
-                  <MapPin size={22} color={C.primary} strokeWidth={1.5} />
-                </div>
-                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>圃場が登録されていません</div>
-                <div style={{ fontSize:12, color:C.textMuted }}>上のフォームから追加できます</div>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                <div style={{ fontSize:13, color:C.textMuted }}>圃場が登録されていません</div>
               </div>
             ) : fields.map(f => (
               <div key={f.id} style={S.card}>
@@ -2907,7 +2854,7 @@ export default function App() {
       {/* ───── USERS ───── */}
       {tab === "users" && (
         <div style={S.page}>
-          <div style={S.sec}><Navigation size={14} strokeWidth={2} />農場の場所設定</div>
+          <div style={S.sec}>農場の場所設定</div>
           <div style={S.card}>
             <div style={S.lbl}><MapPin size={13} strokeWidth={2} />場所を検索</div>
             <div style={{ display:"flex", gap:8, marginBottom:12, width:"100%" }}>
@@ -2949,7 +2896,7 @@ export default function App() {
             </button>
           </div>
 
-          <div style={S.sec}><PlusCircle size={14} strokeWidth={2} />アカウントを作成</div>
+          <div style={S.sec}>アカウントを作成</div>
           <div style={S.card}>
             <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />名前 *</div>
             <input style={S.input} placeholder="例: 山田 三郎" value={invForm.name} onChange={e => setInvForm(f => ({ ...f, name:e.target.value }))} />
@@ -2967,7 +2914,7 @@ export default function App() {
             </button>
           </div>
 
-          <div style={S.sec}><Users size={14} strokeWidth={2} />登録済みユーザー</div>
+          <div style={S.sec}>登録済みユーザー</div>
           {users.map(u => (
             <div key={u.id} style={S.card}>
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
@@ -3386,9 +3333,9 @@ export default function App() {
                 </>
               )}
 
-              <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />作業報告</div>
+              <div style={S.sec}>作業報告</div>
               {cropReports.length === 0 ? (
-                <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
+                <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ報告がありません</div>
                   <div style={{ fontSize:12, color:C.textMuted }}>報告タブから登録できます</div>
                 </div>
@@ -3516,12 +3463,10 @@ export default function App() {
               </>
             )}
 
-            <div style={S.sec}><ClipboardList size={14} strokeWidth={2} />計画一覧</div>
+            <div style={S.sec}>計画一覧</div>
             {projects.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"28px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, marginBottom:10 }}>
-                <div style={{ background:C.primary3, borderRadius:14, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><ClipboardList size={22} color={C.primary} strokeWidth={1.5} /></div>
-                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>計画がありません</div>
-                {isAdmin && <div style={{ fontSize:12, color:C.textMuted }}>上のボタンから追加できます</div>}
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                <div style={{ fontSize:13, color:C.textMuted }}>計画がありません</div>
               </div>
             ) : projects.map(project => {
               const projTickets = tickets.filter(t => t.project_id === project.id);
