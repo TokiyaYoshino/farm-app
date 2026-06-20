@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
-  Home, PenLine, Sprout, Users, Leaf, Thermometer,
+  Home, PenLine, Users, Leaf, Thermometer,
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
   Snowflake, CloudLightning, MapPin, RefreshCw, AlertCircle,
   PackageCheck, CalendarDays, Clock, Wheat,
@@ -10,7 +10,7 @@ import {
   Wind, Camera, X, Navigation, Search, Save,
   Mic, MicOff, Timer,
   LogIn, LogOut, KeyRound, Eye, EyeOff,
-  LeafyGreen, Grape, Apple, MoreVertical,
+  MoreVertical,
   ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings, Copy,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
@@ -111,16 +111,6 @@ async function fetchWeatherForPeriod(
   return { temp: avg(temps), humidity: avg(hums), rain: totalRain, weather: wmoToLabel(dominant) };
 }
 
-// 作物別アイコン設定
-type CropIconDef = { Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; color: string; bg: string; };
-const CROP_ICON_MAP: Record<string, CropIconDef> = {
-  "ほうれん草": { Icon: LeafyGreen, color: "#2d6a2d", bg: "#e8f5e9" },
-  "にんにく":   { Icon: Sprout,     color: "#8d6e2e", bg: "#fff8e1" },
-  "たまねぎ":   { Icon: Apple,      color: "#c0392b", bg: "#fdecea" },
-  "ぶどう":     { Icon: Grape,      color: "#7b1fa2", bg: "#f3e5f5" },
-};
-const getCropIcon = (name: string): CropIconDef =>
-  CROP_ICON_MAP[name] ?? { Icon: Leaf, color: "#2d6a2d", bg: "#e8f5e9" };
 
 
 
@@ -2895,16 +2885,13 @@ export default function App() {
           <div style={S.sec}>登録済みユーザー</div>
           {users.map(u => (
             <div key={u.id} style={S.card}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                <div style={{ background:C.primary3, borderRadius:9, padding:7, flexShrink:0 }}>
-                  <UserCircle size={16} color={C.primary} strokeWidth={1.8} />
-                </div>
-                <div style={{ minWidth:0 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                <div>
                   <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" as const }}>
-                    <span style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" as const }}>{u.name}</span>
+                    <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{u.name}</span>
                     <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
                   </div>
-                  <div style={{ fontSize:11, color:C.textMuted, marginTop:2, whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" }}>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
                     {u.login_id ? `ID: ${u.login_id}` : <span style={{ color:"#e07020" }}>ログイン未設定</span>}
                   </div>
                 </div>
@@ -3135,7 +3122,6 @@ export default function App() {
       {selectedCropId !== null && (() => {
         const crop = crops.find(c => c.id === selectedCropId);
         if (!crop) return null;
-        const ci = getCropIcon(crop.name);
         const cropReports = reports.filter(r => r.crop_id === selectedCropId).sort((a,b) => b.date.localeCompare(a.date));
         const cropYears  = cropDataYears(selectedCropId);
         const safeYear   = cropYears.length > 0 && !cropYears.includes(chartYear)
@@ -3154,9 +3140,6 @@ export default function App() {
               <button onClick={() => setSelectedCropId(null)} style={{ background:"rgba(255,255,255,0.18)", border:"none", borderRadius:20, padding:"6px 8px", color:"#fff", cursor:"pointer", display:"flex", flexShrink:0 }}>
                 <ChevronLeft size={18} strokeWidth={2.5} />
               </button>
-              <div style={{ background:ci.bg, borderRadius:8, padding:6, flexShrink:0 }}>
-                <ci.Icon size={16} color={ci.color} strokeWidth={2} />
-              </div>
               <span style={{ fontSize:16, fontWeight:700 }}>{crop.name}</span>
             </div>
             <div style={{ padding:"16px 16px 0" }}>
@@ -3166,8 +3149,8 @@ export default function App() {
                   { label:"作業回数", value:stat?.count ?? 0 },
                   { label: stat?.tot ? "kg総収穫" : "収穫なし", value: stat?.tot ?? "—" },
                 ].map(({ label, value }) => (
-                  <div key={label} style={{ background:C.card, borderRadius:14, padding:"14px 8px", textAlign:"center", boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }}>
-                    <div style={{ fontSize:String(value).length > 4 ? 20 : 30, fontWeight:800, color:C.primary, lineHeight:1 }}>{value}</div>
+                  <div key={label} style={{ background:C.card, borderRadius:12, padding:"14px 8px", textAlign:"center", border:"1px solid #e5e7eb" }}>
+                    <div style={{ fontSize:String(value).length > 4 ? 18 : 26, fontWeight:700, color:C.text, lineHeight:1 }}>{value}</div>
                     <div style={{ fontSize:11, color:C.textMuted, marginTop:6 }}>{label}</div>
                   </div>
                 ))}
