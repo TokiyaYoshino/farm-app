@@ -1460,38 +1460,42 @@ export default function App() {
               )}
             </div>
           )}
-          {/* 天気カード（全幅） */}
+          {/* 天気（カードなし・背景に馴染む） */}
           {wxLoading ? null : wxAuto ? (
-            <div style={{ background:C.card, borderRadius:8, padding:"14px 16px", border:`1px solid ${C.border}`, marginBottom:10, display:"flex", alignItems:"baseline", gap:12 }}>
-              <div style={{ fontSize:32, fontWeight:700, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</div>
-              <div style={{ fontSize:14, color:C.textSub }}>{wxAuto.label}</div>
+            <div style={{ display:"flex", alignItems:"baseline", gap:10, paddingBottom:14, marginBottom:4, borderBottom:`1px solid ${C.border}` }}>
+              <span style={{ fontSize:34, fontWeight:700, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</span>
+              <span style={{ fontSize:14, color:C.textSub }}>{wxAuto.label}</span>
               {(wxAuto.humidity !== undefined || wxAuto.rain !== undefined) && (
-                <div style={{ marginLeft:"auto", fontSize:12, color:C.textMuted, display:"flex", gap:10 }}>
-                  {wxAuto.humidity !== undefined && <span>{wxAuto.humidity}% 湿度</span>}
-                  {wxAuto.rain !== undefined && <span>{wxAuto.rain}mm</span>}
-                </div>
+                <span style={{ marginLeft:"auto", fontSize:12, color:C.textMuted }}>
+                  {[wxAuto.humidity !== undefined ? `${wxAuto.humidity}%` : "", wxAuto.rain !== undefined ? `${wxAuto.rain}mm` : ""].filter(Boolean).join("  ")}
+                </span>
               )}
             </div>
           ) : null}
-          {/* 統計3枚（2カラムグリッド） */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, marginBottom:12, background:C.border, border:`1px solid ${C.border}`, borderRadius:8, overflow:"hidden" }}>
-            <div style={{ background:C.card, padding:"14px 16px" }}>
-              <div style={{ fontSize:11, color:C.textMuted, marginBottom:4 }}>直近7日の作業</div>
-              <div style={{ fontSize:28, fontWeight:700, color:C.text, lineHeight:1 }}>{workCount7d}<span style={{ fontSize:13, fontWeight:400, marginLeft:3, color:C.textMuted }}>件</span></div>
-            </div>
-            <div style={{ background:C.card, padding:"14px 16px" }}>
-              <div style={{ fontSize:11, color:C.textMuted, marginBottom:4 }}>今週の収穫</div>
-              <div style={{ fontSize:28, fontWeight:700, color:C.text, lineHeight:1 }}>
-                {weekHarvest > 0 ? <>{weekHarvest}<span style={{ fontSize:13, fontWeight:400, marginLeft:3, color:C.textMuted }}>kg</span></> : <span style={{ fontSize:14, fontWeight:400, color:C.textMuted }}>なし</span>}
+          {/* 統計（カードなし・数値主体） */}
+          <div style={{ display:"flex", alignItems:"flex-start", paddingTop:8, paddingBottom:4 }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:32, fontWeight:700, color:C.text, lineHeight:1 }}>
+                {workCount7d}<span style={{ fontSize:14, fontWeight:400, color:C.textMuted, marginLeft:4 }}>件</span>
               </div>
+              <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>直近7日の作業</div>
             </div>
-            <div style={{ background:C.card, padding:"14px 16px", gridColumn:"span 2" }}>
-              <div style={{ fontSize:11, color:C.textMuted, marginBottom:4 }}>今日の予定</div>
-              <div style={{ fontSize:28, fontWeight:700, color: todayScheduleCount > 0 ? C.text : C.text, lineHeight:1 }}>
-                {todayScheduleCount > 0
-                  ? <>{todayScheduleCount}<span style={{ fontSize:13, fontWeight:400, marginLeft:3, color:C.textMuted }}>件</span></>
-                  : <span style={{ fontSize:14, fontWeight:400, color:C.textMuted }}>予定なし</span>}
+            <div style={{ width:1, background:C.border, alignSelf:"stretch", margin:"0 20px" }} />
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:32, fontWeight:700, color:C.text, lineHeight:1 }}>
+                {weekHarvest > 0
+                  ? <>{weekHarvest}<span style={{ fontSize:14, fontWeight:400, color:C.textMuted, marginLeft:4 }}>kg</span></>
+                  : <span style={{ fontSize:18, fontWeight:400, color:C.textMuted }}>—</span>}
               </div>
+              <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>今週の収穫</div>
+            </div>
+          </div>
+          <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:12, marginBottom:16 }}>
+            <div style={{ fontSize:11, color:C.textMuted, marginBottom:4 }}>今日の予定</div>
+            <div style={{ fontSize:32, fontWeight:700, color: todayScheduleCount > 0 ? C.primary : C.text, lineHeight:1 }}>
+              {todayScheduleCount > 0
+                ? <>{todayScheduleCount}<span style={{ fontSize:14, fontWeight:400, color:C.textMuted, marginLeft:4 }}>件</span></>
+                : <span style={{ fontSize:18, fontWeight:400, color:C.textMuted }}>予定なし</span>}
             </div>
           </div>
 
@@ -1534,7 +1538,7 @@ export default function App() {
                     </div>
                     <button
                       onClick={e => { e.stopPropagation(); setTab("analytics"); }}
-                      style={{ width:"100%", padding:"8px 0", borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textSub, fontSize:13, fontWeight:600, cursor:"pointer" }}
+                      style={{ background:"none", border:"none", cursor:"pointer", color:C.primary, fontSize:13, fontWeight:600, padding:0 }}
                     >
                       分析で見る →
                     </button>
@@ -1581,23 +1585,15 @@ export default function App() {
                 </div>
               </div>
               <div style={S.divider} />
-              <div style={{ display:"flex", flexWrap:"wrap", gap:8, fontSize:12 }}>
-                <span style={{ color:C.textSub, fontWeight:600 }}>{r.work_type}</span>
-                {r.quantity  && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><PackageCheck size={11} strokeWidth={2}/>{r.quantity}kg</span>}
-                {(r.work_start && r.work_end)
-                  ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_start}〜{r.work_end}</span>
-                  : r.work_time ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span> : null}
-                {r.pesticide_id && (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? <span style={{ color:C.textSub, background:C.bg, borderRadius:6, padding:"1px 7px", fontWeight:600, border:`1px solid ${C.border}` }}>{ps.name}{r.pesticide_amount ? ` ${r.pesticide_amount}` : ""}</span> : null; })()}
-              </div>
-              <div style={{ ...S.row, marginTop:8 }}>
-                <span style={{ fontSize:11, color:C.textMuted }}>{userName(r.user_id)}</span>
-                {r.weather && (
-                  <span style={{ fontSize:11, color:C.textSub, display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" as const }}>
-                    <span>{r.weather}{r.temp ? ` ${r.temp}°C` : ""}</span>
-                    {r.humidity !== "" && r.humidity !== null && <span style={{ display:"flex", alignItems:"center", gap:2 }}><Droplets size={10} color="#1976d2" strokeWidth={2}/>{r.humidity}%</span>}
-                    {r.rain     !== "" && r.rain     !== null && <span style={{ display:"flex", alignItems:"center", gap:2 }}><CloudRain size={10} color="#0288d1" strokeWidth={2}/>{r.rain}mm</span>}
-                  </span>
-                )}
+              <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
+                {[
+                  r.work_type,
+                  r.quantity ? `${r.quantity}kg` : "",
+                  (r.work_start && r.work_end) ? `${r.work_start}〜${r.work_end}` : r.work_time ? `${r.work_time}h` : "",
+                  r.pesticide_id ? (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? ps.name : ""; })() : "",
+                  userName(r.user_id),
+                  r.weather ? `${r.weather}${r.temp ? ` ${r.temp}°C` : ""}` : "",
+                ].filter(Boolean).join("  ·  ")}
               </div>
               {r.note && (
                 <div style={{ fontSize:12, color:C.textSub, marginTop:8, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
