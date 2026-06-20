@@ -183,21 +183,20 @@ interface Ticket {
 
 // ─── カラーパレット ──────────────────────────────────────
 const C = {
-  primary:   "#6B2D5C",
-  primary2:  "#8B4A7A",
-  primary3:  "#F3EEF1",
-  primary4:  "#E8D8E4",
+  primary:   "#2d6a2d",
+  primary2:  "#3a8a3a",
+  primary3:  "#e8f5e9",
+  primary4:  "#c8e6c9",
   accent:    "#f9a825",
   danger:    "#c0392b",
   dangerBg:  "#fdecea",
-  text:      "#1F1B19",
-  textSub:   "#5C554F",
-  textMuted: "#8A8378",
-  bg:        "#F7F5F1",
+  text:      "#1a2e1a",
+  textSub:   "#4a6a4a",
+  textMuted: "#8aaa8a",
+  bg:        "#f3f4f6",
   card:      "#ffffff",
-  border:    "#E5E0D8",
+  border:    "#dde8dd",
   navBg:     "#ffffff",
-  statusGreen: "#2E7D32",
 };
 
 const roleLabel: Record<Role, string> = { admin:"管理者", worker:"作業者", viewer:"閲覧者" };

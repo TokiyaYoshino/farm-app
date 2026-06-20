@@ -57,9 +57,9 @@ interface Props {
 }
 
 const C = {
-  primary: "#6B2D5C", primary2: "#8B4A7A", primary3: "#F3EEF1", primary4: "#E8D8E4",
-  text: "#1F1B19", textSub: "#5C554F", textMuted: "#8A8378",
-  bg: "#F7F5F1", card: "#ffffff", border: "#E5E0D8",
+  primary: "#2d6a2d", primary2: "#3a8a3a", primary3: "#e8f5e9", primary4: "#c8e6c9",
+  text: "#1a2e1a", textSub: "#4a6a4a", textMuted: "#8aaa8a",
+  bg: "#f4f7f2", card: "#ffffff", border: "#dde8dd",
   danger: "#c0392b",
   blue: "#1565c0", blueBg: "#e3f2fd", blue4: "#bbdefb",
 };
