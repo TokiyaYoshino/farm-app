@@ -1333,19 +1333,17 @@ export default function App() {
   );
 
   if (!authSession) return (
-    <div style={{ minHeight:"100vh", background:`linear-gradient(160deg, ${C.primary} 0%, #1b4d1b 100%)`, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:20, padding:"32px 24px", width:"100%", maxWidth:400, boxShadow:"0 8px 40px rgba(0,0,0,0.25)" }}>
-        <div style={{ marginBottom:28 }}>
-          <div style={{ fontSize:22, fontWeight:700, color:C.text, marginBottom:4 }}>農作業レポート</div>
-          <div style={{ fontSize:13, color:C.textMuted }}>ログインしてください</div>
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ width:"100%", maxWidth:360 }}>
+        <div style={{ marginBottom:40 }}>
+          <div style={{ fontSize:22, fontWeight:700, color:C.text, marginBottom:6 }}>農作業レポート</div>
+          <div style={{ fontSize:14, color:C.textMuted }}>ログイン</div>
         </div>
 
-        <div style={{ marginBottom:14 }}>
-          <label style={{ fontSize:12, fontWeight:600, color:C.textSub, display:"flex", alignItems:"center", gap:4, marginBottom:6 }}>
-            <KeyRound size={13} strokeWidth={2} />ユーザーID
-          </label>
+        <div style={{ marginBottom:24 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:C.textMuted, display:"block", marginBottom:8 }}>ユーザーID</label>
           <input
-            style={{ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${loginError ? "#c0392b" : C.border}`, fontSize:15, background:"#fafcfa", color:C.text, boxSizing:"border-box" }}
+            style={{ width:"100%", padding:"10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:15, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
             placeholder="例: kishu-001"
             value={loginId}
             onChange={e => { setLoginId(e.target.value); setLoginError(""); }}
@@ -1353,33 +1351,30 @@ export default function App() {
           />
         </div>
 
-        <div style={{ marginBottom:20 }}>
-          <label style={{ fontSize:12, fontWeight:600, color:C.textSub, display:"flex", alignItems:"center", gap:4, marginBottom:6 }}>
-            <KeyRound size={13} strokeWidth={2} />パスワード
-          </label>
+        <div style={{ marginBottom:32 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:C.textMuted, display:"block", marginBottom:8 }}>パスワード</label>
           <div style={{ position:"relative" }}>
             <input
               type={showPass ? "text" : "password"}
-              style={{ width:"100%", padding:"11px 44px 11px 14px", borderRadius:10, border:`1.5px solid ${loginError ? "#c0392b" : C.border}`, fontSize:15, background:"#fafcfa", color:C.text, boxSizing:"border-box" }}
+              style={{ width:"100%", padding:"10px 40px 10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:15, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
               placeholder="パスワード"
               value={loginPass}
               onChange={e => { setLoginPass(e.target.value); setLoginError(""); }}
               onKeyDown={e => e.key === "Enter" && handleLogin()}
             />
-            <button onClick={() => setShowPass(p => !p)} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}>
+            <button onClick={() => setShowPass(p => !p)} style={{ position:"absolute", right:0, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}>
               {showPass ? <EyeOff size={18} strokeWidth={2} /> : <Eye size={18} strokeWidth={2} />}
             </button>
           </div>
         </div>
 
-        {loginError && <div style={{ color:"#c0392b", fontSize:13, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}><AlertCircle size={14} strokeWidth={2} />{loginError}</div>}
+        {loginError && <div style={{ color:C.danger, fontSize:13, marginBottom:16 }}>{loginError}</div>}
 
         <button
           onClick={handleLogin}
           disabled={loginBusy}
-          style={{ width:"100%", padding:"13px 0", borderRadius:10, border:"none", background:"#166534", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, opacity:loginBusy?0.7:1, boxShadow:"0 3px 10px rgba(45,106,45,0.35)" }}
+          style={{ width:"100%", padding:"14px 0", borderRadius:8, border:"none", background:C.primary, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", opacity:loginBusy ? 0.7 : 1 }}
         >
-          {loginBusy ? <RefreshCw size={16} strokeWidth={2} /> : <LogIn size={16} strokeWidth={2} />}
           {loginBusy ? "ログイン中..." : "ログイン"}
         </button>
       </div>
@@ -1692,14 +1687,14 @@ export default function App() {
               <div style={{ marginTop:16 }}>
                 <div style={S.sec}>今日の予定</div>
                 {todayScheds.length === 0 ? (
-                  <div style={{ padding:"14px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", fontSize:13, color:C.textMuted }}>
+                  <div style={{ padding:"14px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, fontSize:13, color:C.textMuted }}>
                     今日の予定はありません
                   </div>
                 ) : todayScheds.map(s => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
                   const meta = [s.crop, s.field, assignedUser?.name, s.work_type].filter(Boolean).join(" · ");
                   return (
-                    <div key={s.id} style={{ background:C.card, borderRadius:12, padding:"10px 14px", border:"1px solid #e5e7eb", marginBottom:6 }}>
+                    <div key={s.id} style={{ background:C.card, borderRadius:8, padding:"10px 14px", border:`1px solid ${C.border}`, marginBottom:6 }}>
                       <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{s.title}</div>
                       {meta && <div style={{ fontSize:12, color:C.textMuted, marginTop:3 }}>{meta}</div>}
                     </div>
@@ -1724,7 +1719,7 @@ export default function App() {
                     <button
                       key={s.id}
                       onClick={() => setSelectedSchedule(s)}
-                      style={{ width:"100%", background:"#fff7ed", borderRadius:12, padding:"10px 14px", border:`1px solid #fed7aa`, marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
+                      style={{ width:"100%", background:"#fff7ed", borderRadius:8, padding:"10px 14px", border:`1px solid #fed7aa`, marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
                     >
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
@@ -1749,7 +1744,7 @@ export default function App() {
               {!inlineOpen ? (
                 <button
                   onClick={() => setInlineOpen(true)}
-                  style={{ width:"100%", padding:"12px 0", borderRadius:12, border:`2px dashed ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                  style={{ width:"100%", padding:"12px 0", borderRadius:8, border:`2px dashed ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
                 >
                   <Plus size={16} strokeWidth={2.5} />記録を追加
                 </button>
@@ -1765,7 +1760,7 @@ export default function App() {
                     <div style={{ display:"flex", gap:10 }}>
                       <button
                         onClick={() => setInlineMode("schedule")}
-                        style={{ flex:1, padding:"14px 8px", borderRadius:12, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}
+                        style={{ flex:1, padding:"14px 8px", borderRadius:8, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}
                       >
                         <CalendarDays size={22} color={C.primary} strokeWidth={1.8} />
                         <span style={{ fontSize:13, fontWeight:700 }}>予定を登録</span>
@@ -1773,7 +1768,7 @@ export default function App() {
                       </button>
                       <button
                         onClick={() => setInlineMode("report")}
-                        style={{ flex:1, padding:"14px 8px", borderRadius:12, border:`1.5px solid ${C.primary4}`, background:"#fff", color:C.text, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}
+                        style={{ flex:1, padding:"14px 8px", borderRadius:8, border:`1.5px solid ${C.primary4}`, background:"#fff", color:C.text, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}
                       >
                         <ClipboardList size={22} color={C.primary} strokeWidth={1.8} />
                         <span style={{ fontSize:13, fontWeight:700 }}>作業報告</span>
@@ -2078,7 +2073,7 @@ export default function App() {
 
           <div style={S.sec}>登録済みの農薬</div>
           {pesticides.length === 0 ? (
-            <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8, fontSize:13, color:C.textMuted }}>
+            <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8, fontSize:13, color:C.textMuted }}>
               農薬が登録されていません
             </div>
           ) : pesticides.map(p => (
@@ -2143,7 +2138,7 @@ export default function App() {
             )}
             <div style={S.sec}>登録作物</div>
             {crops.length === 0 ? (
-              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
                 <div style={{ fontSize:13, color:C.textMuted }}>作物が登録されていません</div>
               </div>
             ) : crops.map(c => {
@@ -2192,7 +2187,7 @@ export default function App() {
             )}
             <div style={S.sec}>登録圃場</div>
             {fields.length === 0 ? (
-              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
                 <div style={{ fontSize:13, color:C.textMuted }}>圃場が登録されていません</div>
               </div>
             ) : fields.map(f => (
@@ -2335,7 +2330,7 @@ export default function App() {
             )}
             <div style={S.sec}>登録済みの農薬</div>
             {pesticides.length === 0 ? (
-              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
                 <div style={{ fontSize:13, color:C.textMuted }}>農薬が登録されていません</div>
               </div>
             ) : pesticides.map(p => (
@@ -2423,7 +2418,7 @@ export default function App() {
 
               <div style={S.sec}>計画一覧</div>
               {projects.length === 0 ? (
-                <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
                   <div style={{ fontSize:13, color:C.textMuted }}>計画がありません</div>
                 </div>
               ) : projects.map(project => {
@@ -2502,7 +2497,7 @@ export default function App() {
                           </div>
                           <div style={{ display:"flex", gap:8 }}>
                             <input type="date" style={{ ...S.input, marginBottom:0, flex:1, maxWidth:"100%" }} value={tForm.due_date} onChange={e => setTForm(f => ({ ...f, due_date:e.target.value }))} />
-                            <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:"#166534", border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
+                            <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:C.primary, border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
                               {submitting ? <RefreshCw size={14} strokeWidth={2} /> : <Save size={14} strokeWidth={2} />}
                             </button>
                             <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
@@ -2537,12 +2532,12 @@ export default function App() {
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <button
                       onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() - 7); setProgressWeekStart(d); }}
-                      style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}
+                      style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}
                     ><ChevronLeft size={14} strokeWidth={2.5} /></button>
                     <span style={{ fontSize:12, fontWeight:600, color:C.text, minWidth:110, textAlign:"center" as const }}>{weekLabel}</span>
                     <button
                       onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }}
-                      style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}
+                      style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}
                     ><ChevronRight size={14} strokeWidth={2.5} /></button>
                   </div>
                 </div>
@@ -2602,7 +2597,7 @@ export default function App() {
 
           {/* マップ */}
           {false && (
-            <div style={{ borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}`, height:"60vh", marginBottom:16 }}>
+            <div style={{ borderRadius:8, overflow:"hidden", border:`1px solid ${C.border}`, height:"60vh", marginBottom:16 }}>
               <MapContainer
                 center={userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]}
                 zoom={15}
@@ -2668,7 +2663,7 @@ export default function App() {
             )}
             <div style={S.sec}>登録作物</div>
             {crops.length === 0 ? (
-              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
                 <div style={{ fontSize:13, color:C.textMuted }}>作物が登録されていません</div>
               </div>
             ) : crops.map(c => {
@@ -2714,7 +2709,7 @@ export default function App() {
             )}
             <div style={S.sec}>登録圃場</div>
             {fields.length === 0 ? (
-              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
                 <div style={{ fontSize:13, color:C.textMuted }}>圃場が登録されていません</div>
               </div>
             ) : fields.map(f => (
@@ -2900,7 +2895,7 @@ export default function App() {
 
               <div style={{ padding:"0 16px" }}>
                 {/* 基本情報 */}
-                <div style={{ background:C.bg, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div style={{ background:C.bg, borderRadius:8, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   <div>
                     <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業種別</div>
                     <div style={{ fontWeight:700, fontSize:14, color:C.primary }}>{r.work_type}</div>
@@ -2982,7 +2977,7 @@ export default function App() {
 
                 {/* 写真 */}
                 {r.image_url && (
-                  <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:12, marginBottom:12, maxHeight:240, objectFit:"cover", display:"block" }} />
+                  <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:8, marginBottom:12, maxHeight:240, objectFit:"cover", display:"block" }} />
                 )}
 
                 {/* アクション */}
@@ -3035,7 +3030,7 @@ export default function App() {
 
               <div style={{ padding:"0 16px" }}>
                 {/* 基本情報 */}
-                <div style={{ background:C.bg, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div style={{ background:C.bg, borderRadius:8, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   {s.work_type && (
                     <div>
                       <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業種別</div>
@@ -3071,7 +3066,7 @@ export default function App() {
                     setRForm(f => ({ ...f, user_id: s.assigned_user_id ?? s.user_id, crop_id: cropObj?.id ?? f.crop_id, date: s.date, work_type: s.work_type ?? f.work_type, note: s.note ?? "" }));
                     setShowQuickReport(true);
                   }}
-                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"14px 0", borderRadius:12, border:"none", background:"#166534", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}
+                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"14px 0", borderRadius:8, border:"none", background:C.primary, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}
                 >
                   <ClipboardList size={16} strokeWidth={2} />この予定の報告を入力
                 </button>
@@ -3099,11 +3094,11 @@ export default function App() {
         const stat = cropStats.find(c => c.id === selectedCropId);
         return (
           <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:200, overflowY:"auto", paddingBottom:80 }} className="anim-slideUp">
-            <div style={{ background:"#166534", color:"#fff", padding:"10px 12px", display:"flex", alignItems:"center", gap:10, position:"sticky", top:0, zIndex:10 }}>
-              <button onClick={() => setSelectedCropId(null)} style={{ background:"rgba(255,255,255,0.18)", border:"none", borderRadius:20, padding:"6px 8px", color:"#fff", cursor:"pointer", display:"flex", flexShrink:0 }}>
+            <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, position:"sticky", top:0, zIndex:10 }}>
+              <button onClick={() => setSelectedCropId(null)} style={{ background:"none", border:"none", padding:"6px 6px", color:C.textSub, cursor:"pointer", display:"flex", flexShrink:0 }}>
                 <ChevronLeft size={18} strokeWidth={2.5} />
               </button>
-              <span style={{ fontSize:16, fontWeight:700 }}>{crop.name}</span>
+              <span style={{ fontSize:16, fontWeight:700, color:C.text }}>{crop.name}</span>
             </div>
             <div style={{ padding:"16px 16px 0" }}>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
@@ -3112,7 +3107,7 @@ export default function App() {
                   { label:"作業回数", value:stat?.count ?? 0 },
                   { label: stat?.tot ? "kg総収穫" : "収穫なし", value: stat?.tot ?? "—" },
                 ].map(({ label, value }) => (
-                  <div key={label} style={{ background:C.card, borderRadius:12, padding:"14px 8px", textAlign:"center", border:"1px solid #e5e7eb" }}>
+                  <div key={label} style={{ background:C.card, borderRadius:8, padding:"14px 8px", textAlign:"center", border:`1px solid ${C.border}` }}>
                     <div style={{ fontSize:String(value).length > 4 ? 18 : 26, fontWeight:700, color:C.text, lineHeight:1 }}>{value}</div>
                     <div style={{ fontSize:11, color:C.textMuted, marginTop:6 }}>{label}</div>
                   </div>
@@ -3173,7 +3168,7 @@ export default function App() {
                         onKeyDown={e => e.key === "Enter" && updateTargetYield(crop.id, targetYieldInput)}
                         style={{ width:100, padding:"5px 9px", borderRadius:8, border:`1.5px solid ${C.primary4}`, fontSize:13, background:"#fff", color:C.text, boxSizing:"border-box" as const }}
                       />
-                      <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={{ background:"#166534", border:"none", borderRadius:8, padding:"5px 11px", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>保存</button>
+                      <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={{ background:C.primary, border:"none", borderRadius:8, padding:"5px 11px", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>保存</button>
                       <button onClick={() => setEditingTargetYield(false)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"5px 9px", color:C.textSub, fontSize:12, cursor:"pointer" }}>×</button>
                     </div>
                   ) : (
@@ -3195,7 +3190,7 @@ export default function App() {
                       <button
                         onClick={() => setChartYear(y => y - 1)}
                         disabled={cropYears.length === 0 || safeYear <= cropYears[0]}
-                        style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear <= cropYears[0]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear <= cropYears[0]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center" }}
+                        style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear <= cropYears[0]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear <= cropYears[0]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center" }}
                       >
                         <ChevronLeft size={14} strokeWidth={2.5} />
                       </button>
@@ -3203,7 +3198,7 @@ export default function App() {
                       <button
                         onClick={() => setChartYear(y => y + 1)}
                         disabled={cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]}
-                        style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center" }}
+                        style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center" }}
                       >
                         <ChevronRight size={14} strokeWidth={2.5} />
                       </button>
@@ -3242,7 +3237,7 @@ export default function App() {
 
               <div style={S.sec}>作業報告</div>
               {cropReports.length === 0 ? (
-                <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+                <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ報告がありません</div>
                   <div style={{ fontSize:12, color:C.textMuted }}>報告タブから登録できます</div>
                 </div>
@@ -3372,7 +3367,7 @@ export default function App() {
 
             <div style={S.sec}>計画一覧</div>
             {projects.length === 0 ? (
-              <div style={{ padding:"18px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8 }}>
+              <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
                 <div style={{ fontSize:13, color:C.textMuted }}>計画がありません</div>
               </div>
             ) : projects.map(project => {
@@ -3448,7 +3443,7 @@ export default function App() {
                         </div>
                         <div style={{ display:"flex", gap:8 }}>
                           <input type="date" style={{ ...S.input, marginBottom:0, flex:1, maxWidth:"100%" }} value={tForm.due_date} onChange={e => setTForm(f => ({ ...f, due_date:e.target.value }))} />
-                          <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:"#166534", border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
+                          <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:C.primary, border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
                             {submitting ? <RefreshCw size={14} strokeWidth={2} /> : <Save size={14} strokeWidth={2} />}
                           </button>
                           <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
@@ -3480,9 +3475,9 @@ export default function App() {
                       <Users size={14} strokeWidth={2} />担当者進捗
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() - 7); setProgressWeekStart(d); }} style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}><ChevronLeft size={14} strokeWidth={2.5} /></button>
+                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() - 7); setProgressWeekStart(d); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}><ChevronLeft size={14} strokeWidth={2.5} /></button>
                       <span style={{ fontSize:12, fontWeight:600, color:C.text, minWidth:110, textAlign:"center" as const }}>{weekLabel}</span>
-                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }} style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}><ChevronRight size={14} strokeWidth={2.5} /></button>
+                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}><ChevronRight size={14} strokeWidth={2.5} /></button>
                     </div>
                   </div>
                   <div style={{ overflowX:"auto" as const, background:C.card, borderRadius:14, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", marginBottom:10 }}>
@@ -3619,7 +3614,7 @@ export default function App() {
               {/* 詳細アコーディオン */}
               <button
                 onClick={() => setQuickExpanded(p => !p)}
-                style={{ width:"100%", padding:"14px 0", background:"none", border:"1.5px dashed #d1d5db", borderRadius:10, cursor:"pointer", fontSize:14, color:"#166534", fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:4, marginBottom:quickExpanded ? 8 : 0, marginTop:4 }}
+                style={{ width:"100%", padding:"12px 0", background:"none", border:`1px dashed ${C.border}`, borderRadius:8, cursor:"pointer", fontSize:13, color:C.textSub, fontWeight:600, marginBottom:quickExpanded ? 8 : 0, marginTop:4 }}
               >
                 {quickExpanded ? "▲ 詳細を閉じる" : "▼ 詳細を入力"}
               </button>
@@ -3796,16 +3791,11 @@ export default function App() {
               <button
                 key={u.id}
                 onClick={() => { setCurrentUser(u); setRForm(f => ({ ...f, user_id:u.id })); setShowUserPicker(false); }}
-                style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"11px 12px", borderRadius:12, border:"none", cursor:"pointer", marginBottom:6, background: currentUser?.id === u.id ? C.primary3 : "#fafcfa", transition:"background 0.15s" }}
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"11px 12px", borderRadius:8, border:`1px solid ${currentUser?.id === u.id ? C.primary : "transparent"}`, cursor:"pointer", marginBottom:6, background: currentUser?.id === u.id ? C.primary3 : "transparent" }}
               >
-                <div style={{ background: currentUser?.id === u.id ? C.primary : C.border, borderRadius:10, padding:8, display:"flex" }}>
-                  <UserCircle size={18} color={ currentUser?.id === u.id ? "#fff" : C.textMuted } strokeWidth={1.8} />
-                </div>
                 <div style={{ textAlign:"left", flex:1 }}>
                   <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{u.name}</div>
-                  <span style={{ background: roleColor[u.role]+"18", color:roleColor[u.role], borderRadius:5, padding:"1px 8px", fontSize:11, fontWeight:700, border:`1px solid ${roleColor[u.role]}30` }}>
-                    {roleLabel[u.role]}
-                  </span>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{roleLabel[u.role]}</div>
                 </div>
                 {currentUser?.id === u.id && <span style={{ fontSize:12, color:C.primary, fontWeight:700 }}>✓</span>}
               </button>
@@ -3813,7 +3803,7 @@ export default function App() {
             {isAdmin && (
               <button
                 onClick={() => { setShowUserPicker(false); setTab("users"); }}
-                style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", marginTop:8, borderRadius:12, border:`1.5px solid #e07020`, background:"#fff8f0", color:"#e07020", fontSize:14, fontWeight:700, cursor:"pointer" }}
+                style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", marginTop:8, borderRadius:8, border:`1px solid ${C.border}`, background:"transparent", color:C.text, fontSize:14, fontWeight:700, cursor:"pointer" }}
               >
                 <Users size={15} strokeWidth={2} />
                 管理画面
@@ -3821,7 +3811,7 @@ export default function App() {
             )}
             <button
               onClick={() => { setShowUserPicker(false); handleLogout(); }}
-              style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", marginTop:8, borderRadius:12, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:700, cursor:"pointer" }}
+              style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", marginTop:8, borderRadius:8, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:700, cursor:"pointer" }}
             >
               <LogOut size={15} strokeWidth={2} />
               ログアウト
