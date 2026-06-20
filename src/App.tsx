@@ -183,20 +183,21 @@ interface Ticket {
 
 // ─── カラーパレット ──────────────────────────────────────
 const C = {
-  primary:   "#2d6a2d",
-  primary2:  "#3a8a3a",
-  primary3:  "#e8f5e9",
-  primary4:  "#c8e6c9",
+  primary:   "#6B2D5C",
+  primary2:  "#8B4A7A",
+  primary3:  "#F3EEF1",
+  primary4:  "#E8D8E4",
   accent:    "#f9a825",
   danger:    "#c0392b",
   dangerBg:  "#fdecea",
-  text:      "#1a2e1a",
-  textSub:   "#4a6a4a",
-  textMuted: "#8aaa8a",
-  bg:        "#f3f4f6",
+  text:      "#1F1B19",
+  textSub:   "#5C554F",
+  textMuted: "#8A8378",
+  bg:        "#F7F5F1",
   card:      "#ffffff",
-  border:    "#dde8dd",
+  border:    "#E5E0D8",
   navBg:     "#ffffff",
+  statusGreen: "#2E7D32",
 };
 
 const roleLabel: Record<Role, string> = { admin:"管理者", worker:"作業者", viewer:"閲覧者" };
@@ -1246,36 +1247,35 @@ export default function App() {
   // ─── スタイル ─────────────────────────────────────────
   const S = {
     wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:80 }),
-    header:  css({ background:"#fff", color:C.text, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid #e5e7eb`, position:"sticky" as const, top:0, zIndex:90 }),
+    header:  css({ background:"#fff", color:C.text, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${C.border}`, position:"sticky" as const, top:0, zIndex:90 }),
     headerTitle: css({ fontSize:16, fontWeight:700, color:C.text, letterSpacing:-0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
     headerSub: css({ background:"#fff", borderBottom:`1px solid ${C.border}`, display:"flex", paddingLeft:4, paddingRight:4, gap:0 }),
     subTabBtn: (active: boolean) => ({ flex:1, padding:"10px 8px", border:"none", borderBottom: active ? `2.5px solid ${C.primary}` : "2.5px solid transparent", background:"transparent", color: active ? C.primary : C.textMuted, fontSize:13, fontWeight: active ? 700 : 600, cursor:"pointer", transition:"all 0.15s" } as const),
     page:    css({ padding:"16px 16px 0" }),
-    sec:     css({ fontSize:13, fontWeight:600, color:C.textSub, marginBottom:8, marginTop:20, display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" as const }),
+    sec:     css({ fontSize:12, fontWeight:600, color:C.textMuted, marginBottom:8, marginTop:20, letterSpacing:0.4, textTransform:"uppercase" as const }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
-    card:    css({ background:C.card, borderRadius:12, padding:"14px 16px", marginBottom:8, border:`1px solid #e5e7eb` }),
-    input:   css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid #e5e7eb`, fontSize:15, marginBottom:12, background:"#ffffff", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
-    select:  css({ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid #e5e7eb`, fontSize:15, marginBottom:12, background:"#ffffff", color:C.text }),
-    btn:     css({ background:"#166534", color:"#fff", border:"none", borderRadius:12, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 1px 3px rgba(0,0,0,.10), 0 4px 12px rgba(22,101,52,.25)", whiteSpace:"nowrap" as const, minHeight:52 }),
-    btnSm:   css({ background:C.dangerBg, color:C.danger, border:`1.5px solid ${C.danger}22`, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap" as const, minWidth:48, flexShrink:0 }),
+    card:    css({ background:C.card, borderRadius:8, padding:"14px 16px", marginBottom:8, border:`1px solid ${C.border}` }),
+    input:   css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
+    select:  css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text }),
+    btn:     css({ background:C.primary, color:"#fff", border:"none", borderRadius:8, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, whiteSpace:"nowrap" as const, minHeight:52 }),
+    btnSm:   css({ background:C.dangerBg, color:C.danger, border:`1.5px solid ${C.danger}22`, borderRadius:6, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap" as const, minWidth:48, flexShrink:0 }),
     row:     css({ display:"flex", justifyContent:"space-between", alignItems:"center" }),
-    wxBox:   css({ background:`linear-gradient(135deg, #f0faf0 0%, #daf0da 100%)`, borderRadius:14, padding:"14px 16px", marginBottom:14, border:`1px solid ${C.primary4}` }),
+    wxBox:   css({ background:C.card, borderRadius:8, padding:"14px 16px", marginBottom:14, border:`1px solid ${C.border}` }),
     wxGrid:  css({ display:"flex", flexWrap:"nowrap" as const, gap:6, marginTop:8, overflowX:"auto" as const }),
-    wxBadge: css({ background:"rgba(255,255,255,0.85)", backdropFilter:"blur(4px)", borderRadius:8, padding:"4px 7px", display:"inline-flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.text, border:`1px solid ${C.border}`, whiteSpace:"nowrap" as const, flexShrink:0 }),
+    wxBadge: css({ background:C.bg, borderRadius:6, padding:"4px 7px", display:"inline-flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.text, border:`1px solid ${C.border}`, whiteSpace:"nowrap" as const, flexShrink:0 }),
 
-    nav:     css({ position:"fixed" as const, bottom:0, left:0, right:0, background:C.navBg, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:100, boxShadow:"0 -2px 12px rgba(0,0,0,0.06)" }),
+    nav:     css({ position:"fixed" as const, bottom:0, left:0, right:0, background:C.navBg, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:100 }),
     center:  css({ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", flexDirection:"column" as const, gap:12, fontSize:15, color:C.textMuted }),
-    divider: css({ height:1, background:C.border, margin:"6px 0 12px" }),
+    divider: css({ height:1, background:C.border, margin:"8px 0 12px" }),
   };
 
 
   const navBtn = (active: boolean): CSSProperties => ({
     flex:1, padding:"10px 0 8px", border:"none", background:"none", cursor:"pointer",
     display:"flex", flexDirection:"column", alignItems:"center", gap:3,
-    color: active ? "#166534" : C.textMuted,
+    color: active ? C.primary : C.textMuted,
     fontSize:10, fontWeight: active ? 700 : 500,
-    borderTop: active ? `3px solid #166534` : "3px solid transparent",
-    transition:"all 0.15s",
+    borderTop: active ? `3px solid ${C.primary}` : "3px solid transparent",
     minHeight:48,
   });
 
@@ -1407,14 +1407,14 @@ export default function App() {
           {(tab === "home" || tab === "report") && (
             <button
               onClick={() => setShowQuickReport(true)}
-              style={{ display:"flex", alignItems:"center", gap:4, background:"#166534", borderRadius:8, padding:"7px 14px", border:"none", cursor:"pointer", color:"#fff", fontWeight:600, fontSize:13, flexShrink:0 }}
+              style={{ display:"flex", alignItems:"center", gap:4, background:C.primary, borderRadius:8, padding:"7px 14px", border:"none", cursor:"pointer", color:"#fff", fontWeight:600, fontSize:13, flexShrink:0 }}
             >
               <Plus size={14} strokeWidth={2.5} />
               記録する
             </button>
           )}
           {currentUser && (
-            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", padding:"5px 6px", background:"#f3f4f6", borderRadius:8, border:"1px solid #e5e7eb", cursor:"pointer", color:C.textSub, flexShrink:0 }}>
+            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", padding:"5px 6px", background:C.bg, borderRadius:8, border:`1px solid ${C.border}`, cursor:"pointer", color:C.textSub, flexShrink:0 }}>
               <UserCircle size={18} strokeWidth={1.8} />
             </button>
           )}
@@ -1440,73 +1440,64 @@ export default function App() {
         <div style={S.page}>
           {/* 作業セッション（作業中のみ表示） */}
           {workSession && (
-            <div style={{ background:"#fff3e0", borderRadius:12, padding:"12px 14px", marginBottom:4, border:"1px solid #ffe0b2" }}>
+            <div style={{ background:C.card, borderRadius:8, padding:"12px 14px", marginBottom:4, border:`1px solid ${C.border}` }}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:"#e53935", animation:"pulse 1s infinite", flexShrink:0 }} />
-                <span style={{ fontSize:14, fontWeight:700, color:"#e07020", flex:1 }}>作業中</span>
-                <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(224,112,32,0.12)", borderRadius:8, padding:"4px 10px" }}>
-                  <Timer size={13} color="#e07020" strokeWidth={2} />
-                  <span style={{ fontSize:16, fontWeight:700, color:"#e07020", fontVariantNumeric:"tabular-nums" as const, letterSpacing:0.5 }}>{fmtElapsed(workElapsed)}</span>
-                </div>
+                <div style={{ width:7, height:7, borderRadius:"50%", background:C.danger, flexShrink:0 }} />
+                <span style={{ fontSize:14, fontWeight:700, color:C.text, flex:1 }}>作業中</span>
+                <span style={{ fontSize:16, fontWeight:700, color:C.text, fontVariantNumeric:"tabular-nums" as const }}>
+                  {fmtElapsed(workElapsed)}
+                </span>
                 <button
                   onClick={toggleVoice}
-                  style={{ display:"flex", alignItems:"center", gap:4, padding:"6px 10px", borderRadius:20, border:`1.5px solid ${isListening ? "#e53935" : "#ffe0b2"}`, background: isListening ? "#fdecea" : "#fff", color: isListening ? "#e53935" : "#e07020", fontWeight:700, fontSize:12, cursor:"pointer", flexShrink:0 }}
+                  style={{ padding:"5px 10px", borderRadius:6, border:`1px solid ${isListening ? C.danger : C.border}`, background:"transparent", color: isListening ? C.danger : C.textMuted, fontWeight:600, fontSize:12, cursor:"pointer", flexShrink:0 }}
                 >
                   {isListening ? <MicOff size={13} strokeWidth={2} /> : <Mic size={13} strokeWidth={2} />}
-                  {isListening ? "停止" : "音声"}
                 </button>
                 <button
                   onClick={stopWork}
-                  style={{ padding:"7px 14px", borderRadius:8, border:"1.5px solid #e07020", background:"#fff", color:"#e07020", fontWeight:700, fontSize:13, cursor:"pointer", flexShrink:0 }}
+                  style={{ padding:"7px 14px", borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textSub, fontWeight:600, fontSize:13, cursor:"pointer", flexShrink:0 }}
                 >
                   終了する
                 </button>
               </div>
               {voiceTranscript && (
-                <div style={{ marginTop:8, background:"rgba(255,255,255,0.7)", borderRadius:8, padding:"6px 10px", fontSize:11, color:"#7a4000", borderLeft:"3px solid #ffe0b2" }}>
+                <div style={{ marginTop:10, fontSize:12, color:C.textSub, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
                   {voiceTranscript}
                 </div>
               )}
             </div>
           )}
           {/* 天気カード（全幅） */}
-          {wxLoading ? (
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px 16px", border:"1px solid #e5e7eb", marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
-              <RefreshCw size={16} color={C.textMuted} strokeWidth={1.8} />
-              <span style={{ fontSize:13, color:C.textMuted }}>天気取得中...</span>
-            </div>
-          ) : wxAuto ? (
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px 16px", border:"1px solid #e5e7eb", marginBottom:10, display:"flex", alignItems:"center", gap:16 }}>
-              <div style={{ flexShrink:0 }}>
-                <div style={{ fontSize:36, fontWeight:700, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</div>
-                <div style={{ fontSize:13, color:C.textSub, marginTop:2 }}>{wxAuto.label}</div>
-              </div>
-              <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4, paddingLeft:16, borderLeft:"1px solid #e5e7eb" }}>
-                {wxAuto.humidity !== undefined && (
-                  <span style={{ fontSize:12, color:C.textSub }}><Droplets size={11} color="#1976d2" strokeWidth={2} style={{ verticalAlign:"middle", marginRight:4 }}/>{wxAuto.humidity}% 湿度</span>
-                )}
-                {wxAuto.rain !== undefined && (
-                  <span style={{ fontSize:12, color:C.textSub }}><CloudRain size={11} color="#0288d1" strokeWidth={2} style={{ verticalAlign:"middle", marginRight:4 }}/>{wxAuto.rain}mm 降水</span>
-                )}
-              </div>
+          {wxLoading ? null : wxAuto ? (
+            <div style={{ background:C.card, borderRadius:8, padding:"14px 16px", border:`1px solid ${C.border}`, marginBottom:10, display:"flex", alignItems:"baseline", gap:12 }}>
+              <div style={{ fontSize:32, fontWeight:700, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</div>
+              <div style={{ fontSize:14, color:C.textSub }}>{wxAuto.label}</div>
+              {(wxAuto.humidity !== undefined || wxAuto.rain !== undefined) && (
+                <div style={{ marginLeft:"auto", fontSize:12, color:C.textMuted, display:"flex", gap:10 }}>
+                  {wxAuto.humidity !== undefined && <span>{wxAuto.humidity}% 湿度</span>}
+                  {wxAuto.rain !== undefined && <span>{wxAuto.rain}mm</span>}
+                </div>
+              )}
             </div>
           ) : null}
           {/* 統計3枚（2カラムグリッド） */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:4 }}>
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px", border:"1px solid #e5e7eb", display:"flex", flexDirection:"column", gap:2 }}>
-              <div style={{ fontSize:11, color:C.textMuted }}>直近7日の作業</div>
-              <div style={{ fontSize:26, fontWeight:700, color:C.text, lineHeight:1.2 }}>{workCount7d}<span style={{ fontSize:13, fontWeight:400, marginLeft:3 }}>件</span></div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, marginBottom:12, background:C.border, border:`1px solid ${C.border}`, borderRadius:8, overflow:"hidden" }}>
+            <div style={{ background:C.card, padding:"14px 16px" }}>
+              <div style={{ fontSize:11, color:C.textMuted, marginBottom:4 }}>直近7日の作業</div>
+              <div style={{ fontSize:28, fontWeight:700, color:C.text, lineHeight:1 }}>{workCount7d}<span style={{ fontSize:13, fontWeight:400, marginLeft:3, color:C.textMuted }}>件</span></div>
             </div>
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px", border:"1px solid #e5e7eb", display:"flex", flexDirection:"column", gap:2 }}>
-              <div style={{ fontSize:11, color:C.textMuted }}>今週の収穫</div>
-              <div style={{ fontSize:26, fontWeight:700, color:C.text, lineHeight:1.2 }}>
-                {weekHarvest > 0 ? <>{weekHarvest}<span style={{ fontSize:13, fontWeight:400, marginLeft:3 }}>kg</span></> : <span style={{ fontSize:16, color:C.textMuted }}>なし</span>}
+            <div style={{ background:C.card, padding:"14px 16px" }}>
+              <div style={{ fontSize:11, color:C.textMuted, marginBottom:4 }}>今週の収穫</div>
+              <div style={{ fontSize:28, fontWeight:700, color:C.text, lineHeight:1 }}>
+                {weekHarvest > 0 ? <>{weekHarvest}<span style={{ fontSize:13, fontWeight:400, marginLeft:3, color:C.textMuted }}>kg</span></> : <span style={{ fontSize:14, fontWeight:400, color:C.textMuted }}>なし</span>}
               </div>
             </div>
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px", border:"1px solid #e5e7eb", display:"flex", flexDirection:"column", gap:2, gridColumn:"span 2" }}>
-              <div style={{ fontSize:11, color:C.textMuted }}>今日の予定</div>
-              <div style={{ fontSize:26, fontWeight:700, color: todayScheduleCount > 0 ? "#166534" : C.text, lineHeight:1.2 }}>
-                {todayScheduleCount > 0 ? <>{todayScheduleCount}<span style={{ fontSize:13, fontWeight:400, marginLeft:3 }}>件</span></> : <span style={{ fontSize:16, color:C.textMuted }}>予定なし</span>}
+            <div style={{ background:C.card, padding:"14px 16px", gridColumn:"span 2" }}>
+              <div style={{ fontSize:11, color:C.textMuted, marginBottom:4 }}>今日の予定</div>
+              <div style={{ fontSize:28, fontWeight:700, color: todayScheduleCount > 0 ? C.text : C.text, lineHeight:1 }}>
+                {todayScheduleCount > 0
+                  ? <>{todayScheduleCount}<span style={{ fontSize:13, fontWeight:400, marginLeft:3, color:C.textMuted }}>件</span></>
+                  : <span style={{ fontSize:14, fontWeight:400, color:C.textMuted }}>予定なし</span>}
               </div>
             </div>
           </div>
@@ -1514,7 +1505,7 @@ export default function App() {
           <div style={S.sec}>作物サマリー</div>
 
           {cropStats.length === 0 ? (
-            <div style={{ padding:"20px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8, color:C.textMuted, fontSize:13 }}>
+            <div style={{ padding:"16px", color:C.textMuted, fontSize:13 }}>
               作物が登録されていません
             </div>
           ) : cropStats.map(c => {
@@ -1527,32 +1518,30 @@ export default function App() {
                 >
                   <span style={{ fontWeight:700, fontSize:15, color:C.text, flex:1, textAlign:"left" }}>{c.name}</span>
                   {c.growDays !== null && (
-                    <span style={{ fontSize:12, color:C.textMuted, whiteSpace:"nowrap" as const }}>
-                      {c.growDays}日目
-                    </span>
+                    <span style={{ fontSize:12, color:C.textMuted }}>{c.growDays}日目</span>
                   )}
-                  <ChevronRight size={16} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0, transform: expanded ? "rotate(90deg)" : "none", transition:"transform 0.15s" }} />
+                  <ChevronRight size={16} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0, transform: expanded ? "rotate(90deg)" : "none" }} />
                 </button>
                 {expanded && (
                   <>
                     <div style={S.divider} />
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
-                      <div style={{ borderRadius:8, padding:"10px 6px", textAlign:"center" }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:0, marginBottom:12, background:C.border, borderRadius:6, overflow:"hidden" }}>
+                      <div style={{ background:C.bg, padding:"10px 6px", textAlign:"center" as const }}>
                         <div style={{ fontSize:22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.growDays ?? "—"}</div>
                         <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>生育日数</div>
                       </div>
-                      <div style={{ borderRadius:8, padding:"10px 6px", textAlign:"center" }}>
+                      <div style={{ background:C.bg, padding:"10px 6px", textAlign:"center" as const, borderLeft:`1px solid ${C.border}`, borderRight:`1px solid ${C.border}` }}>
                         <div style={{ fontSize:22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.count}</div>
                         <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>作業回数</div>
                       </div>
-                      <div style={{ borderRadius:8, padding:"10px 6px", textAlign:"center" }}>
+                      <div style={{ background:C.bg, padding:"10px 6px", textAlign:"center" as const }}>
                         <div style={{ fontSize:c.tot > 999 ? 16 : 22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.tot > 0 ? c.tot : "—"}</div>
                         <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>{c.tot > 0 ? "kg収穫" : "収穫なし"}</div>
                       </div>
                     </div>
                     <button
                       onClick={e => { e.stopPropagation(); setTab("analytics"); }}
-                      style={{ width:"100%", padding:"8px 0", borderRadius:8, border:"1px solid #e5e7eb", background:"#f9fafb", color:C.textSub, fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                      style={{ width:"100%", padding:"8px 0", borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textSub, fontSize:13, fontWeight:600, cursor:"pointer" }}
                     >
                       分析で見る →
                     </button>
@@ -1570,7 +1559,7 @@ export default function App() {
           </div>
 
           {reports.length === 0 ? (
-            <div style={{ padding:"20px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", marginBottom:8, color:C.textMuted, fontSize:13 }}>
+            <div style={{ padding:"16px", color:C.textMuted, fontSize:13 }}>
               まだ作業報告がありません
             </div>
           ) : reports.slice(0,2).map(r => (
@@ -1605,10 +1594,10 @@ export default function App() {
                 {(r.work_start && r.work_end)
                   ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_start}〜{r.work_end}</span>
                   : r.work_time ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span> : null}
-                {r.pesticide_id && (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? <span style={{ color:"#7b1fa2", display:"flex", alignItems:"center", gap:3, background:"#f3e5f5", borderRadius:6, padding:"1px 7px", fontWeight:600 }}><FlaskConical size={10} strokeWidth={2}/>{ps.name}{r.pesticide_amount ? ` ${r.pesticide_amount}` : ""}</span> : null; })()}
+                {r.pesticide_id && (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? <span style={{ color:C.textSub, background:C.bg, borderRadius:6, padding:"1px 7px", fontWeight:600, border:`1px solid ${C.border}` }}>{ps.name}{r.pesticide_amount ? ` ${r.pesticide_amount}` : ""}</span> : null; })()}
               </div>
               <div style={{ ...S.row, marginTop:8 }}>
-                <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2}/>{userName(r.user_id)}</span>
+                <span style={{ fontSize:11, color:C.textMuted }}>{userName(r.user_id)}</span>
                 {r.weather && (
                   <span style={{ fontSize:11, color:C.textSub, display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" as const }}>
                     <span>{r.weather}{r.temp ? ` ${r.temp}°C` : ""}</span>
@@ -1618,23 +1607,23 @@ export default function App() {
                 )}
               </div>
               {r.note && (
-                <div style={{ fontSize:12, color:C.textSub, marginTop:8, padding:"7px 10px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}` }}>
+                <div style={{ fontSize:12, color:C.textSub, marginTop:8, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
                   {r.note}
                 </div>
               )}
               {r.image_url && (
-                <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:8, marginTop:8, maxHeight:180, objectFit:"cover", display:"block" }} />
+                <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:6, marginTop:10, maxHeight:180, objectFit:"cover", display:"block" }} />
               )}
-              <div style={{ display:"flex", gap:8, marginTop:10 }}>
+              <div style={{ display:"flex", gap:8, marginTop:12 }}>
                 <button
                   onClick={() => setSelectedReport(r)}
-                  style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:12, fontWeight:600, cursor:"pointer" }}
+                  style={{ flex:1, padding:"7px 0", borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textSub, fontSize:12, fontWeight:600, cursor:"pointer" }}
                 >
-                  <ClipboardList size={12} strokeWidth={2} />詳細を見る
+                  詳細を見る
                 </button>
                 <button
                   onClick={() => handleCopyReport(r)}
-                  style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.primary}`, background:"transparent", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
+                  style={{ flex:1, padding:"7px 0", borderRadius:6, border:`1px solid ${C.primary}`, background:"transparent", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
                 >
                   <Copy size={12} strokeWidth={2} />コピーして作成
                 </button>
@@ -1701,26 +1690,18 @@ export default function App() {
             const todayScheds = schedules.filter(s => s.date === todayStr);
             return (
               <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
-                  <CalendarDays size={14} color={C.primary} strokeWidth={2} />今日の予定
-                </div>
+                <div style={S.sec}>今日の予定</div>
                 {todayScheds.length === 0 ? (
-                  <div style={{ background:C.card, borderRadius:12, padding:"12px 16px", border:`1px solid ${C.border}`, fontSize:13, color:C.textMuted, textAlign:"center" as const }}>
+                  <div style={{ padding:"14px 16px", background:C.card, borderRadius:12, border:"1px solid #e5e7eb", fontSize:13, color:C.textMuted }}>
                     今日の予定はありません
                   </div>
                 ) : todayScheds.map(s => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
+                  const meta = [s.crop, s.field, assignedUser?.name, s.work_type].filter(Boolean).join(" · ");
                   return (
-                    <div key={s.id} style={{ background:C.card, borderRadius:12, padding:"10px 14px", border:`1px solid ${C.border}`, marginBottom:6, display:"flex", alignItems:"center", gap:10 }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{s.title}</div>
-                        <div style={{ fontSize:11, color:C.textSub, marginTop:2, display:"flex", gap:8, flexWrap:"wrap" as const }}>
-                          {s.crop && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Leaf size={11} strokeWidth={2} />{s.crop}</span>}
-                          {s.field && <span style={{ display:"flex", alignItems:"center", gap:3 }}><MapPin size={11} strokeWidth={2} />{s.field}</span>}
-                          {assignedUser && <span style={{ display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2} />{assignedUser.name}</span>}
-                          {s.work_type && <span>{s.work_type}</span>}
-                        </div>
-                      </div>
+                    <div key={s.id} style={{ background:C.card, borderRadius:12, padding:"10px 14px", border:"1px solid #e5e7eb", marginBottom:6 }}>
+                      <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{s.title}</div>
+                      {meta && <div style={{ fontSize:12, color:C.textMuted, marginTop:3 }}>{meta}</div>}
                     </div>
                   );
                 })}
@@ -1734,8 +1715,8 @@ export default function App() {
             if (unreported.length === 0) return null;
             return (
               <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:"#c2410c", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
-                  <ClipboardList size={14} color="#c2410c" strokeWidth={2} />未報告の作業
+                <div style={{ fontSize:13, fontWeight:700, color:"#c2410c", marginBottom:8 }}>
+                  未報告の作業
                 </div>
                 {unreported.map(s => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
@@ -1750,11 +1731,8 @@ export default function App() {
                           <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
                           <span style={{ fontSize:10, fontWeight:700, color:"#c2410c", background:"#fff7ed", border:`1px solid #fed7aa`, borderRadius:5, padding:"2px 7px", flexShrink:0 }}>未報告</span>
                         </div>
-                        <div style={{ fontSize:11, color:C.textSub, display:"flex", gap:8, flexWrap:"wrap" as const }}>
-                          <span style={{ display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={11} strokeWidth={2} />{s.date}</span>
-                          {s.crop && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Leaf size={11} strokeWidth={2} />{s.crop}</span>}
-                          {assignedUser && <span style={{ display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2} />{assignedUser.name}</span>}
-                          {s.work_type && <span>{s.work_type}</span>}
+                        <div style={{ fontSize:11, color:C.textSub, marginTop:2 }}>
+                          {[s.date, s.crop, assignedUser?.name, s.work_type].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                       <ChevronRight size={16} color={C.textMuted} strokeWidth={2} />
@@ -2248,8 +2226,8 @@ export default function App() {
                   const history = getFieldCropHistory(f.name);
                   return (
                     <div style={{ borderTop:`1px solid ${C.border}`, marginTop:10, paddingTop:10 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6, display:"flex", alignItems:"center", gap:4 }}>
-                        <Leaf size={11} strokeWidth={2} />作付け履歴
+                      <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>
+                        作付け履歴
                       </div>
                       {history.length === 0 ? (
                         <div style={{ fontSize:11, color:C.textMuted }}>記録なし</div>
@@ -2458,10 +2436,8 @@ export default function App() {
                     <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{project.name}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, display:"flex", flexWrap:"wrap" as const, gap:6 }}>
-                          {cropLabel && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Leaf size={10} strokeWidth={2} />{cropLabel}</span>}
-                          {project.field && <span style={{ display:"flex", alignItems:"center", gap:3 }}><MapPin size={10} strokeWidth={2} />{project.field}</span>}
-                          {project.end_date && <span style={{ display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={10} strokeWidth={2} />〜{project.end_date}</span>}
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>
+                          {[cropLabel, project.field, project.end_date ? `〜${project.end_date}` : ""].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                       <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
@@ -2772,8 +2748,8 @@ export default function App() {
                   const history = getFieldCropHistory(f.name);
                   return (
                     <div style={{ borderTop:`1px solid ${C.border}`, marginTop:10, paddingTop:10 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6, display:"flex", alignItems:"center", gap:4 }}>
-                        <Leaf size={11} strokeWidth={2} />作付け履歴
+                      <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>
+                        作付け履歴
                       </div>
                       {history.length === 0 ? (
                         <div style={{ fontSize:11, color:C.textMuted }}>記録なし</div>
@@ -3278,7 +3254,7 @@ export default function App() {
                       {r.field && <span style={{ fontSize:12, color:C.textMuted }}>· {r.field}</span>}
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={11} strokeWidth={2}/>{r.date}</span>
+                      <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
                       {(isAdmin || r.user_id === currentUser?.id) && (
                         <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
                           <button onClick={() => setOpenMenuId(openMenuId === `dr${r.id}` ? null : `dr${r.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", borderRadius:6, color:C.textMuted, display:"flex" }}>
@@ -3295,12 +3271,12 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8, fontSize:12 }}>
-                    {r.quantity  && <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><PackageCheck size={11} strokeWidth={2}/>{r.quantity}kg</span>}
-                    {(r.work_start && r.work_end)
-                      ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_start}〜{r.work_end}</span>
-                      : r.work_time ? <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11} strokeWidth={2}/>{r.work_time}h</span> : null}
-                    <span style={{ color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><UserCircle size={11} strokeWidth={2}/>{userName(r.user_id)}</span>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:6 }}>
+                    {[
+                      r.quantity ? `${r.quantity}kg` : "",
+                      (r.work_start && r.work_end) ? `${r.work_start}〜${r.work_end}` : r.work_time ? `${r.work_time}h` : "",
+                      userName(r.user_id),
+                    ].filter(Boolean).join(" · ")}
                   </div>
                   {r.note && (
                     <div style={{ fontSize:12, color:C.textSub, marginTop:8, padding:"7px 10px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}` }}>
