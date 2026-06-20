@@ -1335,12 +1335,9 @@ export default function App() {
   if (!authSession) return (
     <div style={{ minHeight:"100vh", background:`linear-gradient(160deg, ${C.primary} 0%, #1b4d1b 100%)`, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ background:"#fff", borderRadius:20, padding:"32px 24px", width:"100%", maxWidth:400, boxShadow:"0 8px 40px rgba(0,0,0,0.25)" }}>
-        <div style={{ textAlign:"center", marginBottom:28 }}>
-          <div style={{ background:C.primary3, borderRadius:16, width:60, height:60, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}>
-            <Wheat size={30} color={C.primary} strokeWidth={1.8} />
-          </div>
-          <div style={{ fontSize:20, fontWeight:700, color:C.text }}>農作業レポート</div>
-          <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>ログインしてください</div>
+        <div style={{ marginBottom:28 }}>
+          <div style={{ fontSize:22, fontWeight:700, color:C.text, marginBottom:4 }}>農作業レポート</div>
+          <div style={{ fontSize:13, color:C.textMuted }}>ログインしてください</div>
         </div>
 
         <div style={{ marginBottom:14 }}>
@@ -2223,14 +2220,9 @@ export default function App() {
             ) : fields.map(f => (
               <div key={f.id} style={S.card}>
                 <div style={S.row}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
-                    <div style={{ background: f.lat ? C.primary3 : C.bg, borderRadius:9, padding:7, flexShrink:0 }}>
-                      <MapPin size={16} color={f.lat ? C.primary : C.textMuted} strokeWidth={1.8} />
-                    </div>
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" as const }}>{f.name}</div>
-                      <div style={{ fontSize:11, color:C.textMuted, whiteSpace:"nowrap" as const }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
-                    </div>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{f.name}</div>
+                    <div style={{ fontSize:12, color: f.lat ? C.textSub : C.textMuted, marginTop:2 }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
                   </div>
                   {isAdmin && (
                     <div style={{ display:"flex", gap:6, flexShrink:0 }} onClick={e => e.stopPropagation()}>
@@ -2569,12 +2561,12 @@ export default function App() {
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <button
                       onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() - 7); setProgressWeekStart(d); }}
-                      style={{ background:C.primary3, border:"none", borderRadius:7, padding:"4px 8px", cursor:"pointer", color:C.primary, display:"flex", alignItems:"center" }}
+                      style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}
                     ><ChevronLeft size={14} strokeWidth={2.5} /></button>
                     <span style={{ fontSize:12, fontWeight:600, color:C.text, minWidth:110, textAlign:"center" as const }}>{weekLabel}</span>
                     <button
                       onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }}
-                      style={{ background:C.primary3, border:"none", borderRadius:7, padding:"4px 8px", cursor:"pointer", color:C.primary, display:"flex", alignItems:"center" }}
+                      style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}
                     ><ChevronRight size={14} strokeWidth={2.5} /></button>
                   </div>
                 </div>
@@ -2752,14 +2744,9 @@ export default function App() {
             ) : fields.map(f => (
               <div key={f.id} style={S.card}>
                 <div style={S.row}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
-                    <div style={{ background: f.lat ? C.primary3 : C.bg, borderRadius:9, padding:7, flexShrink:0 }}>
-                      <MapPin size={16} color={f.lat ? C.primary : C.textMuted} strokeWidth={1.8} />
-                    </div>
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" as const }}>{f.name}</div>
-                      <div style={{ fontSize:11, color:C.textMuted, whiteSpace:"nowrap" as const }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
-                    </div>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{f.name}</div>
+                    <div style={{ fontSize:12, color: f.lat ? C.textSub : C.textMuted, marginTop:2 }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
                   </div>
                   {isAdmin && (
                     <div style={{ display:"flex", gap:6, flexShrink:0 }} onClick={e => e.stopPropagation()}>
@@ -3232,7 +3219,7 @@ export default function App() {
                       <button
                         onClick={() => setChartYear(y => y - 1)}
                         disabled={cropYears.length === 0 || safeYear <= cropYears[0]}
-                        style={{ background:C.primary3, border:"none", borderRadius:7, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear <= cropYears[0]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear <= cropYears[0]) ? C.textMuted:C.primary, display:"flex", alignItems:"center" }}
+                        style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear <= cropYears[0]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear <= cropYears[0]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center" }}
                       >
                         <ChevronLeft size={14} strokeWidth={2.5} />
                       </button>
@@ -3240,7 +3227,7 @@ export default function App() {
                       <button
                         onClick={() => setChartYear(y => y + 1)}
                         disabled={cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]}
-                        style={{ background:C.primary3, border:"none", borderRadius:7, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? C.textMuted:C.primary, display:"flex", alignItems:"center" }}
+                        style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center" }}
                       >
                         <ChevronRight size={14} strokeWidth={2.5} />
                       </button>
@@ -3288,7 +3275,7 @@ export default function App() {
                   <div style={S.row}>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <span style={{ fontWeight:700, fontSize:13, color:C.primary }}>{r.work_type}</span>
-                      {r.field && <span style={{ fontSize:11, color:C.primary, background:C.primary3, borderRadius:6, padding:"1px 7px", fontWeight:600 }}>{r.field}</span>}
+                      {r.field && <span style={{ fontSize:12, color:C.textMuted }}>· {r.field}</span>}
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <span style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><CalendarDays size={11} strokeWidth={2}/>{r.date}</span>
@@ -3517,9 +3504,9 @@ export default function App() {
                       <Users size={14} strokeWidth={2} />担当者進捗
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() - 7); setProgressWeekStart(d); }} style={{ background:C.primary3, border:"none", borderRadius:7, padding:"4px 8px", cursor:"pointer", color:C.primary, display:"flex", alignItems:"center" }}><ChevronLeft size={14} strokeWidth={2.5} /></button>
+                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() - 7); setProgressWeekStart(d); }} style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}><ChevronLeft size={14} strokeWidth={2.5} /></button>
                       <span style={{ fontSize:12, fontWeight:600, color:C.text, minWidth:110, textAlign:"center" as const }}>{weekLabel}</span>
-                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }} style={{ background:C.primary3, border:"none", borderRadius:7, padding:"4px 8px", cursor:"pointer", color:C.primary, display:"flex", alignItems:"center" }}><ChevronRight size={14} strokeWidth={2.5} /></button>
+                      <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }} style={{ background:"#f3f4f6", border:"1px solid #e5e7eb", borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}><ChevronRight size={14} strokeWidth={2.5} /></button>
                     </div>
                   </div>
                   <div style={{ overflowX:"auto" as const, background:C.card, borderRadius:14, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", marginBottom:10 }}>
