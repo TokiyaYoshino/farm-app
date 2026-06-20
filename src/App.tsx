@@ -1327,8 +1327,7 @@ export default function App() {
   // ─── Auth ゲート ─────────────────────────────────────────
   if (authLoading) return (
     <div style={S.center}>
-      <Leaf size={36} color={C.primary} strokeWidth={1.5} />
-      <span>認証確認中...</span>
+      <span style={{ fontSize:14, color:C.textMuted }}>認証確認中...</span>
     </div>
   );
 
@@ -1383,8 +1382,7 @@ export default function App() {
 
   if (loading) return (
     <div style={S.center}>
-      <Leaf size={36} color={C.primary} strokeWidth={1.5} />
-      <span>読み込み中...</span>
+      <span style={{ fontSize:14, color:C.textMuted }}>読み込み中...</span>
     </div>
   );
 
@@ -1572,7 +1570,7 @@ export default function App() {
                         <MoreVertical size={16} strokeWidth={2} />
                       </button>
                       {openMenuId === `hr${r.id}` && (
-                        <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                        <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                           <button onClick={() => { setOpenMenuId(null); deleteReport(r.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                             <Trash2 size={13} strokeWidth={2} />削除
                           </button>
@@ -1752,7 +1750,7 @@ export default function App() {
               <>
                 {/* 2択セレクター */}
                 {!inlineMode && (
-                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:14, padding:14, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
+                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:8, padding:14, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
                     <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                       <span>何を追加しますか？</span>
                       <button onClick={() => setInlineOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><X size={16} strokeWidth={2} /></button>
@@ -1780,7 +1778,7 @@ export default function App() {
 
                 {/* 予定フォーム */}
                 {inlineMode === "schedule" && (
-                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:14, padding:16, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
+                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:8, padding:16, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <button onClick={() => setInlineMode(null)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><ChevronLeft size={18} strokeWidth={2.5} /></button>
@@ -1792,33 +1790,33 @@ export default function App() {
                       <button onClick={() => { setInlineOpen(false); setInlineMode(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><X size={16} strokeWidth={2} /></button>
                     </div>
 
-                    <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
+                    <div style={S.lbl}>日付</div>
                     <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={inlineSchedForm.date} onChange={e => setInlineSchedForm(f => ({ ...f, date:e.target.value }))} />
 
-                    <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物（任意）</div>
+                    <div style={S.lbl}>作物（任意）</div>
                     <select style={S.select} value={inlineSchedForm.crop} onChange={e => setInlineSchedForm(f => ({ ...f, crop:e.target.value }))}>
                       <option value="">未指定</option>
                       {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
 
-                    <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場（任意）</div>
+                    <div style={S.lbl}>圃場（任意）</div>
                     <select style={S.select} value={inlineSchedForm.field} onChange={e => setInlineSchedForm(f => ({ ...f, field:e.target.value }))}>
                       <option value="">未指定</option>
                       {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
                     </select>
 
-                    <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業種別</div>
+                    <div style={S.lbl}>作業種別</div>
                     <select style={S.select} value={inlineSchedForm.work_type} onChange={e => setInlineSchedForm(f => ({ ...f, work_type:e.target.value }))}>
                       {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
 
-                    <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />担当者</div>
+                    <div style={S.lbl}>担当者</div>
                     <select style={S.select} value={inlineSchedForm.assigned_user_id} onChange={e => setInlineSchedForm(f => ({ ...f, assigned_user_id:Number(e.target.value) }))}>
                       <option value={0}>未指定</option>
                       {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
 
-                    <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
+                    <div style={S.lbl}>メモ</div>
                     <input style={S.input} placeholder="詳細・備考など" value={inlineSchedForm.note} onChange={e => setInlineSchedForm(f => ({ ...f, note:e.target.value }))} />
 
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addScheduleInline} disabled={submitting}>
@@ -1829,7 +1827,7 @@ export default function App() {
 
                 {/* 作業報告フォーム */}
                 {inlineMode === "report" && (
-                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:14, padding:16, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
+                  <div className="anim-slideDown" style={{ background:C.card, borderRadius:8, padding:16, border:`1px solid ${C.border}`, boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <button onClick={() => { setInlineMode(null); setCopySource(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><ChevronLeft size={18} strokeWidth={2.5} /></button>
@@ -1841,25 +1839,25 @@ export default function App() {
                       <button onClick={() => { setInlineOpen(false); setInlineMode(null); setCopySource(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex" }}><X size={16} strokeWidth={2} /></button>
                     </div>
 
-                    <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
+                    <div style={S.lbl}>日付</div>
                     <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
 
                     <div style={{ display:"flex", gap:10 }}>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物</div>
+                        <div style={S.lbl}>作物</div>
                         <select style={S.select} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
                           {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場</div>
+                        <div style={S.lbl}>圃場</div>
                         <select style={S.select} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
                           {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
                         </select>
                       </div>
                     </div>
 
-                    <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業種別</div>
+                    <div style={S.lbl}>作業種別</div>
                     {workCategories.length > 0 ? (
                       <select style={S.select} value={rForm.work_category_id}
                         onChange={e => {
@@ -1875,18 +1873,18 @@ export default function App() {
                       </select>
                     )}
 
-                    <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />担当者</div>
+                    <div style={S.lbl}>担当者</div>
                     <select style={S.select} value={rForm.user_id} onChange={e => setRForm(f => ({ ...f, user_id:Number(e.target.value) }))}>
                       {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
 
-                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
+                    <div style={S.lbl}>実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
                     <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
                       <input type="number" style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: 20" value={rForm.quantity_value} onChange={e => setRForm(f => ({ ...f, quantity_value:e.target.value, quantity:e.target.value }))} />
                       <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:13, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
                     </div>
 
-                    <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時刻</div>
+                    <div style={S.lbl}>作業時刻</div>
                     <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
                       <input type="time" style={{ ...S.input, marginBottom:0, flex:1 }} value={rForm.work_start} onChange={e => setRForm(f => ({ ...f, work_start:e.target.value }))} />
                       <span style={{ color:C.textMuted, flexShrink:0, fontSize:13 }}>〜</span>
@@ -1902,11 +1900,11 @@ export default function App() {
                       </div>
                     )}
 
-                    <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />使用農薬（任意）</div>
+                    <div style={S.lbl}>使用農薬（任意）</div>
                     {pesticides.length === 0 ? (
                       <div style={{ fontSize:12, color:C.textMuted, padding:"8px 12px", background:C.bg, borderRadius:8, marginBottom:12 }}>登録済みの農薬がありません</div>
                     ) : (
-                      <div style={{ border:`1.5px solid ${C.border}`, borderRadius:10, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
+                      <div style={{ border:`1.5px solid ${C.border}`, borderRadius:8, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
                         {pesticides.map(p => (
                           <div key={p.id} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:6, marginBottom:6 }}>
                             <label style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", cursor:"pointer" }}>
@@ -1939,14 +1937,14 @@ export default function App() {
                       </div>
                     )}
 
-                    <div style={S.lbl}><Droplets size={13} strokeWidth={2} />土壌pH（任意）</div>
+                    <div style={S.lbl}>土壌pH（任意）</div>
                     <input
                       type="number" placeholder="例: 6.5" min="0" max="14" step="0.1"
                       value={soilPh} onChange={e => setSoilPh(e.target.value)}
                       style={S.input}
                     />
 
-                    <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
+                    <div style={S.lbl}>メモ</div>
                     <div style={{ position:"relative", marginBottom:12 }}>
                       <input style={{ ...S.input, marginBottom:0, paddingRight: hasSpeech ? 44 : 14 }} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
                       {hasSpeech && (
@@ -1979,7 +1977,7 @@ export default function App() {
                 {!pManualMode ? (
                   <>
                     {/* マスタ検索モード */}
-                    <div style={S.lbl}><Search size={13} strokeWidth={2} />農薬名で検索</div>
+                    <div style={S.lbl}>農薬名で検索</div>
                     <div style={{ position:"relative", marginBottom:12 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <input
@@ -1992,7 +1990,7 @@ export default function App() {
                         {masterSearching && <RefreshCw size={14} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />}
                       </div>
                       {masterResults.length > 0 && (
-                        <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, background:C.card, border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", marginTop:4, maxHeight:220, overflowY:"auto" }}>
+                        <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, background:C.card, border:`1px solid ${C.border}`, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", marginTop:4, maxHeight:220, overflowY:"auto" }}>
                           {masterResults.map(m => (
                             <button
                               key={m.id}
@@ -2011,7 +2009,7 @@ export default function App() {
                       )}
                     </div>
                     {selectedMaster && (
-                      <div style={{ background:C.primary3, borderRadius:10, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ background:C.primary3, borderRadius:8, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:8 }}>
                         <FlaskConical size={14} color={C.primary} strokeWidth={2} />
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{selectedMaster.name}</div>
@@ -2022,7 +2020,7 @@ export default function App() {
                     {/* 備考（マスタ選択後も入力可） */}
                     {selectedMaster && (
                       <>
-                        <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考（任意）</div>
+                        <div style={S.lbl}>備考（任意）</div>
                         <input style={S.input} placeholder="使用上の注意など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
                       </>
                     )}
@@ -2052,15 +2050,15 @@ export default function App() {
                         検索から選ぶ
                       </button>
                     </div>
-                    <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬名 *</div>
+                    <div style={S.lbl}>農薬名 *</div>
                     <input style={S.input} placeholder="例: スミチオン" value={pForm.name} onChange={e => setPForm(f => ({ ...f, name:e.target.value }))} />
-                    <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />種別</div>
+                    <div style={S.lbl}>種別</div>
                     <select style={S.select} value={pForm.type} onChange={e => setPForm(f => ({ ...f, type:e.target.value }))}>
                       {["殺虫剤","殺菌剤","除草剤","その他"].map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />希釈倍数</div>
+                    <div style={S.lbl}>希釈倍数</div>
                     <input style={S.input} placeholder="例: 1000倍" value={pForm.dilution_rate} onChange={e => setPForm(f => ({ ...f, dilution_rate:e.target.value }))} />
-                    <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考</div>
+                    <div style={S.lbl}>備考</div>
                     <input style={S.input} placeholder="注意事項など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addPesticide} disabled={submitting}>
                       {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />この農薬を登録する</>}
@@ -2093,7 +2091,7 @@ export default function App() {
                       <MoreVertical size={18} strokeWidth={2} />
                     </button>
                     {openMenuId === `ps${p.id}` && (
-                      <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                      <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                         <button onClick={() => { setOpenMenuId(null); deletePesticide(p.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                           <Trash2 size={13} strokeWidth={2} />削除
                         </button>
@@ -2123,11 +2121,11 @@ export default function App() {
                 </button>
                 {showCropAddForm && (
                   <div style={{ ...S.card, animation:"slideDown 0.15s ease" }}>
-                    <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
+                    <div style={S.lbl}>作物名 *</div>
                     <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
-                    <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
+                    <div style={S.lbl}>作付け日</div>
                     <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
-                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />目標収穫量（kg/年・任意）</div>
+                    <div style={S.lbl}>目標収穫量（kg/年・任意）</div>
                     <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
                       {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
@@ -2157,7 +2155,7 @@ export default function App() {
                           <MoreVertical size={18} strokeWidth={2} />
                         </button>
                         {openMenuId === `mc${c.id}` && (
-                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                             <button onClick={() => { setOpenMenuId(null); deleteCrop(c.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                               <Trash2 size={13} strokeWidth={2} />削除
                             </button>
@@ -2177,7 +2175,7 @@ export default function App() {
               <>
                 <div style={S.sec}>圃場を追加</div>
                 <div style={S.card}>
-                  <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
+                  <div style={S.lbl}>圃場名 *</div>
                   <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
                   <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addField} disabled={submitting}>
                     {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />圃場を追加</>}
@@ -2207,7 +2205,7 @@ export default function App() {
                           <MoreVertical size={18} strokeWidth={2} />
                         </button>
                         {openMenuId === `mf${f.id}` && (
-                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                             <button onClick={() => { setOpenMenuId(null); deleteField(f.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                               <Trash2 size={13} strokeWidth={2} />削除
                             </button>
@@ -2261,14 +2259,14 @@ export default function App() {
                 <div style={S.card}>
                   {!pManualMode ? (
                     <>
-                      <div style={S.lbl}><Search size={13} strokeWidth={2} />農薬名で検索</div>
+                      <div style={S.lbl}>農薬名で検索</div>
                       <div style={{ position:"relative", marginBottom:12 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                           <input style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: スミチオン、ラウンドアップ..." value={masterSearch} onChange={e => handleMasterSearchChange(e.target.value)} autoComplete="off" />
                           {masterSearching && <RefreshCw size={14} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />}
                         </div>
                         {masterResults.length > 0 && (
-                          <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, background:C.card, border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", marginTop:4, maxHeight:220, overflowY:"auto" }}>
+                          <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, background:C.card, border:`1px solid ${C.border}`, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", marginTop:4, maxHeight:220, overflowY:"auto" }}>
                             {masterResults.map(m => (
                               <button key={m.id} onClick={() => selectMaster(m)} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", borderBottom:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" as const, display:"flex", flexDirection:"column" as const, gap:2 }}>
                                 <span style={{ fontWeight:700, fontSize:13, color:C.text }}>{m.name}</span>
@@ -2283,7 +2281,7 @@ export default function App() {
                         )}
                       </div>
                       {selectedMaster && (
-                        <div style={{ background:C.primary3, borderRadius:10, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ background:C.primary3, borderRadius:8, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:8 }}>
                           <FlaskConical size={14} color={C.primary} strokeWidth={2} />
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{selectedMaster.name}</div>
@@ -2293,7 +2291,7 @@ export default function App() {
                       )}
                       {selectedMaster && (
                         <>
-                          <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考（任意）</div>
+                          <div style={S.lbl}>備考（任意）</div>
                           <input style={S.input} placeholder="使用上の注意など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
                         </>
                       )}
@@ -2310,15 +2308,15 @@ export default function App() {
                         <div style={{ fontSize:12, fontWeight:700, color:C.textSub }}>自分で入力する</div>
                         <button onClick={() => { setPManualMode(false); resetPesticideForm(); }} style={{ fontSize:12, color:C.primary, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>検索から選ぶ</button>
                       </div>
-                      <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />農薬名 *</div>
+                      <div style={S.lbl}>農薬名 *</div>
                       <input style={S.input} placeholder="例: スミチオン" value={pForm.name} onChange={e => setPForm(f => ({ ...f, name:e.target.value }))} />
-                      <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />種別</div>
+                      <div style={S.lbl}>種別</div>
                       <select style={S.select} value={pForm.type} onChange={e => setPForm(f => ({ ...f, type:e.target.value }))}>
                         {["殺虫剤","殺菌剤","除草剤","その他"].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
-                      <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />希釈倍数</div>
+                      <div style={S.lbl}>希釈倍数</div>
                       <input style={S.input} placeholder="例: 1000倍" value={pForm.dilution_rate} onChange={e => setPForm(f => ({ ...f, dilution_rate:e.target.value }))} />
-                      <div style={S.lbl}><PenLine size={13} strokeWidth={2} />備考</div>
+                      <div style={S.lbl}>備考</div>
                       <input style={S.input} placeholder="注意事項など" value={pForm.notes} onChange={e => setPForm(f => ({ ...f, notes:e.target.value }))} />
                       <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addPesticide} disabled={submitting}>
                         {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />この農薬を登録する</>}
@@ -2350,7 +2348,7 @@ export default function App() {
                         <MoreVertical size={18} strokeWidth={2} />
                       </button>
                       {openMenuId === `mp${p.id}` && (
-                        <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                        <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                           <button onClick={() => { setOpenMenuId(null); deletePesticide(p.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                             <Trash2 size={13} strokeWidth={2} />削除
                           </button>
@@ -2371,18 +2369,18 @@ export default function App() {
                   {showAddProject ? (
                     <div style={S.card}>
                       <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}><PlusCircle size={15} strokeWidth={2} color={C.primary} />新しい計画を登録</div>
-                      <div style={S.lbl}><ClipboardList size={13} strokeWidth={2} />計画名 *</div>
+                      <div style={S.lbl}>計画名 *</div>
                       <input style={S.input} placeholder="例: 2024年 ぶどう栽培" value={prjForm.name} onChange={e => setPrjForm(f => ({ ...f, name:e.target.value }))} />
                       <div style={{ display:"flex", gap:10 }}>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物（任意）</div>
+                          <div style={S.lbl}>作物（任意）</div>
                           <select style={S.select} value={prjForm.crop_id} onChange={e => setPrjForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
                             <option value={0}>未指定</option>
                             {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場（任意）</div>
+                          <div style={S.lbl}>圃場（任意）</div>
                           <select style={S.select} value={prjForm.field} onChange={e => setPrjForm(f => ({ ...f, field:e.target.value }))}>
                             <option value="">未指定</option>
                             {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
@@ -2391,11 +2389,11 @@ export default function App() {
                       </div>
                       <div style={{ display:"flex", gap:10 }}>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />開始日</div>
+                          <div style={S.lbl}>開始日</div>
                           <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={prjForm.start_date} onChange={e => setPrjForm(f => ({ ...f, start_date:e.target.value }))} />
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />終了予定日</div>
+                          <div style={S.lbl}>終了予定日</div>
                           <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={prjForm.end_date} onChange={e => setPrjForm(f => ({ ...f, end_date:e.target.value }))} />
                         </div>
                       </div>
@@ -2403,7 +2401,7 @@ export default function App() {
                         <button style={{ ...S.btn, flex:1, width:"auto", opacity:submitting?0.7:1 }} onClick={addProject} disabled={submitting}>
                           {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />追加する</>}
                         </button>
-                        <button onClick={() => setShowAddProject(false)} style={{ flex:1, padding:"12px 0", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:600, cursor:"pointer" }}>
+                        <button onClick={() => setShowAddProject(false)} style={{ flex:1, padding:"12px 0", borderRadius:8, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:600, cursor:"pointer" }}>
                           キャンセル
                         </button>
                       </div>
@@ -2445,7 +2443,7 @@ export default function App() {
                               <MoreVertical size={15} strokeWidth={2} />
                             </button>
                             {openMenuId === `prj${project.id}` && (
-                              <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                              <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                                 <button onClick={() => { setOpenMenuId(null); deleteProject(project.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                                   <Trash2 size={13} strokeWidth={2} />削除
                                 </button>
@@ -2483,7 +2481,7 @@ export default function App() {
                     {/* チケット追加フォーム */}
                     {isAdmin && (
                       addingTicketProjectId === project.id ? (
-                        <div style={{ background:C.bg, borderRadius:10, padding:"10px 12px", border:`1px solid ${C.border}` }}>
+                        <div style={{ background:C.bg, borderRadius:8, padding:"10px 12px", border:`1px solid ${C.border}` }}>
                           <input style={{ ...S.input, marginBottom:8 }} placeholder="チケットのタイトル *" value={tForm.title} onChange={e => setTForm(f => ({ ...f, title:e.target.value }))} />
                           <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                             <select style={{ ...S.select, marginBottom:0, flex:1 }} value={tForm.work_type} onChange={e => setTForm(f => ({ ...f, work_type:e.target.value }))}>
@@ -2497,10 +2495,10 @@ export default function App() {
                           </div>
                           <div style={{ display:"flex", gap:8 }}>
                             <input type="date" style={{ ...S.input, marginBottom:0, flex:1, maxWidth:"100%" }} value={tForm.due_date} onChange={e => setTForm(f => ({ ...f, due_date:e.target.value }))} />
-                            <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:C.primary, border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
+                            <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:C.primary, border:"none", borderRadius:8, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
                               {submitting ? <RefreshCw size={14} strokeWidth={2} /> : <Save size={14} strokeWidth={2} />}
                             </button>
-                            <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
+                            <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
                               <X size={14} strokeWidth={2} />
                             </button>
                           </div>
@@ -2542,7 +2540,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div style={{ overflowX:"auto" as const, background:C.card, borderRadius:14, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", marginBottom:10 }}>
+                <div style={{ overflowX:"auto" as const, background:C.card, borderRadius:8, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", marginBottom:10 }}>
                   <table style={{ width:"100%", borderCollapse:"collapse" as const, fontSize:12 }}>
                     <thead>
                       <tr style={{ background:C.bg }}>
@@ -2628,7 +2626,7 @@ export default function App() {
       {tab === "crops" && (
         <div style={S.page}>
           {/* ⑩ 作物 / 圃場 サブタブ */}
-          <div style={{ display:"flex", background:C.bg, borderRadius:10, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
+          <div style={{ display:"flex", background:C.bg, borderRadius:8, padding:3, marginBottom:14, border:`1px solid ${C.border}` }}>
             {(["crops","fields"] as const).map(k => (
               <button key={k} onClick={() => setCropListTab(k)} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.15s", background: cropListTab === k ? C.card : "transparent", color: cropListTab === k ? C.primary : C.textMuted, boxShadow: cropListTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
                 {k === "crops" ? "作物" : "圃場"}
@@ -2648,11 +2646,11 @@ export default function App() {
                 </button>
                 {showCropAddForm && (
                   <div style={{ ...S.card, animation:"slideDown 0.15s ease" }}>
-                    <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物名 *</div>
+                    <div style={S.lbl}>作物名 *</div>
                     <input style={S.input} placeholder="例: キャベツ" value={cForm.name} onChange={e => setCForm(f => ({ ...f, name:e.target.value }))} />
-                    <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />作付け日</div>
+                    <div style={S.lbl}>作付け日</div>
                     <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
-                    <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />目標収穫量（kg/年・任意）</div>
+                    <div style={S.lbl}>目標収穫量（kg/年・任意）</div>
                     <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
                       {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
@@ -2680,7 +2678,7 @@ export default function App() {
                           <MoreVertical size={18} strokeWidth={2} />
                         </button>
                         {openMenuId === `c${c.id}` && (
-                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                             <button onClick={() => { setOpenMenuId(null); deleteCrop(c.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                               <Trash2 size={13} strokeWidth={2} />削除
                             </button>
@@ -2699,7 +2697,7 @@ export default function App() {
               <>
                 <div style={S.sec}>圃場を追加</div>
                 <div style={S.card}>
-                  <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場名 *</div>
+                  <div style={S.lbl}>圃場名 *</div>
                   <input style={S.input} placeholder="例: A圃場" value={fForm.name} onChange={e => setFForm({ name:e.target.value })} />
                   <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addField} disabled={submitting}>
                     {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />圃場を追加</>}
@@ -2729,7 +2727,7 @@ export default function App() {
                           <MoreVertical size={18} strokeWidth={2} />
                         </button>
                         {openMenuId === `f${f.id}` && (
-                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                             <button onClick={() => { setOpenMenuId(null); deleteField(f.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                               <Trash2 size={13} strokeWidth={2} />削除
                             </button>
@@ -2782,7 +2780,7 @@ export default function App() {
         <div style={S.page}>
           <div style={S.sec}>農場の場所設定</div>
           <div style={S.card}>
-            <div style={S.lbl}><MapPin size={13} strokeWidth={2} />場所を検索</div>
+            <div style={S.lbl}>場所を検索</div>
             <div style={{ display:"flex", gap:8, marginBottom:12, width:"100%" }}>
               <input
                 style={{ ...S.input, marginBottom:0, flex:1, minWidth:0 }}
@@ -2794,20 +2792,20 @@ export default function App() {
               <button
                 onClick={searchLocation}
                 disabled={locSearching}
-                style={{ background:C.primary, color:"#fff", border:"none", borderRadius:10, padding:"0 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600, opacity:locSearching?0.7:1, flexShrink:0 }}
+                style={{ background:C.primary, color:"#fff", border:"none", borderRadius:8, padding:"0 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600, opacity:locSearching?0.7:1, flexShrink:0 }}
               >
                 {locSearching ? <RefreshCw size={14} strokeWidth={2} /> : <Search size={14} strokeWidth={2} />}
                 検索
               </button>
             </div>
             {locPreview && (
-              <div style={{ background:C.primary3, borderRadius:10, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
+              <div style={{ background:C.primary3, borderRadius:8, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
                 <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:4 }}>{locPreview.name}</div>
                 <div style={{ fontSize:11, color:C.textMuted }}>緯度: {locPreview.lat.toFixed(4)}　経度: {locPreview.lng.toFixed(4)}</div>
               </div>
             )}
             {!locPreview && weatherCoords && (
-              <div style={{ background:C.bg, borderRadius:10, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.border}` }}>
+              <div style={{ background:C.bg, borderRadius:8, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.border}` }}>
                 <div style={{ fontSize:11, color:C.textMuted, marginBottom:2 }}>現在の設定</div>
                 <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{weatherCoords.name}</div>
                 <div style={{ fontSize:11, color:C.textMuted }}>緯度: {weatherCoords.lat.toFixed(4)}　経度: {weatherCoords.lng.toFixed(4)}</div>
@@ -2824,14 +2822,14 @@ export default function App() {
 
           <div style={S.sec}>アカウントを作成</div>
           <div style={S.card}>
-            <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />名前 *</div>
+            <div style={S.lbl}>名前 *</div>
             <input style={S.input} placeholder="例: 山田 三郎" value={invForm.name} onChange={e => setInvForm(f => ({ ...f, name:e.target.value }))} />
-            <div style={S.lbl}><Users size={13} strokeWidth={2} />役割</div>
+            <div style={S.lbl}>役割</div>
             <select style={S.select} value={invForm.role} onChange={e => setInvForm(f => ({ ...f, role:e.target.value as Role }))}>
               <option value="admin">管理者</option>
               <option value="worker">作業者</option>
             </select>
-            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />ユーザーID *</div>
+            <div style={S.lbl}>ユーザーID *</div>
             <input style={S.input} placeholder="例: worker-001" value={invForm.login_id} onChange={e => setInvForm(f => ({ ...f, login_id:e.target.value }))} />
             <div style={{ ...S.lbl, flexWrap:"nowrap" as const, whiteSpace:"nowrap" as const }}><KeyRound size={13} strokeWidth={2} />パスワード * <span style={{ fontWeight:400, color:C.textMuted, fontSize:11 }}>（6文字以上）</span></div>
             <input type="password" style={{ ...S.input, padding:"11px 14px" }} placeholder="パスワードを設定" value={invForm.password} onChange={e => setInvForm(f => ({ ...f, password:e.target.value }))} />
@@ -2931,7 +2929,7 @@ export default function App() {
 
                 {/* 天気 */}
                 {r.weather && (
-                  <div style={{ background:"#f0faf0", borderRadius:10, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" as const }}>
+                  <div style={{ background:"#f0faf0", borderRadius:8, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" as const }}>
                     <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{r.weather}</span>
                     {r.temp && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Thermometer size={13} color="#e07020" strokeWidth={2}/>{r.temp}°C</span>}
                     {r.humidity && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Droplets size={13} color="#1976d2" strokeWidth={2}/>{r.humidity}%</span>}
@@ -2970,7 +2968,7 @@ export default function App() {
 
                 {/* メモ */}
                 {r.note && (
-                  <div style={{ fontSize:13, color:C.textSub, padding:"10px 12px", background:C.bg, borderRadius:10, borderLeft:`3px solid ${C.primary4}`, marginBottom:12 }}>
+                  <div style={{ fontSize:13, color:C.textSub, padding:"10px 12px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}`, marginBottom:12 }}>
                     {r.note}
                   </div>
                 )}
@@ -2984,14 +2982,14 @@ export default function App() {
                 <div style={{ display:"flex", gap:8 }}>
                   <button
                     onClick={() => { setSelectedReport(null); handleCopyReport(r); }}
-                    style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 0", borderRadius:10, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                    style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 0", borderRadius:8, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
                   >
                     <Copy size={14} strokeWidth={2} />コピーして作成
                   </button>
                   {(isAdmin || r.user_id === currentUser?.id) && (
                     <button
                       onClick={() => { setSelectedReport(null); deleteReport(r.id); }}
-                      style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 16px", borderRadius:10, border:`1.5px solid ${C.danger}22`, background:C.dangerBg, color:C.danger, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                      style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 16px", borderRadius:8, border:`1.5px solid ${C.danger}22`, background:C.dangerBg, color:C.danger, fontSize:13, fontWeight:700, cursor:"pointer" }}
                     >
                       <Trash2 size={14} strokeWidth={2} />削除
                     </button>
@@ -3053,7 +3051,7 @@ export default function App() {
 
                 {/* メモ */}
                 {s.note && (
-                  <div style={{ fontSize:13, color:C.textSub, padding:"10px 12px", background:C.bg, borderRadius:10, borderLeft:`3px solid ${C.primary4}`, marginBottom:12 }}>
+                  <div style={{ fontSize:13, color:C.textSub, padding:"10px 12px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}`, marginBottom:12 }}>
                     {s.note}
                   </div>
                 )}
@@ -3119,7 +3117,7 @@ export default function App() {
                 const lastDate = crop.last_work_date || stat?.last?.date || null;
                 const isManual = !!crop.last_work_date;
                 return (
-                  <div style={{ background:C.card, borderRadius:14, padding:"12px 16px", marginBottom:16, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+                  <div style={{ background:C.card, borderRadius:8, padding:"12px 16px", marginBottom:16, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
                     {/* 作付け日 */}
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingBottom:10, borderBottom:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:12, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
@@ -3154,7 +3152,7 @@ export default function App() {
               })()}
 
               {/* 目標収穫量 編集行 */}
-              <div style={{ background:C.card, borderRadius:14, padding:"12px 16px", marginBottom:16, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+              <div style={{ background:C.card, borderRadius:8, padding:"12px 16px", marginBottom:16, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                   <span style={{ fontSize:12, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
                     <PackageCheck size={12} strokeWidth={2} />目標収穫量（kg/年）
@@ -3204,7 +3202,7 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                  <div style={{ background:C.card, borderRadius:14, padding:"16px 6px 8px", marginBottom:14, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }}>
+                  <div style={{ background:C.card, borderRadius:8, padding:"16px 6px 8px", marginBottom:14, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }}>
                     {yearTotal === 0 ? (
                       <div style={{ textAlign:"center" as const, padding:"32px 0", color:C.textMuted, fontSize:13 }}>{safeYear}年の収穫記録はありません</div>
                     ) : (
@@ -3256,7 +3254,7 @@ export default function App() {
                             <MoreVertical size={15} strokeWidth={2} />
                           </button>
                           {openMenuId === `dr${r.id}` && (
-                            <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                            <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                               <button onClick={() => { setOpenMenuId(null); deleteReport(r.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                                 <Trash2 size={13} strokeWidth={2} />削除
                               </button>
@@ -3320,18 +3318,18 @@ export default function App() {
                 {showAddProject ? (
                   <div style={S.card}>
                     <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}><PlusCircle size={15} strokeWidth={2} color={C.primary} />新しい計画を登録</div>
-                    <div style={S.lbl}><ClipboardList size={13} strokeWidth={2} />計画名 *</div>
+                    <div style={S.lbl}>計画名 *</div>
                     <input style={S.input} placeholder="例: 2024年 ぶどう栽培" value={prjForm.name} onChange={e => setPrjForm(f => ({ ...f, name:e.target.value }))} />
                     <div style={{ display:"flex", gap:10 }}>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物（任意）</div>
+                        <div style={S.lbl}>作物（任意）</div>
                         <select style={S.select} value={prjForm.crop_id} onChange={e => setPrjForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
                           <option value={0}>未指定</option>
                           {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場（任意）</div>
+                        <div style={S.lbl}>圃場（任意）</div>
                         <select style={S.select} value={prjForm.field} onChange={e => setPrjForm(f => ({ ...f, field:e.target.value }))}>
                           <option value="">未指定</option>
                           {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
@@ -3340,11 +3338,11 @@ export default function App() {
                     </div>
                     <div style={{ display:"flex", gap:10 }}>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />開始日</div>
+                        <div style={S.lbl}>開始日</div>
                         <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={prjForm.start_date} onChange={e => setPrjForm(f => ({ ...f, start_date:e.target.value }))} />
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />終了予定日</div>
+                        <div style={S.lbl}>終了予定日</div>
                         <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={prjForm.end_date} onChange={e => setPrjForm(f => ({ ...f, end_date:e.target.value }))} />
                       </div>
                     </div>
@@ -3352,7 +3350,7 @@ export default function App() {
                       <button style={{ ...S.btn, flex:1, width:"auto", opacity:submitting?0.7:1 }} onClick={addProject} disabled={submitting}>
                         {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />追加する</>}
                       </button>
-                      <button onClick={() => setShowAddProject(false)} style={{ flex:1, padding:"12px 0", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:600, cursor:"pointer" }}>
+                      <button onClick={() => setShowAddProject(false)} style={{ flex:1, padding:"12px 0", borderRadius:8, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:600, cursor:"pointer" }}>
                         キャンセル
                       </button>
                     </div>
@@ -3395,7 +3393,7 @@ export default function App() {
                             <MoreVertical size={15} strokeWidth={2} />
                           </button>
                           {openMenuId === `prj${project.id}` && (
-                            <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:10, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
+                            <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
                               <button onClick={() => { setOpenMenuId(null); deleteProject(project.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                                 <Trash2 size={13} strokeWidth={2} />削除
                               </button>
@@ -3429,7 +3427,7 @@ export default function App() {
                   )}
                   {isAdmin && (
                     addingTicketProjectId === project.id ? (
-                      <div style={{ background:C.bg, borderRadius:10, padding:"10px 12px", border:`1px solid ${C.border}` }}>
+                      <div style={{ background:C.bg, borderRadius:8, padding:"10px 12px", border:`1px solid ${C.border}` }}>
                         <input style={{ ...S.input, marginBottom:8 }} placeholder="チケットのタイトル *" value={tForm.title} onChange={e => setTForm(f => ({ ...f, title:e.target.value }))} />
                         <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                           <select style={{ ...S.select, marginBottom:0, flex:1 }} value={tForm.work_type} onChange={e => setTForm(f => ({ ...f, work_type:e.target.value }))}>
@@ -3443,10 +3441,10 @@ export default function App() {
                         </div>
                         <div style={{ display:"flex", gap:8 }}>
                           <input type="date" style={{ ...S.input, marginBottom:0, flex:1, maxWidth:"100%" }} value={tForm.due_date} onChange={e => setTForm(f => ({ ...f, due_date:e.target.value }))} />
-                          <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:C.primary, border:"none", borderRadius:10, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
+                          <button onClick={() => addTicket(project.id)} disabled={submitting} style={{ background:C.primary, border:"none", borderRadius:8, padding:"0 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", opacity:submitting?0.7:1, flexShrink:0 }}>
                             {submitting ? <RefreshCw size={14} strokeWidth={2} /> : <Save size={14} strokeWidth={2} />}
                           </button>
-                          <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
+                          <button onClick={() => { setAddingTicketProjectId(null); setTForm({ title:"", work_type:"収穫", assigned_user_id:0, due_date:"" }); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"0 12px", color:C.textSub, fontSize:13, cursor:"pointer", flexShrink:0 }}>
                             <X size={14} strokeWidth={2} />
                           </button>
                         </div>
@@ -3480,7 +3478,7 @@ export default function App() {
                       <button onClick={() => { const d = new Date(progressWeekStart); d.setDate(d.getDate() + 7); setProgressWeekStart(d); }} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 8px", cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center" }}><ChevronRight size={14} strokeWidth={2.5} /></button>
                     </div>
                   </div>
-                  <div style={{ overflowX:"auto" as const, background:C.card, borderRadius:14, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", marginBottom:10 }}>
+                  <div style={{ overflowX:"auto" as const, background:C.card, borderRadius:8, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", marginBottom:10 }}>
                     <table style={{ width:"100%", borderCollapse:"collapse" as const, fontSize:12 }}>
                       <thead>
                         <tr style={{ background:C.bg }}>
@@ -3541,7 +3539,7 @@ export default function App() {
             {/* ヘッダー */}
             <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <div style={{ background:C.primary3, borderRadius:10, padding:7, flexShrink:0 }}>
+                <div style={{ background:C.primary3, borderRadius:8, padding:7, flexShrink:0 }}>
                   <PenLine size={16} color={C.primary} strokeWidth={2} />
                 </div>
                 <span style={{ fontWeight:700, fontSize:16, color:C.text }}>作業記録</span>
@@ -3554,7 +3552,7 @@ export default function App() {
 
             <div style={{ padding:"0 16px" }}>
               {/* 天気表示 */}
-              <div style={{ background:"#f0faf0", borderRadius:10, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
+              <div style={{ background:"#f0faf0", borderRadius:8, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
                 <div style={{ fontSize:11, color:C.textSub, fontWeight:600, marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
                   <MapPin size={11} color={C.primary} strokeWidth={2} />{weatherCoords?.name ?? "..."} · 天気（自動入力）
                 </div>
@@ -3575,19 +3573,19 @@ export default function App() {
               </div>
 
               {/* 日付 */}
-              <div style={S.lbl}><CalendarDays size={13} strokeWidth={2} />日付</div>
+              <div style={S.lbl}>日付</div>
               <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
 
               {/* 作物・圃場 2カラム */}
               <div style={{ display:"flex", gap:10 }}>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={S.lbl}><Leaf size={13} strokeWidth={2} />作物</div>
+                  <div style={S.lbl}>作物</div>
                   <select style={{ ...S.select }} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
                     {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={S.lbl}><MapPin size={13} strokeWidth={2} />圃場</div>
+                  <div style={S.lbl}>圃場</div>
                   <select style={{ ...S.select }} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
                     {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
                   </select>
@@ -3595,7 +3593,7 @@ export default function App() {
               </div>
 
               {/* 作業種別 */}
-              <div style={S.lbl}><Wheat size={13} strokeWidth={2} />作業の種類</div>
+              <div style={S.lbl}>作業の種類</div>
               {workCategories.length > 0 ? (
                 <select style={S.select} value={rForm.work_category_id}
                   onChange={e => {
@@ -3622,20 +3620,20 @@ export default function App() {
               {quickExpanded && (
                 <>
                   {/* 作業者 */}
-                  <div style={S.lbl}><UserCircle size={13} strokeWidth={2} />作業者</div>
+                  <div style={S.lbl}>作業者</div>
                   <select style={S.select} value={rForm.user_id} onChange={e => setRForm(f => ({ ...f, user_id:Number(e.target.value) }))}>
                     {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
 
                   {/* 実績数量 */}
-                  <div style={S.lbl}><PackageCheck size={13} strokeWidth={2} />実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
+                  <div style={S.lbl}>実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
                   <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
                     <input type="number" style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: 20" value={rForm.quantity_value} onChange={e => setRForm(f => ({ ...f, quantity_value:e.target.value, quantity:e.target.value }))} />
                     <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:13, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
                   </div>
 
                   {/* 作業時刻 */}
-                  <div style={S.lbl}><Clock size={13} strokeWidth={2} />作業時刻</div>
+                  <div style={S.lbl}>作業時刻</div>
                   <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
                     <input type="time" style={{ ...S.input, marginBottom:0, flex:1 }} value={rForm.work_start} onChange={e => setRForm(f => ({ ...f, work_start:e.target.value }))} />
                     <span style={{ color:C.textMuted, flexShrink:0, fontSize:13 }}>〜</span>
@@ -3652,7 +3650,7 @@ export default function App() {
                   )}
 
                   {/* 写真 */}
-                  <div style={S.lbl}><Camera size={13} strokeWidth={2} />写真</div>
+                  <div style={S.lbl}>写真</div>
                   <input type="file" id="img-input-quick" accept="image/*" style={{ display:"none" }}
                     onChange={e => {
                       const file = e.target.files?.[0];
@@ -3664,25 +3662,25 @@ export default function App() {
                   />
                   {imagePreview ? (
                     <div style={{ position:"relative", marginBottom:12 }}>
-                      <img src={imagePreview} alt="preview" style={{ width:"100%", borderRadius:10, maxHeight:200, objectFit:"cover", display:"block" }} />
+                      <img src={imagePreview} alt="preview" style={{ width:"100%", borderRadius:8, maxHeight:200, objectFit:"cover", display:"block" }} />
                       <button onClick={() => { setImageFile(null); setImagePreview(""); }}
                         style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.55)", border:"none", borderRadius:20, padding:"5px 10px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600 }}>
                         <X size={12} strokeWidth={2.5} />削除
                       </button>
                     </div>
                   ) : (
-                    <label htmlFor="img-input-quick" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, border:`2px dashed ${C.border}`, borderRadius:10, padding:"20px 0", cursor:"pointer", marginBottom:12, color:C.textMuted, fontSize:13, background:C.bg }}>
+                    <label htmlFor="img-input-quick" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, border:`2px dashed ${C.border}`, borderRadius:8, padding:"20px 0", cursor:"pointer", marginBottom:12, color:C.textMuted, fontSize:13, background:C.bg }}>
                       <Camera size={24} color={C.textMuted} strokeWidth={1.5} />
                       <span>タップして写真を選択</span>
                     </label>
                   )}
 
                   {/* 農薬複数選択 */}
-                  <div style={S.lbl}><FlaskConical size={13} strokeWidth={2} />使用農薬（任意）</div>
+                  <div style={S.lbl}>使用農薬（任意）</div>
                   {pesticides.length === 0 ? (
                     <div style={{ fontSize:12, color:C.textMuted, padding:"8px 12px", background:C.bg, borderRadius:8, marginBottom:12 }}>登録済みの農薬がありません</div>
                   ) : (
-                    <div style={{ border:`1.5px solid ${C.border}`, borderRadius:10, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
+                    <div style={{ border:`1.5px solid ${C.border}`, borderRadius:8, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
                       {pesticides.map(p => (
                         <div key={p.id} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:6, marginBottom:6 }}>
                           <label style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", cursor:"pointer" }}>
@@ -3716,7 +3714,7 @@ export default function App() {
                   )}
 
                   {/* 土壌pH */}
-                  <div style={S.lbl}><Droplets size={13} strokeWidth={2} />土壌pH（任意）</div>
+                  <div style={S.lbl}>土壌pH（任意）</div>
                   <input
                     type="number" placeholder="例: 6.5" min="0" max="14" step="0.1"
                     value={soilPh} onChange={e => setSoilPh(e.target.value)}
@@ -3724,7 +3722,7 @@ export default function App() {
                   />
 
                   {/* メモ */}
-                  <div style={S.lbl}><PenLine size={13} strokeWidth={2} />メモ</div>
+                  <div style={S.lbl}>メモ</div>
                   <div style={{ position:"relative", marginBottom:12 }}>
                     <input style={{ ...S.input, marginBottom:0, paddingRight: hasSpeech ? 44 : 14 }} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
                     {hasSpeech && (
@@ -3760,11 +3758,11 @@ export default function App() {
               <KeyRound size={15} color={C.primary} strokeWidth={2} />
               {setAuthTarget.name} のログイン設定
             </div>
-            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />ユーザーID</div>
+            <div style={S.lbl}>ユーザーID</div>
             <input style={S.input} placeholder="例: worker-001" value={setAuthForm.login_id} onChange={e => setSetAuthFormState(f => ({ ...f, login_id:e.target.value }))} />
-            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />パスワード（6文字以上）</div>
+            <div style={S.lbl}>パスワード（6文字以上）</div>
             <input type="password" style={S.input} placeholder="パスワード" value={setAuthForm.password} onChange={e => setSetAuthFormState(f => ({ ...f, password:e.target.value }))} />
-            <div style={S.lbl}><KeyRound size={13} strokeWidth={2} />パスワード確認</div>
+            <div style={S.lbl}>パスワード確認</div>
             <input type="password" style={S.input} placeholder="もう一度入力" value={setAuthForm.confirmPass} onChange={e => setSetAuthFormState(f => ({ ...f, confirmPass:e.target.value }))} />
             <button style={{ ...S.btn, opacity:setAuthBusy?0.7:1 }} disabled={setAuthBusy} onClick={saveUserAuth}>
               {setAuthBusy ? <><RefreshCw size={16} strokeWidth={2} />設定中...</> : <><Save size={16} strokeWidth={2} />ログイン情報を設定する</>}
@@ -3828,7 +3826,7 @@ export default function App() {
             onClick={e => e.stopPropagation()}>
             <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"0 auto 20px" }} />
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-              <div style={{ background:C.dangerBg, borderRadius:10, padding:8, flexShrink:0 }}>
+              <div style={{ background:C.dangerBg, borderRadius:8, padding:8, flexShrink:0 }}>
                 <Trash2 size={18} color={C.danger} strokeWidth={2} />
               </div>
               <div>
@@ -3840,11 +3838,11 @@ export default function App() {
             <div style={{ display:"flex", gap:10 }}>
               <button
                 onClick={() => setDeleteModal(null)}
-                style={{ flex:1, padding:"13px 0", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:15, fontWeight:700, cursor:"pointer" }}
+                style={{ flex:1, padding:"13px 0", borderRadius:8, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:15, fontWeight:700, cursor:"pointer" }}
               >キャンセル</button>
               <button
                 onClick={() => { deleteModal.onConfirm(); setDeleteModal(null); }}
-                style={{ flex:1, padding:"13px 0", borderRadius:10, border:"none", background:C.danger, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                style={{ flex:1, padding:"13px 0", borderRadius:8, border:"none", background:C.danger, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
               ><Trash2 size={15} strokeWidth={2} />削除する</button>
             </div>
           </div>
