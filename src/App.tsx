@@ -2929,7 +2929,6 @@ export default function App() {
       {/* ───── レポート詳細モーダル ───── */}
       {selectedReport && (() => {
         const r = selectedReport;
-        const ci = getCropIcon(cropName(r.crop_id));
         return (
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:300, display:"flex", alignItems:"flex-end" }}
             onClick={() => setSelectedReport(null)}>
@@ -2938,20 +2937,14 @@ export default function App() {
               <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"12px auto 0" }} />
               {/* ヘッダー */}
               <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ background:ci.bg, borderRadius:9, padding:7, flexShrink:0 }}>
-                    <ci.Icon size={16} color={ci.color} strokeWidth={2} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{cropName(r.crop_id)}</div>
-                    <div style={{ fontSize:12, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
-                      <CalendarDays size={11} strokeWidth={2} />{r.date}
-                      {r.field && <><span style={{ color:C.border }}>·</span><span>{r.field}</span></>}
-                    </div>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{cropName(r.crop_id)}</div>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
+                    {r.date}{r.field && ` · ${r.field}`}
                   </div>
                 </div>
-                <button onClick={() => setSelectedReport(null)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 8px", cursor:"pointer", display:"flex", color:C.textMuted }}>
-                  <X size={16} strokeWidth={2} />
+                <button onClick={() => setSelectedReport(null)} style={{ background:"none", border:"none", padding:"6px", cursor:"pointer", display:"flex", color:C.textMuted }}>
+                  <X size={18} strokeWidth={2} />
                 </button>
               </div>
 
@@ -3070,7 +3063,6 @@ export default function App() {
         const s = selectedSchedule;
         const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
         const cropObj = crops.find(c => c.name === s.crop);
-        const ci = getCropIcon(s.crop ?? "");
         return (
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:300, display:"flex", alignItems:"flex-end" }}
             onClick={() => setSelectedSchedule(null)}>
@@ -3080,24 +3072,15 @@ export default function App() {
 
               {/* ヘッダー */}
               <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ background:ci.bg, borderRadius:9, padding:7, flexShrink:0 }}>
-                    <ci.Icon size={16} color={ci.color} strokeWidth={2} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{s.title}</div>
-                    <div style={{ fontSize:12, color:C.textMuted, display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
-                      <CalendarDays size={11} strokeWidth={2} />{s.date}
-                      {s.crop && <><span style={{ color:C.border }}>·</span><span>{s.crop}</span></>}
-                    </div>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{s.title}</div>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
+                    {s.date}{s.crop && ` · ${s.crop}`}
                   </div>
                 </div>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:"#c0392b", background:"#fdecea", borderRadius:6, padding:"3px 9px" }}>未報告</span>
-                  <button onClick={() => setSelectedSchedule(null)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 8px", cursor:"pointer", display:"flex", color:C.textMuted }}>
-                    <X size={16} strokeWidth={2} />
-                  </button>
-                </div>
+                <button onClick={() => setSelectedSchedule(null)} style={{ background:"none", border:"none", padding:"6px", cursor:"pointer", display:"flex", color:C.textMuted }}>
+                  <X size={18} strokeWidth={2} />
+                </button>
               </div>
 
               <div style={{ padding:"0 16px" }}>
