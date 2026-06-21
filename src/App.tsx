@@ -1712,14 +1712,14 @@ export default function App() {
                     <button
                       key={s.id}
                       onClick={() => setSelectedSchedule(s)}
-                      style={{ width:"100%", background:"#fff", borderRadius:0, padding:"10px 0", border:"none", borderBottom: i === unreported.length - 1 ? "none" : `1px solid ${C.border}`, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
+                      style={{ width:"100%", background:"#fff", borderRadius:0, padding:"16px 0", border:"none", borderBottom: i === unreported.length - 1 ? "none" : `1px solid ${C.border}`, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
                     >
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
                           <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
                           <span style={{ fontSize:11, fontWeight:600, color:"#f57f17", flexShrink:0 }}>未報告</span>
                         </div>
-                        <div style={{ fontSize:11, color:C.textSub, marginTop:2 }}>
+                        <div style={{ fontSize:11, color:C.textSub, marginTop:4 }}>
                           {[s.date, s.crop, assignedUser?.name, s.work_type].filter(Boolean).join(" · ")}
                         </div>
                       </div>
