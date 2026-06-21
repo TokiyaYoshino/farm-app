@@ -3086,7 +3086,7 @@ export default function App() {
           : chartData;
         const stat = cropStats.find(c => c.id === selectedCropId);
         return (
-          <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:200, overflowY:"auto", paddingBottom:80 }} className="anim-slideUp">
+          <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:95, overflowY:"auto", paddingBottom:80 }} className="anim-slideUp">
             <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, position:"sticky", top:0, zIndex:10 }}>
               <button onClick={() => setSelectedCropId(null)} style={{ background:"none", border:"none", padding:"6px 6px", color:C.textSub, cursor:"pointer", display:"flex", flexShrink:0 }}>
                 <ChevronLeft size={18} strokeWidth={2.5} />
