@@ -1272,9 +1272,9 @@ export default function App() {
   const navBtn = (active: boolean): CSSProperties => ({
     flex:1, padding:"10px 0 8px", border:"none", background:"none", cursor:"pointer",
     display:"flex", flexDirection:"column", alignItems:"center", gap:3,
-    color: active ? C.primary : C.textMuted,
+    color: active ? "#2E7D32" : "#8A8378",
     fontSize:10, fontWeight: active ? 700 : 500,
-    borderTop: active ? `3px solid ${C.primary}` : "3px solid transparent",
+    borderTop: active ? "3px solid #2E7D32" : "3px solid transparent",
     minHeight:48,
   });
 
@@ -1706,18 +1706,18 @@ export default function App() {
                 <div style={{ fontSize:13, fontWeight:700, color:"#c2410c", marginBottom:8 }}>
                   未報告の作業
                 </div>
-                {unreported.map(s => {
+                {unreported.map((s, i) => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
                   return (
                     <button
                       key={s.id}
                       onClick={() => setSelectedSchedule(s)}
-                      style={{ width:"100%", background:"#fff7ed", borderRadius:8, padding:"10px 14px", border:`1px solid #fed7aa`, marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
+                      style={{ width:"100%", background:"#fff", borderRadius:0, padding:"10px 0", border:"none", borderBottom: i === unreported.length - 1 ? "none" : `1px solid ${C.border}`, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
                     >
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
                           <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
-                          <span style={{ fontSize:10, fontWeight:700, color:"#c2410c", background:"#fff7ed", border:`1px solid #fed7aa`, borderRadius:5, padding:"2px 7px", flexShrink:0 }}>未報告</span>
+                          <span style={{ fontSize:11, fontWeight:600, color:"#f57f17", flexShrink:0 }}>未報告</span>
                         </div>
                         <div style={{ fontSize:11, color:C.textSub, marginTop:2 }}>
                           {[s.date, s.crop, assignedUser?.name, s.work_type].filter(Boolean).join(" · ")}
