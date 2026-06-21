@@ -2963,7 +2963,7 @@ export default function App() {
 
                 {/* メモ */}
                 {r.note && (
-                  <div style={{ fontSize:13, color:C.textSub, padding:"10px 12px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}`, marginBottom:12 }}>
+                  <div style={{ fontSize:13, color:C.textSub, marginBottom:12, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
                     {r.note}
                   </div>
                 )}
@@ -2977,7 +2977,7 @@ export default function App() {
                 <div style={{ display:"flex", gap:8 }}>
                   <button
                     onClick={() => { setSelectedReport(null); handleCopyReport(r); }}
-                    style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 0", borderRadius:8, border:`1.5px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                    style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 0", borderRadius:8, border:`1px solid ${C.primary}`, background:"transparent", color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
                   >
                     <Copy size={14} strokeWidth={2} />コピーして作成
                   </button>
@@ -3046,7 +3046,7 @@ export default function App() {
 
                 {/* メモ */}
                 {s.note && (
-                  <div style={{ fontSize:13, color:C.textSub, padding:"10px 12px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}`, marginBottom:12 }}>
+                  <div style={{ fontSize:13, color:C.textSub, marginBottom:12, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
                     {s.note}
                   </div>
                 )}
@@ -3120,7 +3120,7 @@ export default function App() {
                       </span>
                       <button
                         onClick={() => setDatePickerTarget({ cropId:crop.id, field:"start_date", value:crop.start_date || "" })}
-                        style={{ fontSize:13, fontWeight:700, color:C.primary, background:C.primary3, border:`1px solid ${C.primary4}`, borderRadius:8, padding:"4px 12px", cursor:"pointer" }}
+                        style={{ fontSize:13, fontWeight:700, color: crop.start_date ? C.text : C.textMuted, background:"none", border:"none", padding:0, cursor:"pointer" }}
                       >
                         {crop.start_date || "未設定"}
                       </button>
@@ -3132,11 +3132,11 @@ export default function App() {
                       </span>
                       <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                         {isManual && (
-                          <span style={{ fontSize:10, color:C.textMuted, background:C.bg, borderRadius:5, padding:"1px 6px", border:`1px solid ${C.border}` }}>手動</span>
+                          <span style={{ fontSize:10, color:C.textMuted }}>手動</span>
                         )}
                         <button
                           onClick={() => setDatePickerTarget({ cropId:crop.id, field:"last_work_date", value:crop.last_work_date || stat?.last?.date || "" })}
-                          style={{ fontSize:13, fontWeight:700, color:C.primary, background:C.primary3, border:`1px solid ${C.primary4}`, borderRadius:8, padding:"4px 12px", cursor:"pointer" }}
+                          style={{ fontSize:13, fontWeight:700, color: lastDate ? C.text : C.textMuted, background:"none", border:"none", padding:0, cursor:"pointer" }}
                         >
                           {lastDate || "未設定"}
                         </button>
@@ -3167,7 +3167,7 @@ export default function App() {
                   ) : (
                     <button
                       onClick={() => { setTargetYieldInput(crop.target_yield ? String(crop.target_yield) : ""); setEditingTargetYield(true); }}
-                      style={{ fontSize:13, fontWeight:700, color:C.primary, background:C.primary3, border:`1px solid ${C.primary4}`, borderRadius:8, padding:"4px 12px", cursor:"pointer" }}
+                      style={{ fontSize:13, fontWeight:700, color: crop.target_yield ? C.text : C.textMuted, background:"none", border:"none", padding:0, cursor:"pointer" }}
                     >
                       {crop.target_yield ? `${crop.target_yield}kg` : "未設定"}
                     </button>
@@ -3267,7 +3267,7 @@ export default function App() {
                     ].filter(Boolean).join(" · ")}
                   </div>
                   {r.note && (
-                    <div style={{ fontSize:12, color:C.textSub, marginTop:8, padding:"7px 10px", background:C.bg, borderRadius:8, borderLeft:`3px solid ${C.primary4}` }}>
+                    <div style={{ fontSize:12, color:C.textSub, marginTop:8, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
                       {r.note}
                     </div>
                   )}
@@ -3276,7 +3276,7 @@ export default function App() {
                   )}
                   <button
                     onClick={() => { setSelectedCropId(null); handleCopyReport(r); }}
-                    style={{ marginTop:10, display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:8, border:`1px solid ${C.primary4}`, background:C.primary3, color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
+                    style={{ marginTop:10, display:"flex", alignItems:"center", gap:5, padding:"6px 0", border:"none", background:"none", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
                   >
                     <Copy size={12} strokeWidth={2} />コピーして作成
                   </button>
