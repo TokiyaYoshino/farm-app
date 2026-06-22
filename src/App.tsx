@@ -205,7 +205,7 @@ const roleColor: Record<Role, string> = { admin:C.danger, worker:C.primary, view
 // ─── グローバルスタイル注入 ───────────────────────────────
 const globalStyle = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: ${C.bg}; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+  body { background: ${C.bg}; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; line-height: 1.5; }
   input, select, button { font-family: inherit; }
   input:focus, select:focus { outline: 2px solid ${C.primary}; outline-offset: -1px; }
   input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; width: 100%; font-size: 13px; padding: 8px 10px; }
@@ -2078,7 +2078,7 @@ export default function App() {
                     <span style={{ fontSize:12, color:C.textMuted }}>{p.type}</span>
                     {p.dilution_rate && <span style={{ fontSize:12, color:C.textMuted }}>· {p.dilution_rate}</span>}
                   </div>
-                  {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{p.notes}</div>}
+                  {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{p.notes}</div>}
                 </div>
                 {isAdmin && (
                   <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
@@ -2141,7 +2141,7 @@ export default function App() {
                     <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
-                        <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{c.start_date}</div>
+                        <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{c.start_date}</div>
                       </div>
                     </div>
                     {isAdmin && (
@@ -2188,7 +2188,7 @@ export default function App() {
                 <div style={S.row}>
                   <div style={{ minWidth:0, flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{f.name}</div>
-                    <div style={{ fontSize:12, color: f.lat ? C.textSub : C.textMuted, marginTop:2 }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
+                    <div style={{ fontSize:12, color: f.lat ? C.textSub : C.textMuted, marginTop:4 }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
                   </div>
                   {isAdmin && (
                     <div style={{ display:"flex", gap:6, flexShrink:0 }} onClick={e => e.stopPropagation()}>
@@ -2335,7 +2335,7 @@ export default function App() {
                       <span style={{ fontSize:12, color:C.textMuted }}>{p.type}</span>
                       {p.dilution_rate && <span style={{ fontSize:12, color:C.textMuted }}>· {p.dilution_rate}</span>}
                     </div>
-                    {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{p.notes}</div>}
+                    {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{p.notes}</div>}
                   </div>
                   {isAdmin && (
                     <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
@@ -2424,7 +2424,7 @@ export default function App() {
                     <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{project.name}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>
                           {[cropLabel, project.field, project.end_date ? `〜${project.end_date}` : ""].filter(Boolean).join(" · ")}
                         </div>
                       </div>
@@ -2665,7 +2665,7 @@ export default function App() {
                   <div style={S.row}>
                     <div style={{ minWidth:0, flex:1 }}>
                       <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
-                      <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{c.start_date}</div>
+                      <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{c.start_date}</div>
                     </div>
                     {isAdmin && (
                       <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
@@ -2710,7 +2710,7 @@ export default function App() {
                 <div style={S.row}>
                   <div style={{ minWidth:0, flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{f.name}</div>
-                    <div style={{ fontSize:12, color: f.lat ? C.textSub : C.textMuted, marginTop:2 }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
+                    <div style={{ fontSize:12, color: f.lat ? C.textSub : C.textMuted, marginTop:4 }}>{f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}</div>
                   </div>
                   {isAdmin && (
                     <div style={{ display:"flex", gap:6, flexShrink:0 }} onClick={e => e.stopPropagation()}>
@@ -2842,7 +2842,7 @@ export default function App() {
                     <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{u.name}</span>
                     <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
                   </div>
-                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                     {u.login_id ? `ID: ${u.login_id}` : <span style={{ color:"#e07020" }}>ログイン未設定</span>}
                   </div>
                 </div>
@@ -2877,7 +2877,7 @@ export default function App() {
               <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
                 <div>
                   <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{cropName(r.crop_id)}</div>
-                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                     {r.date}{r.field && ` · ${r.field}`}
                   </div>
                 </div>
@@ -3012,7 +3012,7 @@ export default function App() {
               <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
                 <div>
                   <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{s.title}</div>
-                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                     {s.date}{s.crop && ` · ${s.crop}`}
                   </div>
                 </div>
@@ -3788,7 +3788,7 @@ export default function App() {
               >
                 <div style={{ textAlign:"left", flex:1 }}>
                   <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{u.name}</div>
-                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{roleLabel[u.role]}</div>
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{roleLabel[u.role]}</div>
                 </div>
                 {currentUser?.id === u.id && <span style={{ fontSize:12, color:C.primary, fontWeight:700 }}>✓</span>}
               </button>
@@ -3826,7 +3826,7 @@ export default function App() {
               </div>
               <div>
                 <div style={{ fontWeight:700, fontSize:15, color:C.text }}>削除の確認</div>
-                <div style={{ fontSize:13, color:C.textMuted, marginTop:2 }}>{deleteModal.message}</div>
+                <div style={{ fontSize:13, color:C.textMuted, marginTop:4 }}>{deleteModal.message}</div>
               </div>
             </div>
             <div style={{ fontSize:12, color:C.textMuted, marginBottom:20, paddingLeft:2 }}>この操作は取り消せません。</div>
