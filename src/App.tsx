@@ -1171,7 +1171,6 @@ export default function App() {
   const workCount7d        = reports.filter(r => r.date >= sevenAgo).length;
   const weekHarvest        = reports.filter(r => r.date >= weekStart).reduce((s,r) => s+(Number(r.quantity)||0), 0);
   const todayStr           = new Date().toISOString().slice(0,10);
-  const todayScheduleCount = schedules.filter(s => s.date === todayStr).length;
 
   // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）
   const monthlyHarvest = (cropId: number, year: number) => {
@@ -1459,44 +1458,75 @@ export default function App() {
               )}
             </div>
           )}
-          {/* 天気（カードなし・背景に馴染む） */}
+          {/* 天気カード */}
           {wxLoading ? null : wxAuto ? (
-            <div style={{ display:"flex", alignItems:"baseline", gap:10, paddingBottom:14, marginBottom:4, borderBottom:`1px solid ${C.border}` }}>
-              <span style={{ fontSize:34, fontWeight:700, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</span>
-              <span style={{ fontSize:14, color:C.textSub }}>{wxAuto.label}</span>
-              {(wxAuto.humidity !== undefined || wxAuto.rain !== undefined) && (
-                <span style={{ marginLeft:"auto", fontSize:12, color:C.textMuted }}>
-                  {[wxAuto.humidity !== undefined ? `${wxAuto.humidity}%` : "", wxAuto.rain !== undefined ? `${wxAuto.rain}mm` : ""].filter(Boolean).join("  ")}
-                </span>
-              )}
+            <div style={{ background:"#2E7D32", borderRadius:14, padding:14, color:"#fff", marginBottom:12 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
+                <div>
+                  <div style={{ fontSize:36, fontWeight:700, lineHeight:1 }}>{wxAuto.temp}°</div>
+                  <div style={{ fontSize:13, opacity:0.85, marginTop:3 }}>
+                    {wxAuto.label}{weatherCoords?.name ? ` · ${weatherCoords.name}` : ""}
+                  </div>
+                </div>
+                {(wxAuto.humidity !== undefined || wxAuto.rain !== undefined) && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:6, alignItems:"flex-end" }}>
+                    {wxAuto.humidity !== undefined && (
+                      <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:6, padding:"4px 10px", fontSize:12, display:"flex", alignItems:"center", gap:5, color:"#fff" }}>
+                        <Droplets size={13} strokeWidth={2} />湿度 {wxAuto.humidity}%
+                      </div>
+                    )}
+                    {wxAuto.rain !== undefined && (
+                      <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:6, padding:"4px 10px", fontSize:12, display:"flex", alignItems:"center", gap:5, color:"#fff" }}>
+                        <CloudRain size={13} strokeWidth={2} />雨量 {wxAuto.rain}mm
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
-          {/* 統計（カードなし・数値主体） */}
-          <div style={{ display:"flex", alignItems:"flex-start", paddingTop:8, paddingBottom:4 }}>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:32, fontWeight:700, color:C.text, lineHeight:1 }}>
-                {workCount7d}<span style={{ fontSize:14, fontWeight:400, color:C.textMuted, marginLeft:4 }}>件</span>
+          {/* 統計カードグリッド */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+            <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:12 }}>
+              <div style={{ fontSize:11, color:"#555", marginBottom:4 }}>直近7日の作業</div>
+              <div style={{ fontSize:22, fontWeight:700, color:C.text }}>
+                {workCount7d}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:"#888" }}>件</span>
               </div>
-              <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>直近7日の作業</div>
             </div>
-            <div style={{ width:1, background:C.border, alignSelf:"stretch", margin:"0 20px" }} />
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:32, fontWeight:700, color:C.text, lineHeight:1 }}>
-                {weekHarvest > 0
-                  ? <>{weekHarvest}<span style={{ fontSize:14, fontWeight:400, color:C.textMuted, marginLeft:4 }}>kg</span></>
-                  : <span style={{ fontSize:18, fontWeight:400, color:C.textMuted }}>—</span>}
-              </div>
-              <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>今週の収穫</div>
+            <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:12 }}>
+              <div style={{ fontSize:11, color:"#555", marginBottom:4 }}>今週の収穫</div>
+              {weekHarvest > 0 ? (
+                <div style={{ fontSize:22, fontWeight:700, color:C.text }}>
+                  {weekHarvest}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:"#888" }}>kg</span>
+                </div>
+              ) : (
+                <div style={{ fontSize:13, color:"#999", paddingTop:6 }}>記録なし</div>
+              )}
             </div>
           </div>
-          <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:12, marginBottom:16 }}>
-            <div style={{ fontSize:11, color:C.textMuted, marginBottom:4 }}>今日の予定</div>
-            <div style={{ fontSize:32, fontWeight:700, color: todayScheduleCount > 0 ? C.primary : C.text, lineHeight:1 }}>
-              {todayScheduleCount > 0
-                ? <>{todayScheduleCount}<span style={{ fontSize:14, fontWeight:400, color:C.textMuted, marginLeft:4 }}>件</span></>
-                : <span style={{ fontSize:18, fontWeight:400, color:C.textMuted }}>予定なし</span>}
-            </div>
-          </div>
+
+          {/* 今日の予定 */}
+          {(() => {
+            const todaySchedsHome = schedules.filter(s => s.date === todayStr);
+            return (
+              <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:12, marginBottom:12 }}>
+                <div style={{ fontSize:12, fontWeight:500, color:"#555", marginBottom:8 }}>今日の予定</div>
+                {todaySchedsHome.length === 0 ? (
+                  <div>
+                    <p style={{ fontSize:13, color:"#999", margin:"0 0 8px" }}>予定はありません</p>
+                    <button
+                      onClick={() => setShowQuickReport(true)}
+                      style={{ fontSize:12, color:"#2E7D32", border:"0.5px solid #2E7D32", borderRadius:8, padding:"6px 10px", background:"transparent", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}
+                    >
+                      <Plus size={12} strokeWidth={2.5} />作業を追加
+                    </button>
+                  </div>
+                ) : todaySchedsHome.map(s => (
+                  <div key={s.id} style={{ fontSize:14, fontWeight:600, color:C.text, padding:"6px 0" }}>{s.title}</div>
+                ))}
+              </div>
+            );
+          })()}
 
           <div style={S.sec}>作物サマリー</div>
 
