@@ -1736,27 +1736,29 @@ export default function App() {
                 <div style={{ fontSize:13, fontWeight:700, color:"#c2410c", marginBottom:8 }}>
                   未報告の作業
                 </div>
-                {unreported.map((s, i) => {
-                  const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelectedSchedule(s)}
-                      style={{ width:"100%", background:"#fff", borderRadius:0, padding:"16px 4px", border:"none", borderBottom: i === unreported.length - 1 ? "none" : `1px solid ${C.border}`, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
-                    >
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
-                          <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
-                          <span style={{ fontSize:11, fontWeight:600, color:"#f57f17", flexShrink:0 }}>未報告</span>
+                <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"0 12px" }}>
+                  {unreported.map((s, i) => {
+                    const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedSchedule(s)}
+                        style={{ width:"100%", background:"none", borderRadius:0, padding:"14px 0", border:"none", borderBottom: i === unreported.length - 1 ? "none" : `1px solid ${C.border}`, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const }}
+                      >
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
+                            <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
+                            <span style={{ fontSize:11, fontWeight:600, color:"#f57f17", flexShrink:0 }}>未報告</span>
+                          </div>
+                          <div style={{ fontSize:11, color:C.textSub, marginTop:4 }}>
+                            {[s.date, s.crop, assignedUser?.name, s.work_type].filter(Boolean).join(" · ")}
+                          </div>
                         </div>
-                        <div style={{ fontSize:11, color:C.textSub, marginTop:4 }}>
-                          {[s.date, s.crop, assignedUser?.name, s.work_type].filter(Boolean).join(" · ")}
-                        </div>
-                      </div>
-                      <ChevronRight size={16} color={C.textMuted} strokeWidth={2} />
-                    </button>
-                  );
-                })}
+                        <ChevronRight size={16} color={C.textMuted} strokeWidth={2} />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           })()}
