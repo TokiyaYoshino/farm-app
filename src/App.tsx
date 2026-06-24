@@ -212,9 +212,11 @@ const globalStyle = `
   @keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
   @keyframes fadeIn    { from { opacity:0; } to { opacity:1; } }
   @keyframes slideUp   { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes pulse     { 0%, 100% { opacity:1; } 50% { opacity:0.5; } }
   .anim-slideDown { animation: slideDown 0.2s ease; }
   .anim-fadeIn    { animation: fadeIn 0.2s ease; }
   .anim-slideUp   { animation: slideUp 0.2s ease; }
+  .anim-pulse     { animation: pulse 1.1s ease-in-out infinite; }
 `;
 
 // ─── ユーティリティ ──────────────────────────────────────
@@ -745,7 +747,9 @@ export default function App() {
 
   const toggleNoteVoice = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
+    if (!SR) return showToast("このブラウザは音声入力非対応です（Chrome推奨）", "err");
+
+    // 停止
     if (noteListening) {
       const r = noteRecRef.current;
       noteRecRef.current = null;
@@ -753,23 +757,53 @@ export default function App() {
       try { r?.stop(); } catch { /* ignore */ }
       return;
     }
+
+    // 開始（無音で切れても自動再開し、話し終わるまで継続して聞き取る）
     const rec = new SR();
     rec.lang           = "ja-JP";
-    rec.continuous     = false;
-    rec.interimResults = false;
+    rec.continuous     = true;
+    rec.interimResults = true;
     noteRecRef.current = rec;
+
     rec.onstart  = () => setNoteListening(true);
+
     rec.onresult = (e: any) => {
-      const text = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
-      if (text) setRForm(f => ({ ...f, note: f.note ? f.note + "　" + text : text }));
+      let finalText = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+      }
+      if (!finalText) return;
+      setRForm(f => ({ ...f, note: f.note ? f.note + "　" + finalText : finalText }));
     };
+
     rec.onerror  = (e: any) => {
       if (e.error === "no-speech" || e.error === "aborted") return;
+      console.error("SpeechRecognition error:", e.error);
+      const msg = e.error === "not-allowed"   ? "マイクの使用が許可されていません"
+                : e.error === "audio-capture" ? "マイクが見つかりません"
+                : e.error === "network"       ? "音声認識にはネットワークが必要です"
+                : `音声入力エラー: ${e.error}`;
+      showToast(msg, "err");
       noteRecRef.current = null;
       setNoteListening(false);
     };
-    rec.onend    = () => { noteRecRef.current = null; setNoteListening(false); };
-    try { rec.start(); } catch { noteRecRef.current = null; }
+
+    rec.onend = () => {
+      if (noteRecRef.current !== rec) return;
+      setTimeout(() => {
+        if (noteRecRef.current !== rec) return;
+        try { rec.start(); }
+        catch { noteRecRef.current = null; setNoteListening(false); }
+      }, 300);
+    };
+
+    try {
+      rec.start();
+    } catch (e) {
+      console.error("rec.start() failed:", e);
+      showToast("音声入力を開始できませんでした", "err");
+      noteRecRef.current = null;
+    }
   };
 
   const hasSpeech = typeof window !== "undefined" &&
@@ -1972,14 +2006,17 @@ export default function App() {
                     />
 
                     <div style={S.lbl}>メモ</div>
-                    <div style={{ position:"relative", marginBottom:12 }}>
-                      <input style={{ ...S.input, marginBottom:0, paddingRight: hasSpeech ? 44 : 14 }} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
-                      {hasSpeech && (
-                        <button onClick={toggleNoteVoice} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background: noteListening ? "#fdecea" : "transparent", border:`1.5px solid ${noteListening ? "#e53935" : C.border}`, borderRadius:6, padding:"4px 6px", cursor:"pointer", display:"flex", alignItems:"center", color: noteListening ? "#e53935" : C.textMuted, animation: noteListening ? "pulse 1s infinite" : "none" }}>
-                          {noteListening ? <MicOff size={14} strokeWidth={2} /> : <Mic size={14} strokeWidth={2} />}
-                        </button>
-                      )}
-                    </div>
+                    <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
+                    {hasSpeech && (
+                      <button
+                        onClick={toggleNoteVoice}
+                        className={noteListening ? "anim-pulse" : ""}
+                        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"11px 0", marginTop:-4, marginBottom:12, borderRadius:8, border:`1.5px solid ${noteListening ? "#e53935" : C.primary}`, background: noteListening ? "#fdecea" : "transparent", color: noteListening ? "#e53935" : C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                      >
+                        {noteListening ? <MicOff size={16} strokeWidth={2} /> : <Mic size={16} strokeWidth={2} />}
+                        {noteListening ? "音声入力中…タップで停止" : "音声でメモを入力"}
+                      </button>
+                    )}
 
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addReportInline} disabled={submitting}>
                       {submitting ? <><RefreshCw size={16} strokeWidth={2} />登録中...</> : <><ClipboardList size={16} strokeWidth={2} />作業報告を保存する</>}
@@ -3750,14 +3787,17 @@ export default function App() {
 
                   {/* メモ */}
                   <div style={S.lbl}>メモ</div>
-                  <div style={{ position:"relative", marginBottom:12 }}>
-                    <input style={{ ...S.input, marginBottom:0, paddingRight: hasSpeech ? 44 : 14 }} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
-                    {hasSpeech && (
-                      <button onClick={toggleNoteVoice} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background: noteListening ? "#fdecea" : "transparent", border:`1.5px solid ${noteListening ? "#e53935" : C.border}`, borderRadius:6, padding:"4px 6px", cursor:"pointer", display:"flex", alignItems:"center", color: noteListening ? "#e53935" : C.textMuted, animation: noteListening ? "pulse 1s infinite" : "none" }}>
-                        {noteListening ? <MicOff size={14} strokeWidth={2} /> : <Mic size={14} strokeWidth={2} />}
-                      </button>
-                    )}
-                  </div>
+                  <input style={S.input} placeholder="気づいたことなど" value={rForm.note} onChange={e => setRForm(f => ({ ...f, note:e.target.value }))} />
+                  {hasSpeech && (
+                    <button
+                      onClick={toggleNoteVoice}
+                      className={noteListening ? "anim-pulse" : ""}
+                      style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"11px 0", marginTop:-4, marginBottom:12, borderRadius:8, border:`1.5px solid ${noteListening ? "#e53935" : C.primary}`, background: noteListening ? "#fdecea" : "transparent", color: noteListening ? "#e53935" : C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                    >
+                      {noteListening ? <MicOff size={16} strokeWidth={2} /> : <Mic size={16} strokeWidth={2} />}
+                      {noteListening ? "音声入力中…タップで停止" : "音声でメモを入力"}
+                    </button>
+                  )}
                 </>
               )}
 
