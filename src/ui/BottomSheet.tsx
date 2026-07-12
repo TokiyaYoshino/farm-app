@@ -1,5 +1,5 @@
 import type { ReactNode, CSSProperties } from "react";
-import { C } from "./tokens";
+import { C, SHADOW } from "./tokens";
 
 // ─── ボトムシート共通シェル ──────────────────────────────────
 // 下からせり上がるモーダル。オーバーレイタップで閉じる。上部につまみバー。
@@ -19,22 +19,23 @@ export default function BottomSheet({
   if (!open) return null;
 
   const overlay: CSSProperties = {
-    position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+    position: "fixed", inset: 0, background: "rgba(20,21,24,0.32)",
     zIndex, display: "flex", alignItems: "flex-end",
     animation: "fadeIn 0.2s ease",
   };
   const sheet: CSSProperties = {
-    background: C.card, borderRadius: "20px 20px 0 0", width: "100%",
+    background: C.card, borderRadius: "24px 24px 0 0", width: "100%",
     ...(height ? { height } : { maxHeight }),
     overflowY: "auto", paddingBottom: padBottom,
     animation: "slideUp 0.25s ease",
     display: "flex", flexDirection: "column",
+    boxShadow: SHADOW.float,
   };
 
   return (
     <div style={overlay} onClick={onClose}>
       <div style={sheet} onClick={e => e.stopPropagation()}>
-        <div style={{ width: 36, height: 4, background: C.border, borderRadius: 4, margin: "12px auto 0", flexShrink: 0 }} />
+        <div style={{ width: 38, height: 4, background: C.well, borderRadius: 4, margin: "12px auto 6px", flexShrink: 0 }} />
         {children}
       </div>
     </div>

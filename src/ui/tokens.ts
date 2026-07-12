@@ -1,52 +1,76 @@
 // ─── デザイントークン（単一の色定義元）──────────────────────────
-// 全ファイルはここから import する。色をこのファイル以外で直書きしない。
+// スタイル: Soft Widget（白カード＋灰の受け皿の入れ子・明るい緑アクセント1色・
+//           ピルボタン・ラベル小/値大・border ではなく影と面の色差で階層化）
+// 詳細ブリーフ: docs/design-brief-widget.md
 //
 // 意味付け（セマンティックカラー）:
-//   緑    = ブランド / 状態（完了・保存・アクティブ）… CTA と「進んでいる」状態
+//   緑    = ブランド / 状態（完了・保存・アクティブ・選択）
 //   赤    = 削除・破壊的操作・エラー
 //   琥珀  = 警告・未報告・未設定
 //   青    = 情報・中立の強調
 //   紫    = 農薬カテゴリ（分野色）
-//   灰    = 中立テキスト・境界・背景
+//   灰    = 中立テキスト・境界・サーフェス
+
 export const C = {
-  // ブランド緑
-  primary:   "#2d6a2d", // 主要CTA・アクティブ状態・保存
-  primary2:  "#3a8a3a", // 濃淡・グラフ系列
-  primary3:  "#e8f5e9", // 淡色背景
-  primary4:  "#c8e6c9", // 淡色境界
+  // ── サーフェス（3層：bg の上に card が浮き、card の中に well が凹む）
+  bg:        "#F5F5F6", // ページ背景（最下層のクールグレー）
+  well:      "#EFEFF1", // 受け皿：グループ入力の外枠・ホイールの溝・アイコン円
+  card:      "#FFFFFF", // 浮き面：カード・モーダル・入力行
+  navBg:     "#FFFFFF",
 
-  // セマンティック
-  danger:    "#c0392b",
-  dangerBg:  "#fdecea",
-  warning:   "#f57f17",
-  warningBg: "#fff8e1",
-  info:      "#1976d2",
-  infoBg:    "#e3f2fd",
-  accent:    "#f9a825", // 補助アクセント
+  // ── ブランド緑（インク）— CTA・アクティブ・選択・保存
+  ink:       "#2E7D32",
+  inkPress:  "#256628",
+  inkSoft:   "#E4F0E4",
 
-  // 農薬カテゴリ（紫）
-  pesticide:   "#7b1fa2",
-  pesticideBg: "#f3e5f5",
+  // ── セマンティック
+  danger:    "#D4453C",
+  dangerBg:  "#FBEBEA",
+  warning:   "#DD8A0A",
+  warningBg: "#FBF1DF",
+  info:      "#3773E1",
+  infoBg:    "#E7EEFC",
+  accent:    "#DD8A0A",
 
-  // 天気メトリクスのアイコン色
-  temp: "#e07020", // 気温（湿度は info を使用）
-  rain: "#0288d1", // 雨量
+  // ── 分野色
+  pesticide:   "#7B1FA2",
+  pesticideBg: "#F3E9F8",
+  temp: "#E07020", // 気温
+  rain: "#0288D1", // 雨量
 
-  // ニュートラル
-  text:      "#1a2e1a",
-  textSub:   "#4a6a4a",
-  textMuted: "#8aaa8a",
-  bg:        "#f4f7f2",
-  card:      "#ffffff",
-  border:    "#dde8dd",
-  navBg:     "#ffffff",
+  // ── ニュートラル（緑みのない墨〜灰）
+  text:      "#1A1C1E",
+  textSub:   "#66696E",
+  textMuted: "#9EA1A6",
+  hairline:  "#EBEBED", // 区切り線・secondaryボタン枠
 
-  // CalendarView 互換エイリアス（info 系の青）
-  blue:      "#1976d2",
-  blueBg:    "#e3f2fd",
-  blue4:     "#bbdefb",
+  // ── 後方互換エイリアス（旧コードが参照。段階移行後に整理）
+  //    旧 primary* → ink 系にマップし、緑CTAの見た目を保ちつつ緑ウォッシュを除去
+  primary:   "#2E7D32", // = ink
+  primary2:  "#256628", // = inkPress
+  primary3:  "#E4F0E4", // = inkSoft
+  primary4:  "#CBE3CC", // 淡い緑枠（移行用）
+  border:    "#EBEBED", // = hairline
+  blue:      "#3773E1", // = info
+  blueBg:    "#E7EEFC",
+  blue4:     "#C7D8F7",
+} as const;
+
+// ── 影（構造の主役。border と併用しない）
+export const SHADOW = {
+  card:  "0 1px 2px rgba(16,17,20,.04), 0 8px 24px rgba(16,17,20,.06)", // 通常カード
+  float: "0 12px 40px rgba(16,17,20,.14)",                              // モーダル・ピッカー
+  pill:  "0 2px 8px rgba(16,17,20,.10)",                                // FAB・浮きボタン
+} as const;
+
+// ── 角丸
+export const RADIUS = {
+  card: 20,
+  well: 18,
+  row:  14,
+  pill: 999,
 } as const;
 
 export type Role = "admin" | "worker" | "viewer";
 export const roleLabel: Record<Role, string> = { admin: "管理者", worker: "作業者", viewer: "閲覧者" };
-export const roleColor: Record<Role, string> = { admin: C.danger, worker: C.primary, viewer: C.info };
+export const roleColor: Record<Role, string> = { admin: C.danger, worker: C.ink, viewer: C.info };
