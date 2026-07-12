@@ -290,6 +290,13 @@ export default function App() {
   const [submitting, setSubmitting]       = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  // 記録タブ：カレンダー/一覧の表示切替＋検索/フィルタ
+  const [reportView, setReportView]         = useState<"calendar"|"list">("calendar");
+  const [reportQuery, setReportQuery]       = useState("");
+  const [filterCrop, setFilterCrop]         = useState(0);        // 0 = すべて
+  const [filterField, setFilterField]       = useState("");       // "" = すべて
+  const [filterWorkType, setFilterWorkType] = useState("");       // "" = すべて
+  const [filterUser, setFilterUser]         = useState(0);        // 0 = すべて
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
@@ -1070,6 +1077,30 @@ export default function App() {
     return { ...c, count:rs.length, tot, last, growDays };
   });
 
+  // ─── 記録の検索/フィルタ（一覧モード）─────────────────────
+  const filteredReports = (() => {
+    const q = reportQuery.trim().toLowerCase();
+    return reports.filter(r => {
+      if (filterCrop && r.crop_id !== filterCrop) return false;
+      if (filterField && r.field !== filterField) return false;
+      if (filterWorkType && r.work_type !== filterWorkType) return false;
+      if (filterUser && r.user_id !== filterUser) return false;
+      if (q) {
+        const hay = [r.note, cropName(r.crop_id), r.field, r.work_type, userName(r.user_id)]
+          .filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  })();
+  const reportFilterActive = !!(reportQuery.trim() || filterCrop || filterField || filterWorkType || filterUser);
+  const chipSelect = (active: boolean): CSSProperties => ({
+    flexShrink: 0, appearance: "none", WebkitAppearance: "none", padding: "7px 12px", borderRadius: 20,
+    border: `1.5px solid ${active ? C.primary : C.border}`,
+    background: active ? C.primary3 : C.card, color: active ? C.primary : C.textSub,
+    fontSize: 12, fontWeight: 600, cursor: "pointer",
+  });
+
   // ─── ダッシュボード統計 ───────────────────────────────
   const sevenAgo      = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
   const weekStart     = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return d.toISOString().slice(0,10); })();
@@ -1554,6 +1585,17 @@ export default function App() {
       {/* ───── REPORT ───── */}
       {tab === "report" && (
         <div style={S.page}>
+          {/* 表示モード切替（カレンダー / 記録一覧） */}
+          <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+            {([["calendar","カレンダー",CalendarDays],["list","記録一覧",Search]] as const).map(([key,label,Icon]) => (
+              <button key={key} onClick={() => setReportView(key)}
+                style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"10px 0", borderRadius:8, border:`1.5px solid ${reportView===key ? C.primary : C.border}`, background: reportView===key ? C.primary : C.card, color: reportView===key ? "#fff" : C.textSub, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                <Icon size={15} strokeWidth={2} />{label}
+              </button>
+            ))}
+          </div>
+
+          {reportView === "calendar" && (<>
           <CalendarView
             reports={reports}
             schedules={schedules}
@@ -1631,7 +1673,99 @@ export default function App() {
               </div>
             );
           })()}
+          </>)}
 
+          {reportView === "list" && (
+            <>
+              {/* 検索バー */}
+              <div style={{ display:"flex", alignItems:"center", gap:8, background:C.card, border:`1.5px solid ${C.border}`, borderRadius:8, padding:"9px 12px", marginBottom:10 }}>
+                <Search size={16} color={C.textMuted} strokeWidth={2} />
+                <input
+                  value={reportQuery}
+                  onChange={e => setReportQuery(e.target.value)}
+                  placeholder="メモ・作物・圃場・作業で検索"
+                  style={{ flex:1, minWidth:0, border:"none", outline:"none", background:"transparent", fontSize:14, color:C.text }}
+                />
+                {reportQuery && (
+                  <button onClick={() => setReportQuery("")} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex", flexShrink:0 }}><X size={15} strokeWidth={2} /></button>
+                )}
+              </div>
+
+              {/* フィルタチップ */}
+              <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:6, marginBottom:4 }}>
+                <select value={filterCrop} onChange={e => setFilterCrop(Number(e.target.value))} style={chipSelect(!!filterCrop)}>
+                  <option value={0}>作物：すべて</option>
+                  {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <select value={filterField} onChange={e => setFilterField(e.target.value)} style={chipSelect(!!filterField)}>
+                  <option value="">圃場：すべて</option>
+                  {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                </select>
+                <select value={filterWorkType} onChange={e => setFilterWorkType(e.target.value)} style={chipSelect(!!filterWorkType)}>
+                  <option value="">作業：すべて</option>
+                  {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select value={filterUser} onChange={e => setFilterUser(Number(e.target.value))} style={chipSelect(!!filterUser)}>
+                  <option value={0}>担当：すべて</option>
+                  {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+
+              {/* 件数＋クリア */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, minHeight:28 }}>
+                <span style={{ fontSize:12, color:C.textMuted }}>{filteredReports.length}件の記録</span>
+                {reportFilterActive && (
+                  <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={btn("tertiary", "sm")}>条件をクリア</button>
+                )}
+              </div>
+
+              {/* 結果 */}
+              {filteredReports.length === 0 ? (
+                <div style={{ padding:"32px 16px", textAlign:"center" as const, color:C.textMuted, fontSize:13 }}>
+                  {reportFilterActive ? "条件に一致する記録がありません" : "まだ作業報告がありません"}
+                </div>
+              ) : filteredReports.map(r => (
+                <div key={r.id} style={S.card}>
+                  <div style={S.row}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0, flex:1 }}>
+                      <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{cropName(r.crop_id)}</span>
+                      {r.field && <span style={{ fontSize:12, color:C.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>· {r.field}</span>}
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                      <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
+                      {(isAdmin || r.user_id === currentUser?.id) && (
+                        <RowMenu menuKey={`lr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                          items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteReport(r.id) }]} />
+                      )}
+                    </div>
+                  </div>
+                  <div style={S.divider} />
+                  <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
+                    {[
+                      r.work_type,
+                      r.quantity ? `${r.quantity}kg` : "",
+                      (r.work_start && r.work_end) ? `${r.work_start}〜${r.work_end}` : r.work_time ? `${r.work_time}h` : "",
+                      r.pesticide_id ? (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? ps.name : ""; })() : "",
+                      userName(r.user_id),
+                      r.weather ? `${r.weather}${r.temp ? ` ${r.temp}°C` : ""}` : "",
+                    ].filter(Boolean).join("  ·  ")}
+                  </div>
+                  {r.note && (
+                    <div style={{ fontSize:12, color:C.textSub, marginTop:8, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
+                      {r.note}
+                    </div>
+                  )}
+                  {r.image_url && (
+                    <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:6, marginTop:10, maxHeight:180, objectFit:"cover", display:"block" }} />
+                  )}
+                  <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                    <button onClick={() => setSelectedReport(r)} style={{ ...btn("secondary", "sm"), flex:1 }}>詳細を見る</button>
+                    <button onClick={() => handleCopyReport(r)} style={{ ...btn("secondary", "sm"), flex:1 }}><Copy size={12} strokeWidth={2} />コピーして作成</button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 
