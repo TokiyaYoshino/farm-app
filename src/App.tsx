@@ -903,6 +903,21 @@ export default function App() {
     setTab("report");
   };
 
+  // 予定を1タップで実績記録へ（クイック記録モーダルを予定内容で prefill して開く）
+  const scheduleToReport = (s: Schedule) => {
+    const cropObj = crops.find(c => c.name === s.crop);
+    setRForm(f => ({
+      ...f,
+      user_id:   s.assigned_user_id ?? s.user_id ?? f.user_id,
+      crop_id:   cropObj?.id ?? f.crop_id,
+      field:     s.field ?? f.field,
+      date:      s.date,
+      work_type: s.work_type ?? f.work_type,
+      note:      s.note ?? "",
+    }));
+    setShowQuickReport(true);
+  };
+
   const addField = async () => {
     if (!fForm.name.trim()) return;
     setSubmitting(true);
@@ -1262,15 +1277,6 @@ export default function App() {
            tab === "manage" ? "管理" : "農作業レポート"}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8, flex:"0 0 auto", flexShrink:0 }}>
-          {(tab === "home" || tab === "report") && (
-            <button
-              onClick={() => setShowQuickReport(true)}
-              style={{ display:"flex", alignItems:"center", gap:4, background:C.primary, borderRadius:8, padding:"7px 14px", border:"none", cursor:"pointer", color:"#fff", fontWeight:600, fontSize:13, flexShrink:0 }}
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              記録する
-            </button>
-          )}
           {currentUser && (
             <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", padding:"5px 6px", background:C.bg, borderRadius:8, border:`1px solid ${C.border}`, cursor:"pointer", color:C.textSub, flexShrink:0 }}>
               <UserCircle size={18} strokeWidth={1.8} />
@@ -1376,20 +1382,27 @@ export default function App() {
           {(() => {
             const todaySchedsHome = schedules.filter(s => s.date === todayStr);
             return (
-              <div style={{ background:"#fff", border:`0.5px solid ${C.border}`, borderRadius:12, padding:12, marginBottom:12 }}>
-                <div style={{ fontSize:12, fontWeight:500, color:C.textSub, marginBottom:8 }}>今日の予定</div>
+              <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:12, marginBottom:12 }}>
+                <div style={{ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:8 }}>今日の予定</div>
                 {todaySchedsHome.length === 0 ? (
                   <div>
                     <p style={{ fontSize:13, color:C.textMuted, margin:"0 0 8px" }}>予定はありません</p>
-                    <button
-                      onClick={() => setShowQuickReport(true)}
-                      style={{ fontSize:12, color:C.primary, border:`0.5px solid ${C.primary}`, borderRadius:8, padding:"6px 10px", background:"transparent", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}
-                    >
-                      <Plus size={12} strokeWidth={2.5} />作業を追加
+                    <button onClick={() => setShowQuickReport(true)} style={btn("secondary", "sm")}>
+                      <Plus size={13} strokeWidth={2.5} />作業を追加
                     </button>
                   </div>
-                ) : todaySchedsHome.map(s => (
-                  <div key={s.id} style={{ fontSize:14, fontWeight:600, color:C.text, padding:"6px 0" }}>{s.title}</div>
+                ) : todaySchedsHome.map((s, i) => (
+                  <div key={s.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 0", borderTop: i === 0 ? "none" : `1px solid ${C.border}` }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:14, fontWeight:600, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{s.title}</div>
+                      {(s.work_type || s.crop || s.field) && (
+                        <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{[s.work_type, s.crop, s.field].filter(Boolean).join(" · ")}</div>
+                      )}
+                    </div>
+                    <button onClick={() => scheduleToReport(s)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
+                      <ClipboardList size={13} strokeWidth={2} />実績にする
+                    </button>
+                  </div>
                 ))}
               </div>
             );
@@ -1568,9 +1581,14 @@ export default function App() {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
                   const meta = [s.crop, s.field, assignedUser?.name, s.work_type].filter(Boolean).join(" · ");
                   return (
-                    <div key={s.id} style={{ background:C.card, borderRadius:8, padding:"10px 14px", border:`1px solid ${C.border}`, marginBottom:6 }}>
-                      <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{s.title}</div>
-                      {meta && <div style={{ fontSize:12, color:C.textMuted, marginTop:3 }}>{meta}</div>}
+                    <div key={s.id} style={{ background:C.card, borderRadius:8, padding:"10px 14px", border:`1px solid ${C.border}`, marginBottom:6, display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{s.title}</div>
+                        {meta && <div style={{ fontSize:12, color:C.textMuted, marginTop:3 }}>{meta}</div>}
+                      </div>
+                      <button onClick={() => scheduleToReport(s)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
+                        <ClipboardList size={13} strokeWidth={2} />実績にする
+                      </button>
                     </div>
                   );
                 })}
@@ -1587,7 +1605,7 @@ export default function App() {
                 <div style={{ fontSize:13, fontWeight:700, color:C.warning, marginBottom:8 }}>
                   未報告の作業
                 </div>
-                <div style={{ background:"#fff", border:`0.5px solid ${C.border}`, borderRadius:12, padding:"0 12px" }}>
+                <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"0 12px" }}>
                   {unreported.map((s, i) => {
                     const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
                     return (
@@ -2374,6 +2392,15 @@ export default function App() {
           />
         )
       )}
+      {/* 記録FAB（全タブ共通の主導線） */}
+      <button
+        onClick={() => setShowQuickReport(true)}
+        aria-label="作業を記録"
+        style={{ position:"fixed", right:16, bottom:76, zIndex:90, display:"flex", alignItems:"center", gap:6, background:C.primary, color:"#fff", border:"none", borderRadius:28, padding:"14px 20px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(45,106,45,0.4)" }}
+      >
+        <Plus size={20} strokeWidth={2.5} />記録
+      </button>
+
       {/* ナビゲーション */}
       <nav style={S.nav}>
         {navItems.map(n => (
