@@ -1189,12 +1189,11 @@ export default function App() {
 
 
   const navBtn = (active: boolean): CSSProperties => ({
-    flex:1, padding:"10px 0 8px", border:"none", background:"none", cursor:"pointer",
-    display:"flex", flexDirection:"column", alignItems:"center", gap:3,
-    color: active ? C.primary : C.textMuted,
+    flex:1, padding:"10px 0", border:"none", background:"none", cursor:"pointer",
+    display:"flex", flexDirection:"column", alignItems:"center", gap:4,
+    color: active ? C.ink : C.textMuted,
     fontSize:10, fontWeight: active ? 700 : 500,
-    borderTop: active ? `3px solid ${C.primary}` : "3px solid transparent",
-    minHeight:48,
+    minHeight:54,
   });
 
   const tagStyle = (role: Role): CSSProperties => ({
@@ -1290,7 +1289,7 @@ export default function App() {
         <button
           onClick={handleLogin}
           disabled={loginBusy}
-          style={{ width:"100%", padding:"14px 0", borderRadius:8, border:"none", background:C.primary, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", opacity:loginBusy ? 0.7 : 1 }}
+          style={{ ...btn("primary", "lg"), opacity:loginBusy ? 0.7 : 1 }}
         >
           {loginBusy ? "ログイン中..." : "ログイン"}
         </button>
@@ -1316,7 +1315,7 @@ export default function App() {
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8, flex:"0 0 auto", flexShrink:0 }}>
           {currentUser && (
-            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", padding:"5px 6px", background:C.bg, borderRadius:8, border:`1px solid ${C.border}`, cursor:"pointer", color:C.textSub, flexShrink:0 }}>
+            <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", justifyContent:"center", width:36, height:36, background:C.well, borderRadius:999, border:"none", cursor:"pointer", color:C.textSub, flexShrink:0 }}>
               <UserCircle size={18} strokeWidth={1.8} />
             </button>
           )}
@@ -2537,7 +2536,7 @@ export default function App() {
       <button
         onClick={() => setShowQuickReport(true)}
         aria-label="作業を記録"
-        style={{ position:"fixed", right:16, bottom:76, zIndex:90, display:"flex", alignItems:"center", gap:6, background:C.primary, color:"#fff", border:"none", borderRadius:28, padding:"14px 20px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(45,106,45,0.4)" }}
+        style={{ position:"fixed", right:16, bottom:78, zIndex:90, display:"flex", alignItems:"center", gap:7, background:C.ink, color:"#fff", border:"none", borderRadius:999, padding:"14px 22px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 6px 18px rgba(46,125,50,0.32)" }}
       >
         <Plus size={20} strokeWidth={2.5} />記録
       </button>
