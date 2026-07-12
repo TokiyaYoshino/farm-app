@@ -6,24 +6,12 @@ import {
   CartesianGrid, Legend,
 } from "recharts";
 import { BarChart2, Leaf, Thermometer, CloudRain, Clock, FlaskConical } from "lucide-react";
+import { C } from "../ui/tokens";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 );
-
-const C = {
-  primary:   "#2d6a2d",
-  primary2:  "#3a8a3a",
-  primary3:  "#e8f5e9",
-  primary4:  "#c8e6c9",
-  text:      "#1a2e1a",
-  textSub:   "#4a6a4a",
-  textMuted: "#8aaa8a",
-  bg:        "#f4f7f2",
-  card:      "#ffffff",
-  border:    "#dde8dd",
-};
 
 const CHART_COLORS = ["#2d6a2d","#1976d2","#e07020","#9c27b0","#00838f","#c62828","#558b2f","#4527a0"];
 
@@ -341,7 +329,7 @@ export default function AnalyticsView({ currentOrg }: Props) {
                   );
                 }}
               />
-              <Scatter data={s3Data} fill="#1976d2" opacity={0.7} />
+              <Scatter data={s3Data} fill={C.info} opacity={0.7} />
             </ScatterChart>
           </ResponsiveContainer>
         )}
@@ -376,7 +364,7 @@ export default function AnalyticsView({ currentOrg }: Props) {
                   );
                 }}
               />
-              <Scatter data={s4Data} fill="#e07020" opacity={0.7} />
+              <Scatter data={s4Data} fill={C.temp} opacity={0.7} />
             </ScatterChart>
           </ResponsiveContainer>
         )}

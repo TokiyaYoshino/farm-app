@@ -21,6 +21,7 @@ import AnalyticsView from "./components/AnalyticsView";
 import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
+import { C, roleLabel, roleColor } from "./ui/tokens";
 
 const makePin = (color: string) => L.divIcon({
   className: "",
@@ -30,8 +31,8 @@ const makePin = (color: string) => L.divIcon({
   </svg>`,
   iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -36],
 });
-const PIN_BLUE  = makePin("#1565c0");
-const PIN_GREEN = makePin("#2d6a2d");
+const PIN_BLUE  = makePin(C.info);
+const PIN_GREEN = makePin(C.primary);
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
@@ -181,26 +182,7 @@ interface Ticket {
   created_at: string;
 }
 
-// ─── カラーパレット ──────────────────────────────────────
-const C = {
-  primary:   "#2d6a2d",
-  primary2:  "#3a8a3a",
-  primary3:  "#e8f5e9",
-  primary4:  "#c8e6c9",
-  accent:    "#f9a825",
-  danger:    "#c0392b",
-  dangerBg:  "#fdecea",
-  text:      "#1a2e1a",
-  textSub:   "#4a6a4a",
-  textMuted: "#8aaa8a",
-  bg:        "#f3f4f6",
-  card:      "#ffffff",
-  border:    "#dde8dd",
-  navBg:     "#ffffff",
-};
-
-const roleLabel: Record<Role, string> = { admin:"管理者", worker:"作業者", viewer:"閲覧者" };
-const roleColor: Record<Role, string> = { admin:C.danger, worker:C.primary, viewer:"#1976d2" };
+// カラートークンは src/ui/tokens.ts に集約（import は先頭）
 
 // ─── グローバルスタイル注入 ───────────────────────────────
 const globalStyle = `
@@ -1154,9 +1136,9 @@ export default function App() {
   const navBtn = (active: boolean): CSSProperties => ({
     flex:1, padding:"10px 0 8px", border:"none", background:"none", cursor:"pointer",
     display:"flex", flexDirection:"column", alignItems:"center", gap:3,
-    color: active ? "#2E7D32" : "#8A8378",
+    color: active ? C.primary : C.textMuted,
     fontSize:10, fontWeight: active ? 700 : 500,
-    borderTop: active ? "3px solid #2E7D32" : "3px solid transparent",
+    borderTop: active ? `3px solid ${C.primary}` : "3px solid transparent",
     minHeight:48,
   });
 
@@ -1175,18 +1157,18 @@ export default function App() {
       </span>
       <span style={{ color:C.border }}>|</span>
       <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:13, fontWeight:600, color:C.textSub, whiteSpace:"nowrap" as const }}>
-        <Thermometer size={14} color="#e07020" strokeWidth={2} />{wx.temp}°C
+        <Thermometer size={14} color={C.temp} strokeWidth={2} />{wx.temp}°C
       </span>
       {wx.humidity !== undefined && <>
         <span style={{ color:C.border }}>|</span>
         <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:13, fontWeight:600, color:C.textSub, whiteSpace:"nowrap" as const }}>
-          <Droplets size={14} color="#1976d2" strokeWidth={2} />{wx.humidity}%
+          <Droplets size={14} color={C.info} strokeWidth={2} />{wx.humidity}%
         </span>
       </>}
       {wx.rain !== undefined && <>
         <span style={{ color:C.border }}>|</span>
         <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:13, fontWeight:600, color:C.textSub, whiteSpace:"nowrap" as const }}>
-          <CloudRain size={14} color="#0288d1" strokeWidth={2} />{wx.rain}mm
+          <CloudRain size={14} color={C.rain} strokeWidth={2} />{wx.rain}mm
         </span>
       </>}
     </div>
@@ -1343,7 +1325,7 @@ export default function App() {
           )}
           {/* 天気カード */}
           {wxLoading ? null : wxAuto ? (
-            <div style={{ background:"#2E7D32", borderRadius:14, padding:14, color:"#fff", marginBottom:12 }}>
+            <div style={{ background:C.primary, borderRadius:14, padding:14, color:"#fff", marginBottom:12 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
                 <div>
                   <div style={{ fontSize:36, fontWeight:700, lineHeight:1 }}>{wxAuto.temp}°</div>
@@ -1370,20 +1352,20 @@ export default function App() {
           ) : null}
           {/* 統計カードグリッド */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
-            <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:12 }}>
-              <div style={{ fontSize:11, color:"#555", marginBottom:4 }}>直近7日の作業</div>
+            <div style={{ background:"#fff", border:`0.5px solid ${C.border}`, borderRadius:12, padding:12 }}>
+              <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>直近7日の作業</div>
               <div style={{ fontSize:22, fontWeight:700, color:C.text }}>
-                {workCount7d}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:"#888" }}>件</span>
+                {workCount7d}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:C.textMuted }}>件</span>
               </div>
             </div>
-            <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:12 }}>
-              <div style={{ fontSize:11, color:"#555", marginBottom:4 }}>今週の収穫</div>
+            <div style={{ background:"#fff", border:`0.5px solid ${C.border}`, borderRadius:12, padding:12 }}>
+              <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>今週の収穫</div>
               {weekHarvest > 0 ? (
                 <div style={{ fontSize:22, fontWeight:700, color:C.text }}>
-                  {weekHarvest}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:"#888" }}>kg</span>
+                  {weekHarvest}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:C.textMuted }}>kg</span>
                 </div>
               ) : (
-                <div style={{ fontSize:13, color:"#999", paddingTop:6 }}>記録なし</div>
+                <div style={{ fontSize:13, color:C.textMuted, paddingTop:6 }}>記録なし</div>
               )}
             </div>
           </div>
@@ -1392,14 +1374,14 @@ export default function App() {
           {(() => {
             const todaySchedsHome = schedules.filter(s => s.date === todayStr);
             return (
-              <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:12, marginBottom:12 }}>
-                <div style={{ fontSize:12, fontWeight:500, color:"#555", marginBottom:8 }}>今日の予定</div>
+              <div style={{ background:"#fff", border:`0.5px solid ${C.border}`, borderRadius:12, padding:12, marginBottom:12 }}>
+                <div style={{ fontSize:12, fontWeight:500, color:C.textSub, marginBottom:8 }}>今日の予定</div>
                 {todaySchedsHome.length === 0 ? (
                   <div>
-                    <p style={{ fontSize:13, color:"#999", margin:"0 0 8px" }}>予定はありません</p>
+                    <p style={{ fontSize:13, color:C.textMuted, margin:"0 0 8px" }}>予定はありません</p>
                     <button
                       onClick={() => setShowQuickReport(true)}
-                      style={{ fontSize:12, color:"#2E7D32", border:"0.5px solid #2E7D32", borderRadius:8, padding:"6px 10px", background:"transparent", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}
+                      style={{ fontSize:12, color:C.primary, border:`0.5px solid ${C.primary}`, borderRadius:8, padding:"6px 10px", background:"transparent", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}
                     >
                       <Plus size={12} strokeWidth={2.5} />作業を追加
                     </button>
@@ -1616,10 +1598,10 @@ export default function App() {
             if (unreported.length === 0) return null;
             return (
               <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:"#c2410c", marginBottom:8 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:C.warning, marginBottom:8 }}>
                   未報告の作業
                 </div>
-                <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"0 12px" }}>
+                <div style={{ background:"#fff", border:`0.5px solid ${C.border}`, borderRadius:12, padding:"0 12px" }}>
                   {unreported.map((s, i) => {
                     const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
                     return (
@@ -1631,7 +1613,7 @@ export default function App() {
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
                             <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
-                            <span style={{ fontSize:11, fontWeight:600, color:"#f57f17", flexShrink:0 }}>未報告</span>
+                            <span style={{ fontSize:11, fontWeight:600, color:C.warning, flexShrink:0 }}>未報告</span>
                           </div>
                           <div style={{ fontSize:11, color:C.textSub, marginTop:4 }}>
                             {[s.date, s.crop, assignedUser?.name, s.work_type].filter(Boolean).join(" · ")}
@@ -1816,7 +1798,7 @@ export default function App() {
                               <button key={m.id} onClick={() => selectMaster(m)} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", borderBottom:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" as const, display:"flex", flexDirection:"column" as const, gap:2 }}>
                                 <span style={{ fontWeight:700, fontSize:13, color:C.text }}>{m.name}</span>
                                 <div style={{ display:"flex", gap:6 }}>
-                                  {m.type && <span style={{ fontSize:11, color:"#7b1fa2", background:"#f3e5f5", borderRadius:5, padding:"1px 6px", fontWeight:600 }}>{m.type}</span>}
+                                  {m.type && <span style={{ fontSize:11, color:C.pesticide, background:C.pesticideBg, borderRadius:5, padding:"1px 6px", fontWeight:600 }}>{m.type}</span>}
                                   {m.dilution_rate && <span style={{ fontSize:11, color:C.textMuted }}>{m.dilution_rate}</span>}
                                   {m.company && <span style={{ fontSize:11, color:C.textMuted }}>{m.company}</span>}
                                 </div>
@@ -1985,7 +1967,7 @@ export default function App() {
                     <span style={tagStyle(u.role)}>{roleLabel[u.role]}</span>
                   </div>
                   <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
-                    {u.login_id ? `ID: ${u.login_id}` : <span style={{ color:"#e07020" }}>ログイン未設定</span>}
+                    {u.login_id ? `ID: ${u.login_id}` : <span style={{ color:C.temp }}>ログイン未設定</span>}
                   </div>
                 </div>
               </div>
@@ -2066,11 +2048,11 @@ export default function App() {
 
                 {/* 天気 */}
                 {r.weather && (
-                  <div style={{ background:"#f0faf0", borderRadius:8, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" as const }}>
+                  <div style={{ background:C.primary3, borderRadius:8, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" as const }}>
                     <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{r.weather}</span>
-                    {r.temp && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Thermometer size={13} color="#e07020" strokeWidth={2}/>{r.temp}°C</span>}
-                    {r.humidity && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Droplets size={13} color="#1976d2" strokeWidth={2}/>{r.humidity}%</span>}
-                    {r.rain && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><CloudRain size={13} color="#0288d1" strokeWidth={2}/>{r.rain}mm</span>}
+                    {r.temp && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Thermometer size={13} color={C.temp} strokeWidth={2}/>{r.temp}°C</span>}
+                    {r.humidity && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Droplets size={13} color={C.info} strokeWidth={2}/>{r.humidity}%</span>}
+                    {r.rain && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><CloudRain size={13} color={C.rain} strokeWidth={2}/>{r.rain}mm</span>}
                   </div>
                 )}
 
@@ -2083,9 +2065,9 @@ export default function App() {
                     {r.pesticides_used.map(pu => {
                       const ps = pesticides.find(p => p.id === pu.id);
                       return ps ? (
-                        <div key={pu.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:"#f3e5f5", borderRadius:8, marginBottom:4 }}>
-                          <FlaskConical size={12} color="#7b1fa2" strokeWidth={2} />
-                          <span style={{ fontWeight:600, fontSize:13, color:"#7b1fa2", flex:1 }}>{ps.name}</span>
+                        <div key={pu.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:C.pesticideBg, borderRadius:8, marginBottom:4 }}>
+                          <FlaskConical size={12} color={C.pesticide} strokeWidth={2} />
+                          <span style={{ fontWeight:600, fontSize:13, color:C.pesticide, flex:1 }}>{ps.name}</span>
                           {pu.amount && <span style={{ fontSize:12, color:C.textMuted }}>{pu.amount}</span>}
                         </div>
                       ) : null;
@@ -2095,9 +2077,9 @@ export default function App() {
                 {(!r.pesticides_used || r.pesticides_used.length === 0) && r.pesticide_id && (() => {
                   const ps = pesticides.find(p => p.id === r.pesticide_id);
                   return ps ? (
-                    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:"#f3e5f5", borderRadius:8, marginBottom:12 }}>
-                      <FlaskConical size={12} color="#7b1fa2" strokeWidth={2} />
-                      <span style={{ fontWeight:600, fontSize:13, color:"#7b1fa2", flex:1 }}>{ps.name}</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:C.pesticideBg, borderRadius:8, marginBottom:12 }}>
+                      <FlaskConical size={12} color={C.pesticide} strokeWidth={2} />
+                      <span style={{ fontWeight:600, fontSize:13, color:C.pesticide, flex:1 }}>{ps.name}</span>
                       {r.pesticide_amount && <span style={{ fontSize:12, color:C.textMuted }}>{r.pesticide_amount}</span>}
                     </div>
                   ) : null;
@@ -2480,7 +2462,7 @@ export default function App() {
 
             <div style={{ padding:"0 16px" }}>
               {/* 天気表示 */}
-              <div style={{ background:"#f0faf0", borderRadius:8, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
+              <div style={{ background:C.primary3, borderRadius:8, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
                 <div style={{ fontSize:11, color:C.textSub, fontWeight:600, marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
                   <MapPin size={11} color={C.primary} strokeWidth={2} />{weatherCoords?.name ?? "..."} · 天気（自動入力）
                 </div>
@@ -2568,7 +2550,7 @@ export default function App() {
                     <input type="time" style={{ ...S.input, marginBottom:0, flex:1 }} value={rForm.work_end} onChange={e => setRForm(f => ({ ...f, work_end:e.target.value }))} />
                   </div>
                   {periodWeather && (
-                    <div style={{ background:"#f0faf0", borderRadius:9, padding:"8px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, fontSize:12, color:C.textSub, display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ background:C.primary3, borderRadius:9, padding:"8px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, fontSize:12, color:C.textSub, display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ fontWeight:700, color:C.primary }}>{periodWeather.weather}</span>
                       {periodWeather.temp && <span>{periodWeather.temp}°C</span>}
                       {periodWeather.humidity && <span>湿度{periodWeather.humidity}%</span>}
@@ -2656,7 +2638,7 @@ export default function App() {
                     <button
                       onClick={toggleNoteVoice}
                       className={noteListening ? "anim-pulse" : ""}
-                      style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"11px 0", marginTop:-4, marginBottom:12, borderRadius:8, border:`1.5px solid ${noteListening ? "#e53935" : C.primary}`, background: noteListening ? "#fdecea" : "transparent", color: noteListening ? "#e53935" : C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                      style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"11px 0", marginTop:-4, marginBottom:12, borderRadius:8, border:`1.5px solid ${noteListening ? C.danger : C.primary}`, background: noteListening ? C.dangerBg : "transparent", color: noteListening ? C.danger : C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
                     >
                       {noteListening ? <MicOff size={16} strokeWidth={2} /> : <Mic size={16} strokeWidth={2} />}
                       {noteListening ? "音声入力中…タップで停止" : "音声でメモを入力"}

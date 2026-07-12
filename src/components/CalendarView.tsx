@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import type { CSSProperties } from "react";
+import { C } from "../ui/tokens";
 import {
   ChevronLeft, ChevronRight, Plus, X,
   CalendarDays, ClipboardList, UserCircle,
@@ -56,13 +57,6 @@ interface Props {
   onEditComment: (id: string, message: string) => Promise<boolean>;
 }
 
-const C = {
-  primary: "#2d6a2d", primary2: "#3a8a3a", primary3: "#e8f5e9", primary4: "#c8e6c9",
-  text: "#1a2e1a", textSub: "#4a6a4a", textMuted: "#8aaa8a",
-  bg: "#f4f7f2", card: "#ffffff", border: "#dde8dd",
-  danger: "#c0392b",
-  blue: "#1565c0", blueBg: "#e3f2fd", blue4: "#bbdefb",
-};
 const css = (o: CSSProperties): CSSProperties => o;
 const DOW = ["日", "月", "火", "水", "木", "金", "土"];
 const WORK_TYPES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り", "剪定", "その他"];
@@ -541,7 +535,7 @@ export default function CalendarView({
                           : r.work_time ? <span style={css({ display: "flex", alignItems: "center", gap: 4, color: C.textSub })}><Clock size={12} strokeWidth={2} />{r.work_time}h</span> : null}
                       </div>
                       {r.pesticide_id && (
-                        <div style={css({ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#7b1fa2", background: "#f3e5f5", borderRadius: 7, padding: "4px 8px", marginBottom: 8, width: "fit-content" })}>
+                        <div style={css({ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.pesticide, background: C.pesticideBg, borderRadius: 7, padding: "4px 8px", marginBottom: 8, width: "fit-content" })}>
                           <FlaskConical size={12} strokeWidth={2} />
                           {pesticideName(r.pesticide_id)}{r.pesticide_amount ? ` / ${r.pesticide_amount}` : ""}
                         </div>
@@ -549,8 +543,8 @@ export default function CalendarView({
                       {r.weather && (
                         <div style={css({ fontSize: 12, color: C.textMuted, display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" as const })}>
                           <span>{r.weather}{r.temp ? ` ${r.temp}°C` : ""}</span>
-                          {r.humidity && r.humidity !== "" && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Droplets size={11} color="#1976d2" strokeWidth={2} />{r.humidity}%</span>}
-                          {r.rain     && r.rain     !== "" && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><CloudRain size={11} color="#0288d1" strokeWidth={2} />{r.rain}mm</span>}
+                          {r.humidity && r.humidity !== "" && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Droplets size={11} color={C.info} strokeWidth={2} />{r.humidity}%</span>}
+                          {r.rain     && r.rain     !== "" && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><CloudRain size={11} color={C.rain} strokeWidth={2} />{r.rain}mm</span>}
                         </div>
                       )}
                       {r.note && (
@@ -700,7 +694,7 @@ export default function CalendarView({
                       onClick={() => { setShowForm(f => !f); resetForm(); setAddError(""); }}
                       style={css({
                         display: "flex", alignItems: "center", gap: 5,
-                        background: showForm ? C.bg : `linear-gradient(135deg,${C.blue},#1976d2)`,
+                        background: showForm ? C.bg : `linear-gradient(135deg,${C.blue},${C.blue})`,
                         color: showForm ? C.textSub : "#fff",
                         border: showForm ? `1.5px solid ${C.border}` : "none",
                         borderRadius: 10, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
@@ -754,7 +748,7 @@ export default function CalendarView({
                       disabled={adding}
                       style={css({
                         width: "100%", padding: "11px 0", borderRadius: 8, border: "none",
-                        background: adding ? C.border : `linear-gradient(135deg,${C.blue},#1976d2)`,
+                        background: adding ? C.border : `linear-gradient(135deg,${C.blue},${C.blue})`,
                         color: adding ? C.textMuted : "#fff",
                         fontSize: 14, fontWeight: 700, cursor: adding ? "default" : "pointer",
                         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,

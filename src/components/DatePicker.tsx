@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { ChevronLeft, ChevronRight, CalendarDays, X } from "lucide-react";
+import { C } from "../ui/tokens";
 
 interface Props {
   label: string;
@@ -9,12 +10,6 @@ interface Props {
   onClose: () => void;
 }
 
-const C = {
-  primary: "#2d6a2d", primary2: "#3a8a3a", primary3: "#e8f5e9", primary4: "#c8e6c9",
-  text: "#1a2e1a", textSub: "#4a6a4a", textMuted: "#8aaa8a",
-  bg: "#f4f7f2", card: "#ffffff", border: "#dde8dd",
-  danger: "#c0392b",
-};
 const css = (o: CSSProperties): CSSProperties => o;
 const DOW = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -85,7 +80,7 @@ export default function DatePicker({ label, value, onSelect, onClose }: Props) {
         {/* Day headers */}
         <div style={css({ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 2 })}>
           {DOW.map((d, i) => (
-            <div key={d} style={css({ textAlign: "center" as const, padding: "4px 0", fontSize: 11, fontWeight: 700, color: i === 0 ? C.danger : i === 6 ? "#1565c0" : C.textSub })}>
+            <div key={d} style={css({ textAlign: "center" as const, padding: "4px 0", fontSize: 11, fontWeight: 700, color: i === 0 ? C.danger : i === 6 ? C.info : C.textSub })}>
               {d}
             </div>
           ))}
@@ -108,7 +103,7 @@ export default function DatePicker({ label, value, onSelect, onClose }: Props) {
                   padding: "7px 2px",
                   cursor: date ? "pointer" : "default",
                   background: isSel ? C.primary : isToday ? C.primary3 : "transparent",
-                  color: isSel ? "#fff" : isToday ? C.primary : dow === 0 ? C.danger : dow === 6 ? "#1565c0" : C.text,
+                  color: isSel ? "#fff" : isToday ? C.primary : dow === 0 ? C.danger : dow === 6 ? C.info : C.text,
                   fontSize: 13,
                   fontWeight: isSel || isToday ? 700 : 400,
                   outline: isSel ? `2px solid ${C.primary2}` : "none",

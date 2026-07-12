@@ -4,26 +4,12 @@ import {
   ChevronLeft, ChevronRight, Plus, X, Save, RefreshCw,
   Trash2, Leaf, MapPin, CalendarDays, ClipboardList,
 } from "lucide-react";
+import { C } from "../ui/tokens";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 );
-
-const C = {
-  primary:   "#2d6a2d",
-  primary2:  "#3a8a3a",
-  primary3:  "#e8f5e9",
-  primary4:  "#c8e6c9",
-  danger:    "#c0392b",
-  dangerBg:  "#fdecea",
-  text:      "#1a2e1a",
-  textSub:   "#4a6a4a",
-  textMuted: "#8aaa8a",
-  bg:        "#f4f7f2",
-  card:      "#ffffff",
-  border:    "#dde8dd",
-};
 
 const DEFAULT_BAR_COLOR = "#4CAF50";
 
