@@ -20,7 +20,7 @@ import AnalyticsView from "./components/AnalyticsView";
 import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-import { C, roleLabel, roleColor } from "./ui/tokens";
+import { C, SHADOW, RADIUS, roleLabel, roleColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
 import RowMenu from "./ui/RowMenu";
@@ -1165,13 +1165,13 @@ export default function App() {
     page:    css({ padding:"16px 16px 0" }),
     sec:     css({ fontSize:12, fontWeight:600, color:C.textMuted, marginBottom:8, marginTop:20, letterSpacing:0.4, textTransform:"uppercase" as const }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
-    card:    css({ background:C.card, borderRadius:8, padding:"14px 16px", marginBottom:8, border:`1px solid ${C.border}` }),
+    card:    css({ background:C.card, borderRadius:RADIUS.card, padding:"14px 16px", marginBottom:8, boxShadow:SHADOW.card }),
     input:   css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
     select:  css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text }),
     btn:     btn("primary", "lg"),
     btnSm:   { ...btn("dangerOutline", "sm"), minWidth:48, flexShrink:0 },
     row:     css({ display:"flex", justifyContent:"space-between", alignItems:"center" }),
-    wxBox:   css({ background:C.card, borderRadius:8, padding:"14px 16px", marginBottom:14, border:`1px solid ${C.border}` }),
+    wxBox:   css({ background:C.card, borderRadius:RADIUS.card, padding:"14px 16px", marginBottom:14, boxShadow:SHADOW.card }),
     wxGrid:  css({ display:"flex", flexWrap:"nowrap" as const, gap:6, marginTop:8, overflowX:"auto" as const }),
     wxBadge: css({ background:C.bg, borderRadius:6, padding:"4px 7px", display:"inline-flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.text, border:`1px solid ${C.border}`, whiteSpace:"nowrap" as const, flexShrink:0 }),
 
@@ -1398,13 +1398,13 @@ export default function App() {
           ) : null}
           {/* 統計カードグリッド */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
-            <div style={{ background:"#fff", border:`0.5px solid ${C.border}`, borderRadius:12, padding:12 }}>
+            <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, padding:"14px 16px" }}>
               <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>直近7日の作業</div>
               <div style={{ fontSize:22, fontWeight:700, color:C.text }}>
                 {workCount7d}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:C.textMuted }}>件</span>
               </div>
             </div>
-            <div style={{ background:"#fff", border:`0.5px solid ${C.border}`, borderRadius:12, padding:12 }}>
+            <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, padding:"14px 16px" }}>
               <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>今週の収穫</div>
               {weekHarvest > 0 ? (
                 <div style={{ fontSize:22, fontWeight:700, color:C.text }}>
@@ -1420,8 +1420,8 @@ export default function App() {
           {(() => {
             const todaySchedsHome = schedules.filter(s => s.date === todayStr);
             return (
-              <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:12, marginBottom:12 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:8 }}>今日の予定</div>
+              <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, padding:"14px 16px", marginBottom:12 }}>
+                <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:8 }}>今日の予定</div>
                 {todaySchedsHome.length === 0 ? (
                   <div>
                     <p style={{ fontSize:13, color:C.textMuted, margin:"0 0 8px" }}>予定はありません</p>
@@ -1654,7 +1654,7 @@ export default function App() {
                 <div style={{ fontSize:13, fontWeight:700, color:C.warning, marginBottom:8 }}>
                   未報告の作業
                 </div>
-                <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"0 12px" }}>
+                <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, padding:"0 16px" }}>
                   {unreported.map((s, i) => {
                     const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
                     return (
