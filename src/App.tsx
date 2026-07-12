@@ -1826,6 +1826,7 @@ export default function App() {
                 <div key={c.id} style={{ ...S.card, cursor:"pointer" }} onClick={() => setSelectedCropId(c.id)}>
                   <div style={S.row}>
                     <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
+                      <span style={{ width:10, height:10, borderRadius:"50%", background:cropColor(c.id), flexShrink:0 }} />
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
                         <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{c.start_date}</div>
@@ -1996,13 +1997,18 @@ export default function App() {
             ) : pesticides.map(p => (
               <div key={p.id} style={S.card}>
                 <div style={S.row}>
-                  <div style={{ minWidth:0, flex:1 }}>
-                    <div style={{ fontWeight:700, fontSize:15, color:C.text, marginBottom:3 }}>{p.name}</div>
-                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" as const }}>
-                      <span style={{ fontSize:12, color:C.textMuted }}>{p.type}</span>
-                      {p.dilution_rate && <span style={{ fontSize:12, color:C.textMuted }}>· {p.dilution_rate}</span>}
+                  <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0, flex:1 }}>
+                    <div style={{ width:34, height:34, borderRadius:10, background:C.pesticideBg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <FlaskConical size={16} color={C.pesticide} strokeWidth={2} />
                     </div>
-                    {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{p.notes}</div>}
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div style={{ fontWeight:700, fontSize:15, color:C.text, marginBottom:3 }}>{p.name}</div>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap" as const }}>
+                        <span style={{ fontSize:12, color:C.textMuted }}>{p.type}</span>
+                        {p.dilution_rate && <span style={{ fontSize:12, color:C.textMuted }}>· {p.dilution_rate}</span>}
+                      </div>
+                      {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{p.notes}</div>}
+                    </div>
                   </div>
                   {isAdmin && (
                     <RowMenu menuKey={`mp${p.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
@@ -2638,6 +2644,9 @@ export default function App() {
                       </select>
                     )}
                   </div>
+                  {rForm.work_type && (
+                    <span style={{ width:9, height:9, borderRadius:"50%", background:workTypeColor(rForm.work_type).fg, flexShrink:0 }} />
+                  )}
                   <ChevronRight size={18} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />
                 </div>
               </div>
