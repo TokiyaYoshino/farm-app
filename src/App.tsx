@@ -6,11 +6,11 @@ import {
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
   Snowflake, CloudLightning, MapPin, RefreshCw, AlertCircle,
   PackageCheck, CalendarDays,
-  UserCircle, Trash2, PlusCircle, ClipboardList,
+  UserCircle, Trash2, PlusCircle, ClipboardList, Check,
   Wind, Camera, X, Navigation, Search, Save,
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
-  ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings, Copy,
+  ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -1178,6 +1178,13 @@ export default function App() {
     nav:     css({ position:"fixed" as const, bottom:0, left:0, right:0, background:C.navBg, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:100 }),
     center:  css({ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", flexDirection:"column" as const, gap:12, fontSize:15, color:C.textMuted }),
     divider: css({ height:1, background:C.border, margin:"8px 0 12px" }),
+    // Soft Widget: グループ入力（灰の受け皿 well に白い行 row を積む）
+    wellBox: css({ background:C.well, borderRadius:18, padding:6, marginBottom:12 }),
+    wrow:    css({ background:C.card, borderRadius:14, padding:"12px 16px", display:"flex", alignItems:"center", gap:12, boxShadow:"0 1px 2px rgba(16,17,20,.04)" }),
+    lbl2:    css({ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:2 }),
+    fieldSelect: css({ width:"100%", border:"none", outline:"none", background:"none", fontSize:16, fontWeight:600, color:C.text, appearance:"none" as const, WebkitAppearance:"none" as const, padding:0, cursor:"pointer" }),
+    fieldInput:  css({ width:"100%", border:"none", outline:"none", background:"none", fontSize:16, fontWeight:600, color:C.text, padding:0 }),
+    circleBtn: css({ width:32, height:32, borderRadius:999, background:C.well, border:"none", display:"flex", alignItems:"center", justifyContent:"center", color:C.textSub, cursor:"pointer", flexShrink:0 }),
   };
 
 
@@ -2546,92 +2553,92 @@ export default function App() {
       </nav>
 
       {/* ───── クイック作業記録モーダル ───── */}
-      {showQuickReport && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:450, display:"flex", alignItems:"flex-end" }}
-          onClick={() => { setShowQuickReport(false); setQuickExpanded(false); }}>
-          <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"90vh", overflowY:"auto", paddingBottom:44 }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"12px auto 0" }} />
-
+      <BottomSheet open={showQuickReport} onClose={() => { setShowQuickReport(false); setQuickExpanded(false); }}>
             {/* ヘッダー */}
-            <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <div style={{ background:C.primary3, borderRadius:8, padding:7, flexShrink:0 }}>
-                  <PenLine size={16} color={C.primary} strokeWidth={2} />
-                </div>
-                <span style={{ fontWeight:700, fontSize:16, color:C.text }}>作業記録</span>
-              </div>
-              <button onClick={() => { setShowQuickReport(false); setQuickExpanded(false); }}
-                style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 8px", cursor:"pointer", display:"flex", color:C.textMuted }}>
+            <div style={{ padding:"6px 16px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <span style={{ fontWeight:700, fontSize:17, color:C.text }}>作業を記録</span>
+              <button onClick={() => { setShowQuickReport(false); setQuickExpanded(false); }} style={S.circleBtn}>
                 <X size={16} strokeWidth={2} />
               </button>
             </div>
 
             <div style={{ padding:"0 16px" }}>
-              {/* 天気表示 */}
-              <div style={{ background:C.primary3, borderRadius:8, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
-                <div style={{ fontSize:11, color:C.textSub, fontWeight:600, marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
-                  <MapPin size={11} color={C.primary} strokeWidth={2} />{weatherCoords?.name ?? "..."} · 天気（自動入力）
-                </div>
-                {wxLoading
-                  ? <div style={{ fontSize:12, color:C.textMuted }}>取得中...</div>
-                  : wxAuto
-                  ? <WxBadges wx={wxAuto} />
-                  : (
-                    <div style={{ display:"flex", gap:8, marginTop:4 }}>
-                      <select style={{ ...S.select, marginBottom:0, flex:2, fontSize:13, padding:"7px 10px" }} value={wxManual.label}
-                        onChange={e => { const o = WEATHER_OPTIONS.find(x => x.label === e.target.value) || WEATHER_OPTIONS[0]; setWxManual(f => ({ ...f, label:o.label, Icon:o.icon })); }}>
-                        {WEATHER_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.label}</option>)}
-                      </select>
-                      <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1, fontSize:13, padding:"7px 10px" }}
-                        value={wxManual.temp} onChange={e => setWxManual(f => ({ ...f, temp:e.target.value }))} />
+              {/* 天気（白row） */}
+              <div style={S.wellBox}>
+                <div style={S.wrow}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ ...S.lbl2, display:"flex", alignItems:"center", gap:4 }}>
+                      <MapPin size={11} color={C.textMuted} strokeWidth={2} />{weatherCoords?.name ?? "..."} · 天気（自動）
                     </div>
-                  )}
-              </div>
-
-              {/* 日付 */}
-              <div style={S.lbl}>日付</div>
-              <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
-
-              {/* 作物・圃場 2カラム */}
-              <div style={{ display:"flex", gap:10 }}>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={S.lbl}>作物</div>
-                  <select style={{ ...S.select }} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
-                    {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={S.lbl}>圃場</div>
-                  <select style={{ ...S.select }} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
-                    {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
-                  </select>
+                    {wxLoading
+                      ? <div style={{ fontSize:13, color:C.textMuted }}>取得中...</div>
+                      : wxAuto
+                      ? <WxBadges wx={wxAuto} />
+                      : (
+                        <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                          <select style={{ ...S.select, marginBottom:0, flex:2, fontSize:14, padding:"6px 8px" }} value={wxManual.label}
+                            onChange={e => { const o = WEATHER_OPTIONS.find(x => x.label === e.target.value) || WEATHER_OPTIONS[0]; setWxManual(f => ({ ...f, label:o.label, Icon:o.icon })); }}>
+                            {WEATHER_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.label}</option>)}
+                          </select>
+                          <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1, fontSize:14, padding:"6px 8px" }}
+                            value={wxManual.temp} onChange={e => setWxManual(f => ({ ...f, temp:e.target.value }))} />
+                        </div>
+                      )}
+                  </div>
                 </div>
               </div>
 
-              {/* 作業種別 */}
-              <div style={S.lbl}>作業の種類</div>
-              {workCategories.length > 0 ? (
-                <select style={S.select} value={rForm.work_category_id}
-                  onChange={e => {
-                    const cat = workCategories.find(c => c.id === Number(e.target.value));
-                    setRForm(f => ({ ...f, work_category_id: Number(e.target.value), work_type: cat?.name ?? f.work_type, quantity_unit: cat?.unit ?? f.quantity_unit }));
-                  }}>
-                  <option value={0}>選択してください</option>
-                  {workCategories.map(c => <option key={c.id} value={c.id}>{c.name}{c.unit ? `（${c.unit}）` : ""}</option>)}
-                </select>
-              ) : (
-                <select style={S.select} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
-                  {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              )}
+              {/* 日付・作物/圃場・作業種別（グループ入力） */}
+              <div style={S.wellBox}>
+                <div style={S.wrow}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={S.lbl2}>日付</div>
+                    <input type="date" style={{ ...S.fieldInput, maxWidth:"100%" }} value={rForm.date} onChange={e => setRForm(f => ({ ...f, date:e.target.value }))} />
+                  </div>
+                </div>
+                <div style={{ ...S.wrow, marginTop:6 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={S.lbl2}>作物</div>
+                    <select style={S.fieldSelect} value={rForm.crop_id} onChange={e => setRForm(f => ({ ...f, crop_id:Number(e.target.value) }))}>
+                      {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ flex:1, minWidth:0, borderLeft:`1px solid ${C.hairline}`, paddingLeft:16 }}>
+                    <div style={S.lbl2}>圃場</div>
+                    <select style={S.fieldSelect} value={rForm.field} onChange={e => setRForm(f => ({ ...f, field:e.target.value }))}>
+                      {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ ...S.wrow, marginTop:6 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={S.lbl2}>作業の種類</div>
+                    {workCategories.length > 0 ? (
+                      <select style={S.fieldSelect} value={rForm.work_category_id}
+                        onChange={e => {
+                          const cat = workCategories.find(c => c.id === Number(e.target.value));
+                          setRForm(f => ({ ...f, work_category_id: Number(e.target.value), work_type: cat?.name ?? f.work_type, quantity_unit: cat?.unit ?? f.quantity_unit }));
+                        }}>
+                        <option value={0}>選択してください</option>
+                        {workCategories.map(c => <option key={c.id} value={c.id}>{c.name}{c.unit ? `（${c.unit}）` : ""}</option>)}
+                      </select>
+                    ) : (
+                      <select style={S.fieldSelect} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
+                        {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  <ChevronRight size={18} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />
+                </div>
+              </div>
 
               {/* 詳細アコーディオン */}
               <button
                 onClick={() => setQuickExpanded(p => !p)}
-                style={{ width:"100%", padding:"12px 0", background:"none", border:`1px dashed ${C.border}`, borderRadius:8, cursor:"pointer", fontSize:13, color:C.textSub, fontWeight:600, marginBottom:quickExpanded ? 8 : 0, marginTop:4 }}
+                style={{ ...btn("secondary", "md"), width:"100%", color:C.textSub, marginBottom:12, marginTop:2 }}
               >
-                {quickExpanded ? "▲ 詳細を閉じる" : "▼ 詳細を入力"}
+                <ChevronDown size={15} strokeWidth={2} style={{ transform: quickExpanded ? "rotate(180deg)" : "none", transition:"transform .15s" }} />
+                {quickExpanded ? "詳細を閉じる" : "詳細を入力"}
               </button>
 
               {quickExpanded && (
@@ -2762,12 +2769,10 @@ export default function App() {
               >
                 {imgUploading
                   ? <><RefreshCw size={16} strokeWidth={2} />アップロード中...</>
-                  : <><ClipboardList size={16} strokeWidth={2} />すぐ保存する</>}
+                  : <><Check size={17} strokeWidth={2.4} />保存する</>}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </BottomSheet>
 
       {/* ログイン設定モーダル */}
       {setAuthTarget && (

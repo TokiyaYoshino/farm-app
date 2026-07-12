@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>farm-app リデザイン案 — Soft Widget</title>
+<style>
+  :root{
+    --bg:#F5F5F6; --well:#EFEFF1; --card:#FFFFFF;
+    --ink:#2E7D32; --inkPress:#256628; --inkSoft:#E4F0E4;
+    --text:#1A1C1E; --textSub:#66696E; --textMuted:#9EA1A6; --hairline:#EBEBED;
+    --danger:#D4453C; --dangerBg:#FBEBEA; --warning:#DD8A0A;
+    --pesticide:#7B1FA2; --temp:#E07020; --rain:#0288D1;
+    --sh-card:0 1px 2px rgba(16,17,20,.04), 0 8px 24px rgba(16,17,20,.06);
+    --sh-float:0 12px 40px rgba(16,17,20,.14);
+    --sh-pill:0 2px 8px rgba(16,17,20,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  body{background:#E8E8EA;font-family:-apple-system,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;color:var(--text);line-height:1.5;padding:28px;}
+  .pagehead{max-width:1200px;margin:0 auto 24px;}
+  .pagehead h1{font-size:20px;font-weight:700;letter-spacing:-.02em;}
+  .pagehead p{font-size:13px;color:var(--textSub);margin-top:4px;}
+  .grid{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;gap:28px;justify-content:center;}
+  .phone{width:360px;background:var(--bg);border-radius:34px;box-shadow:var(--sh-float);overflow:hidden;position:relative;border:8px solid #fff;}
+  .screen{height:720px;overflow:hidden;position:relative;display:flex;flex-direction:column;}
+  .caption{font-size:12px;color:var(--textSub);text-align:center;margin-top:10px;font-weight:600;}
+  .frame{display:flex;flex-direction:column;align-items:center;}
+
+  /* header */
+  .appbar{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;}
+  .appbar .title{font-size:17px;font-weight:700;letter-spacing:-.01em;}
+  .iconbtn{width:36px;height:36px;border-radius:999px;background:var(--well);border:none;display:flex;align-items:center;justify-content:center;color:var(--textSub);cursor:pointer;}
+  .body{flex:1;overflow:auto;padding:4px 16px 90px;}
+
+  /* labels & values */
+  .lbl{font-size:11px;font-weight:500;color:var(--textMuted);letter-spacing:.02em;}
+  .val{font-size:16px;font-weight:600;color:var(--text);}
+  .sec{font-size:11px;font-weight:600;color:var(--textMuted);letter-spacing:.08em;text-transform:uppercase;margin:20px 2px 10px;}
+
+  /* group input well */
+  .well{background:var(--well);border-radius:18px;padding:6px;}
+  .row{background:var(--card);border-radius:14px;padding:13px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 2px rgba(16,17,20,.04);}
+  .well .row + .row{margin-top:6px;}
+  .row .grow{flex:1;min-width:0;}
+  .row .placeholder{font-size:16px;color:var(--textMuted);font-weight:400;}
+
+  /* pills / buttons */
+  .pill{border:none;border-radius:999px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:15px;padding:14px 26px;}
+  .pill.primary{background:var(--ink);color:#fff;box-shadow:var(--sh-pill);}
+  .pill.secondary{background:var(--card);color:var(--text);border:1px solid var(--hairline);}
+  .pill.sm{font-size:13px;padding:9px 16px;}
+  .pill.full{width:100%;}
+  .ghost{background:none;border:none;color:var(--textSub);font-weight:600;font-size:13px;cursor:pointer;}
+
+  /* cards */
+  .card{background:var(--card);border-radius:20px;box-shadow:var(--sh-card);}
+  .statrow{display:flex;gap:12px;}
+  .stat{flex:1;background:var(--card);border-radius:20px;box-shadow:var(--sh-card);padding:16px;}
+  .stat .k{font-size:11px;color:var(--textMuted);font-weight:500;}
+  .stat .v{font-size:26px;font-weight:700;margin-top:6px;letter-spacing:-.02em;}
+  .stat .v small{font-size:12px;font-weight:600;color:var(--textMuted);margin-left:3px;}
+
+  /* list rows in one card */
+  .listcard{background:var(--card);border-radius:20px;box-shadow:var(--sh-card);overflow:hidden;}
+  .litem{display:flex;align-items:center;gap:12px;padding:15px 16px;}
+  .litem + .litem{border-top:1px solid var(--hairline);}
+  .litem .t{font-size:15px;font-weight:600;}
+  .litem .m{font-size:12px;color:var(--textMuted);margin-top:2px;}
+
+  /* chips */
+  .chips{display:flex;gap:8px;overflow:auto;padding-bottom:4px;}
+  .chip{flex-shrink:0;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:600;border:1px solid var(--hairline);background:var(--card);color:var(--textSub);cursor:pointer;white-space:nowrap;}
+  .chip.on{background:var(--inkSoft);color:var(--ink);border-color:transparent;}
+
+  /* search */
+  .search{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:11px 14px;box-shadow:var(--sh-card);}
+  .search input{border:none;outline:none;background:none;font-size:15px;flex:1;color:var(--text);}
+  .search input::placeholder{color:var(--textMuted);}
+
+  /* bottom sheet */
+  .sheet{position:absolute;inset:0;background:rgba(20,21,24,.32);display:flex;align-items:flex-end;}
+  .sheetcard{background:var(--card);border-radius:24px 24px 0 0;width:100%;padding:0 16px 24px;box-shadow:var(--sh-float);max-height:92%;overflow:auto;}
+  .grab{width:38px;height:4px;background:var(--well);border-radius:4px;margin:12px auto 6px;}
+  .sheethead{display:flex;align-items:center;justify-content:space-between;padding:8px 2px 14px;}
+  .sheethead .title{font-size:17px;font-weight:700;}
+
+  /* calendar */
+  .cal{background:var(--card);border-radius:20px;box-shadow:var(--sh-float);padding:16px;}
+  .calnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .calnav .mo{font-size:15px;font-weight:700;}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
+  .dow span{text-align:center;font-size:11px;font-weight:600;color:var(--textMuted);letter-spacing:.08em;}
+  .days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+  .day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:14px;color:var(--text);border-radius:12px;cursor:pointer;position:relative;}
+  .day.mut{color:var(--textMuted);}
+  .day.sel{background:var(--ink);color:#fff;font-weight:700;}
+  .day .dot{width:4px;height:4px;border-radius:50%;background:var(--ink);position:absolute;bottom:6px;}
+  .day .dotm{width:3px;height:3px;border-radius:50%;background:var(--textMuted);position:absolute;bottom:7px;}
+  .calfoot{display:flex;gap:10px;margin-top:14px;}
+  .calfoot .pill{flex:1;}
+
+  /* wheel */
+  .wheel{background:var(--card);border-radius:20px;box-shadow:var(--sh-float);padding:8px 16px;}
+  .wheelbox{display:flex;align-items:center;justify-content:center;gap:0;position:relative;height:200px;}
+  .col{flex:1;text-align:center;display:flex;flex-direction:column;gap:6px;padding:8px 0;}
+  .col div{font-size:20px;color:var(--textMuted);font-weight:500;}
+  .col .now{background:var(--card);}
+  .wheelsel{position:absolute;left:8px;right:8px;top:50%;transform:translateY(-50%);height:44px;background:var(--well);border-radius:12px;z-index:0;}
+  .colw{position:relative;z-index:1;display:flex;width:100%;}
+  .colw .c{flex:1;text-align:center;display:flex;flex-direction:column;gap:8px;}
+  .colw .c div{font-size:19px;color:var(--textMuted);font-weight:500;height:26px;}
+  .colw .c .sel{color:var(--text);font-weight:700;font-size:22px;}
+  .colon{align-self:center;color:var(--textMuted);font-weight:700;padding:0 4px;}
+
+  /* nav */
+  .nav{position:absolute;bottom:0;left:0;right:0;height:62px;background:var(--card);border-top:1px solid var(--hairline);display:flex;}
+  .nav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;color:var(--textMuted);font-weight:600;text-decoration:none;}
+  .nav a.on{color:var(--ink);}
+  .fab{position:absolute;right:16px;bottom:74px;background:var(--ink);color:#fff;border:none;border-radius:999px;padding:14px 20px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:7px;box-shadow:0 6px 18px rgba(46,125,50,.32);cursor:pointer;}
+
+  .weatherline{display:flex;align-items:center;gap:14px;}
+  .weatherline .w{display:flex;align-items:center;gap:5px;font-size:14px;font-weight:600;color:var(--text);}
+  .weatherline .w.sub{color:var(--textSub);font-weight:500;}
+  .badge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--inkSoft);color:var(--ink);}
+  .badge.warn{background:#FBF1DF;color:var(--warning);}
+  .note{font-size:12px;color:var(--textSub);border-left:2px solid var(--hairline);padding-left:10px;margin-top:8px;}
+  svg{display:block;}
+</style>
+</head>
+<body>
+<div class="pagehead">
+  <h1>farm-app リデザイン案 — Soft Widget スタイル</h1>
+  <p>白カード＋灰の受け皿の入れ子・深緑アクセント1色・ピルボタン・ラベル小/値大。border ではなく影と面の色差で階層化。</p>
+</div>
+
+<div class="grid">
+
+  <!-- 1. クイック記録モーダル -->
+  <div class="frame">
+  <div class="phone"><div class="screen" style="background:var(--bg)">
+    <div style="filter:blur(1.5px);opacity:.5;padding:16px 18px">
+      <div class="appbar" style="padding:0 0 12px"><div class="title">ホーム</div><div class="iconbtn"></div></div>
+      <div class="statrow"><div class="stat"><div class="k">直近7日</div><div class="v">12<small>件</small></div></div><div class="stat"><div class="k">今週の収穫</div><div class="v">84<small>kg</small></div></div></div>
+    </div>
+    <div class="sheet">
+      <div class="sheetcard">
+        <div class="grab"></div>
+        <div class="sheethead"><div class="title">作業を記録</div><button class="iconbtn">✕</button></div>
+
+        <div class="well" style="margin-bottom:10px">
+          <div class="row">
+            <div class="grow">
+              <div class="lbl">📍 神奈川県横浜市 · 天気（自動）</div>
+              <div class="weatherline" style="margin-top:5px">
+                <span class="w"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--temp)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></svg>晴れ</span>
+                <span class="w sub"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--temp)" stroke-width="2" stroke-linecap="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>25°C</span>
+                <span class="w sub"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--rain)" stroke-width="2" stroke-linecap="round"><path d="M7 16.3A5 5 0 0 1 9 6.7 6 6 0 0 1 20 10a4.5 4.5 0 0 1 0 9H8"/></svg>81%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="well" style="margin-bottom:10px">
+          <div class="row">
+            <div class="grow"><div class="lbl">日付</div><div class="val">2026年7月16日</div></div>
+            <button class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+          </div>
+          <div class="row">
+            <div class="grow" style="display:flex;gap:20px">
+              <div><div class="lbl">作物</div><div class="val">ほうれん草</div></div>
+              <div style="border-left:1px solid var(--hairline);padding-left:20px"><div class="lbl">圃場</div><div class="val">A-3 東畑</div></div>
+            </div>
+            <button class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+          </div>
+          <div class="row">
+            <div class="grow"><div class="lbl">作業の種類</div><div class="placeholder">選択してください</div></div>
+            <button class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </div>
+
+        <button class="pill secondary full" style="margin-bottom:12px;color:var(--textSub)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>詳細を入力
+        </button>
+        <button class="pill primary full">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>保存する
+        </button>
+      </div>
+    </div>
+  </div></div>
+  <div class="caption">① クイック記録（グループ入力）</div>
+  </div>
+
+  <!-- 2. カレンダー & 時刻ホイール -->
+  <div class="frame">
+  <div class="phone"><div class="screen" style="background:var(--bg);justify-content:center;padding:0 16px;gap:16px">
+    <div class="cal">
+      <div class="calnav">
+        <button class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 18-6-6 6-6"/></svg></button>
+        <div class="mo">2026年7月</div>
+        <button class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+      <div class="dow"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div>
+      <div class="days" id="days"></div>
+      <div class="calfoot"><button class="pill secondary sm">戻る</button><button class="pill primary sm">決定</button></div>
+    </div>
+    <div class="wheel">
+      <div class="wheelbox">
+        <div class="wheelsel"></div>
+        <div class="colw">
+          <div class="c"><div>00</div><div>01</div><div class="sel">02</div><div>03</div><div>04</div></div>
+          <div class="colon">:</div>
+          <div class="c"><div>35</div><div>40</div><div class="sel">45</div><div>50</div><div>55</div></div>
+        </div>
+      </div>
+      <div class="calfoot" style="margin-top:6px"><button class="pill secondary sm">戻る</button><button class="pill primary sm">決定</button></div>
+    </div>
+  </div></div>
+  <div class="caption">② 日付・時刻ピッカー</div>
+  </div>
+
+  <!-- 3. 記録一覧（検索） -->
+  <div class="frame">
+  <div class="phone"><div class="screen">
+    <div class="appbar"><div class="title">作業記録</div><div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--textSub)" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div></div>
+    <div style="padding:0 16px 8px;display:flex;gap:8px">
+      <button class="pill secondary sm" style="flex:1;color:var(--textSub)">カレンダー</button>
+      <button class="pill primary sm" style="flex:1">記録一覧</button>
+    </div>
+    <div class="body" style="padding-top:4px">
+      <div class="search" style="margin-bottom:12px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input placeholder="メモ・作物・圃場で検索" value="防除"/>
+      </div>
+      <div class="chips" style="margin-bottom:14px">
+        <span class="chip on">作物：ほうれん草</span><span class="chip">圃場：すべて</span><span class="chip">作業：すべて</span><span class="chip">担当：すべて</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:12px;color:var(--textMuted)">3件の記録</span><span class="ghost">条件をクリア</span></div>
+
+      <div class="card" style="padding:15px 16px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><span style="font-weight:700;font-size:15px">ほうれん草</span> <span style="font-size:12px;color:var(--textMuted)">· A-3 東畑</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--textMuted)">7/14</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg></div>
+        </div>
+        <div style="height:1px;background:var(--hairline);margin:12px -16px"></div>
+        <div style="font-size:12px;color:var(--textMuted)">防除 · サンケイ石灰硫黄合剤 · 田中 · 晴れ 25°C</div>
+        <div class="note">うどんこ病の予防。葉裏まで散布。</div>
+        <div style="display:flex;gap:8px;margin-top:12px"><button class="pill secondary sm" style="flex:1;color:var(--textSub)">詳細を見る</button><button class="pill secondary sm" style="flex:1;color:var(--text)">コピーして作成</button></div>
+      </div>
+
+      <div class="card" style="padding:15px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><span style="font-weight:700;font-size:15px">ほうれん草</span> <span style="font-size:12px;color:var(--textMuted)">· B-1 西畑</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--textMuted)">7/2</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg></div>
+        </div>
+        <div style="height:1px;background:var(--hairline);margin:12px -16px"></div>
+        <div style="font-size:12px;color:var(--textMuted)">防除 · 丸京印ボルドー · 佐藤 · 曇り</div>
+      </div>
+    </div>
+    <button class="fab"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>記録</button>
+    <div class="nav">
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 12 3l9 6.5V21H3z"/></svg>ホーム</a>
+      <a class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>記録</a>
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>分析</a>
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.4l2-1.5-2-3.4-2.3.9A7 7 0 0 0 14 5.3L13.7 3h-3.4L10 5.3a7 7 0 0 0-2.5 1.3l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2.5 1.3l.3 2.3h3.4l.3-2.3a7 7 0 0 0 2.5-1.3l2.3.9 2-3.4-2-1.5c.1-.5.1-.9.1-1.4z"/></svg>管理</a>
+    </div>
+  </div></div>
+  <div class="caption">③ 記録一覧（検索・フィルタ）</div>
+  </div>
+
+  <!-- 4. ホーム -->
+  <div class="frame">
+  <div class="phone"><div class="screen">
+    <div class="appbar"><div class="title">農作業レポート</div><div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--textSub)" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div></div>
+    <div class="body">
+      <div class="statrow" style="margin-bottom:8px">
+        <div class="stat"><div class="k">直近7日の作業</div><div class="v">12<small>件</small></div></div>
+        <div class="stat"><div class="k">今週の収穫</div><div class="v">84<small>kg</small></div></div>
+      </div>
+
+      <div class="card" style="padding:14px 16px;margin-bottom:8px">
+        <div class="lbl" style="margin-bottom:10px">今日の予定</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:2px 0">
+          <div class="grow"><div style="font-size:14px;font-weight:600">防除（うどんこ病予防）</div><div style="font-size:11px;color:var(--textMuted);margin-top:2px">防除 · ほうれん草 · A-3 東畑</div></div>
+          <button class="pill primary sm" style="flex-shrink:0"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>実績にする</button>
+        </div>
+        <div style="height:1px;background:var(--hairline);margin:9px 0"></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:2px 0">
+          <div class="grow"><div style="font-size:14px;font-weight:600">灌水</div><div style="font-size:11px;color:var(--textMuted);margin-top:2px">灌水 · たまねぎ · C-2</div></div>
+          <button class="pill secondary sm" style="flex-shrink:0;color:var(--ink);border-color:var(--inkSoft)">実績にする</button>
+        </div>
+      </div>
+
+      <div class="sec">作物サマリー</div>
+      <div class="listcard">
+        <div class="litem"><div class="grow"><div class="t">ほうれん草</div><div class="m">42日目 · 8回 · 84kg収穫</div></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></div>
+        <div class="litem"><div class="grow"><div class="t">にんにく</div><div class="m">120日目 · 15回</div></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></div>
+        <div class="litem"><div class="grow"><div class="t">たまねぎ</div><div class="m">30日目 · 4回</div></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></div>
+      </div>
+    </div>
+    <button class="fab"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>記録</button>
+    <div class="nav">
+      <a class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 12 3l9 6.5V21H3z"/></svg>ホーム</a>
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>記録</a>
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>分析</a>
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 12a7 7 0 0 0 0 0"/><path d="M19 12a7 7 0 0 0-.1-1.4l2-1.5-2-3.4-2.3.9A7 7 0 0 0 14 5.3L13.7 3h-3.4L10 5.3a7 7 0 0 0-2.5 1.3l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2.5 1.3l.3 2.3h3.4l.3-2.3a7 7 0 0 0 2.5-1.3l2.3.9 2-3.4-2-1.5c.1-.5.1-.9.1-1.4z"/></svg>管理</a>
+    </div>
+  </div></div>
+  <div class="caption">④ ホーム（予定→実績化）</div>
+  </div>
+
+  <!-- 5. 農薬リスト -->
+  <div class="frame">
+  <div class="phone"><div class="screen">
+    <div class="appbar"><div class="title">管理</div><div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--textSub)" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div></div>
+    <div style="display:flex;padding:0 16px 6px;gap:0">
+      <button class="ghost" style="flex:1;padding:8px 0">作物</button>
+      <button class="ghost" style="flex:1;padding:8px 0">圃場</button>
+      <button style="flex:1;padding:8px 0;border:none;background:none;color:var(--ink);font-weight:700;font-size:13px;border-bottom:2px solid var(--ink);cursor:pointer">農薬</button>
+    </div>
+    <div class="body" style="padding-top:12px">
+      <div class="sec" style="margin-top:0;display:flex;align-items:center;gap:6">＋ 農薬を追加</div>
+      <div class="listcard">
+        <div class="litem">
+          <div style="width:34px;height:34px;border-radius:10px;background:var(--well);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--pesticide)" stroke-width="2" stroke-linecap="round"><path d="M9 3h6M10 3v6l-4.5 8A2 2 0 0 0 7 20h10a2 2 0 0 0 1.5-3L14 9V3"/></svg></div>
+          <div class="grow"><div class="t">サンケイ石灰硫黄合剤</div><div class="m">石灰硫黄合剤 · 希釈 200倍</div></div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
+        </div>
+        <div class="litem">
+          <div style="width:34px;height:34px;border-radius:10px;background:var(--well);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--pesticide)" stroke-width="2" stroke-linecap="round"><path d="M9 3h6M10 3v6l-4.5 8A2 2 0 0 0 7 20h10a2 2 0 0 0 1.5-3L14 9V3"/></svg></div>
+          <div class="grow"><div class="t">丸京印ボルドー液用生石灰</div><div class="m">生石灰</div></div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
+        </div>
+      </div>
+
+      <div class="sec">未報告の作業</div>
+      <div class="card" style="padding:4px 16px">
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 0">
+          <div class="grow"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:700">追肥（元肥）</span><span class="badge warn">未報告</span></div><div style="font-size:11px;color:var(--textSub);margin-top:4px">7/9 · にんにく · 田中</div></div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="nav">
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 12 3l9 6.5V21H3z"/></svg>ホーム</a>
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>記録</a>
+      <a><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>分析</a>
+      <a class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.4l2-1.5-2-3.4-2.3.9A7 7 0 0 0 14 5.3L13.7 3h-3.4L10 5.3a7 7 0 0 0-2.5 1.3l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2.5 1.3l.3 2.3h3.4l.3-2.3a7 7 0 0 0 2.5-1.3l2.3.9 2-3.4-2-1.5c.1-.5.1-.9.1-1.4z"/></svg>管理</a>
+    </div>
+  </div></div>
+  <div class="caption">⑤ 管理（農薬リスト・未報告）</div>
+  </div>
+
+</div>
+
+<script>
+  // build calendar days
+  const days=document.getElementById('days');
+  const blanks=1; // July 2026 starts Wednesday(月火水) -> 2 blanks; keep simple with 2
+  for(let i=0;i<2;i++){const d=document.createElement('div');d.className='day';days.appendChild(d);}
+  for(let n=1;n<=31;n++){
+    const d=document.createElement('div');d.className='day';d.textContent=n;
+    if(n===16){d.className='day sel';}
+    if(n===1){const dot=document.createElement('span');dot.className='dot';d.appendChild(dot);}
+    if(n===7||n===14){const dot=document.createElement('span');dot.className='dotm';d.appendChild(dot);}
+    days.appendChild(d);
+  }
+</script>
+</body>
+</html>
