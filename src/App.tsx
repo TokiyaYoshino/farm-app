@@ -10,7 +10,6 @@ import {
   Wind, Camera, X, Navigation, Search, Save,
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
-  MoreVertical,
   ChevronLeft, ChevronRight, BarChart2, Plus, FlaskConical, Settings, Copy,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
@@ -22,6 +21,9 @@ import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { C, roleLabel, roleColor } from "./ui/tokens";
+import { btn } from "./ui/styles";
+import BottomSheet from "./ui/BottomSheet";
+import RowMenu from "./ui/RowMenu";
 
 const makePin = (color: string) => L.divIcon({
   className: "",
@@ -1120,8 +1122,8 @@ export default function App() {
     card:    css({ background:C.card, borderRadius:8, padding:"14px 16px", marginBottom:8, border:`1px solid ${C.border}` }),
     input:   css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
     select:  css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text }),
-    btn:     css({ background:C.primary, color:"#fff", border:"none", borderRadius:8, padding:"13px 0", width:"100%", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, whiteSpace:"nowrap" as const, minHeight:52 }),
-    btnSm:   css({ background:C.dangerBg, color:C.danger, border:`1.5px solid ${C.danger}22`, borderRadius:6, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap" as const, minWidth:48, flexShrink:0 }),
+    btn:     btn("primary", "lg"),
+    btnSm:   { ...btn("dangerOutline", "sm"), minWidth:48, flexShrink:0 },
     row:     css({ display:"flex", justifyContent:"space-between", alignItems:"center" }),
     wxBox:   css({ background:C.card, borderRadius:8, padding:"14px 16px", marginBottom:14, border:`1px solid ${C.border}` }),
     wxGrid:  css({ display:"flex", flexWrap:"nowrap" as const, gap:6, marginTop:8, overflowX:"auto" as const }),
@@ -1463,18 +1465,8 @@ export default function App() {
                 <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                   <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
                   {(isAdmin || r.user_id === currentUser?.id) && (
-                    <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
-                      <button onClick={() => setOpenMenuId(openMenuId === `hr${r.id}` ? null : `hr${r.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", borderRadius:6, color:C.textMuted, display:"flex" }}>
-                        <MoreVertical size={16} strokeWidth={2} />
-                      </button>
-                      {openMenuId === `hr${r.id}` && (
-                        <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
-                          <button onClick={() => { setOpenMenuId(null); deleteReport(r.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-                            <Trash2 size={13} strokeWidth={2} />削除
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <RowMenu menuKey={`hr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                      items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteReport(r.id) }]} />
                   )}
                 </div>
               </div>
@@ -1525,32 +1517,26 @@ export default function App() {
       )}
 
       {/* マップモーダル */}
-      {showMapModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:450, display:"flex", alignItems:"flex-end" }}
-          onClick={() => setShowMapModal(false)}>
-          <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", height:"75vh", overflow:"hidden", display:"flex", flexDirection:"column" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
-              <span style={{ fontWeight:700, fontSize:15, color:C.text, display:"flex", alignItems:"center", gap:6 }}><MapPin size={16} color={C.primary} strokeWidth={2} />圃場マップ</span>
-              <button onClick={() => setShowMapModal(false)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 14px", cursor:"pointer", fontSize:13, color:C.textSub, fontWeight:600 }}>閉じる</button>
-            </div>
-            <div style={{ flex:1, overflow:"hidden" }}>
-              <MapContainer
-                center={(userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]) as [number,number]}
-                zoom={15}
-                style={{ width:"100%", height:"100%" }}
-                zoomControl={false}
-              >
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
-                {userPos && <Marker position={userPos} icon={PIN_BLUE}><Popup><b>現在地</b></Popup></Marker>}
-                {fields.filter(f => f.lat && f.lng).map(f => (
-                  <Marker key={f.id} position={[f.lat!, f.lng!]} icon={PIN_GREEN}><Popup><b>{f.name}</b></Popup></Marker>
-                ))}
-              </MapContainer>
-            </div>
-          </div>
+      <BottomSheet open={showMapModal} onClose={() => setShowMapModal(false)} height="75vh" padBottom={0}>
+        <div style={{ padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+          <span style={{ fontWeight:700, fontSize:15, color:C.text, display:"flex", alignItems:"center", gap:6 }}><MapPin size={16} color={C.primary} strokeWidth={2} />圃場マップ</span>
+          <button onClick={() => setShowMapModal(false)} style={btn("secondary", "sm")}>閉じる</button>
         </div>
-      )}
+        <div style={{ flex:1, overflow:"hidden" }}>
+          <MapContainer
+            center={(userPos ?? [weatherCoords?.lat ?? 35.0167, weatherCoords?.lng ?? 135.5833]) as [number,number]}
+            zoom={15}
+            style={{ width:"100%", height:"100%" }}
+            zoomControl={false}
+          >
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
+            {userPos && <Marker position={userPos} icon={PIN_BLUE}><Popup><b>現在地</b></Popup></Marker>}
+            {fields.filter(f => f.lat && f.lng).map(f => (
+              <Marker key={f.id} position={[f.lat!, f.lng!]} icon={PIN_GREEN}><Popup><b>{f.name}</b></Popup></Marker>
+            ))}
+          </MapContainer>
+        </div>
+      </BottomSheet>
 
       {/* ───── REPORT ───── */}
       {tab === "report" && (
@@ -1677,18 +1663,8 @@ export default function App() {
                       </div>
                     </div>
                     {isAdmin && (
-                      <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
-                        <button onClick={() => setOpenMenuId(openMenuId === `mc${c.id}` ? null : `mc${c.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
-                          <MoreVertical size={18} strokeWidth={2} />
-                        </button>
-                        {openMenuId === `mc${c.id}` && (
-                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
-                            <button onClick={() => { setOpenMenuId(null); deleteCrop(c.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-                              <Trash2 size={13} strokeWidth={2} />削除
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      <RowMenu menuKey={`mc${c.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                        items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteCrop(c.id) }]} />
                     )}
                   </div>
                 </div>
@@ -1727,18 +1703,8 @@ export default function App() {
                       <button style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }} onClick={() => setFieldLocation(f.id)}>
                         <Navigation size={12} strokeWidth={2} />現在地
                       </button>
-                      <div style={{ position:"relative" }}>
-                        <button onClick={() => setOpenMenuId(openMenuId === `mf${f.id}` ? null : `mf${f.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
-                          <MoreVertical size={18} strokeWidth={2} />
-                        </button>
-                        {openMenuId === `mf${f.id}` && (
-                          <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
-                            <button onClick={() => { setOpenMenuId(null); deleteField(f.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-                              <Trash2 size={13} strokeWidth={2} />削除
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      <RowMenu menuKey={`mf${f.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                        items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteField(f.id) }]} />
                     </div>
                   )}
                 </div>
@@ -1870,18 +1836,8 @@ export default function App() {
                     {p.notes && <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{p.notes}</div>}
                   </div>
                   {isAdmin && (
-                    <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
-                      <button onClick={() => setOpenMenuId(openMenuId === `mp${p.id}` ? null : `mp${p.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 6px", borderRadius:8, color:C.textMuted, display:"flex" }}>
-                        <MoreVertical size={18} strokeWidth={2} />
-                      </button>
-                      {openMenuId === `mp${p.id}` && (
-                        <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
-                          <button onClick={() => { setOpenMenuId(null); deletePesticide(p.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-                            <Trash2 size={13} strokeWidth={2} />削除
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <RowMenu menuKey={`mp${p.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                      items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deletePesticide(p.id) }]} />
                   )}
                 </div>
               </div>
@@ -2367,18 +2323,8 @@ export default function App() {
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
                       {(isAdmin || r.user_id === currentUser?.id) && (
-                        <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
-                          <button onClick={() => setOpenMenuId(openMenuId === `dr${r.id}` ? null : `dr${r.id}`)} style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", borderRadius:6, color:C.textMuted, display:"flex" }}>
-                            <MoreVertical size={15} strokeWidth={2} />
-                          </button>
-                          {openMenuId === `dr${r.id}` && (
-                            <div style={{ position:"absolute", right:0, top:"100%", background:C.card, borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.12)", border:`1px solid ${C.border}`, zIndex:50, minWidth:100 }}>
-                              <button onClick={() => { setOpenMenuId(null); deleteReport(r.id); }} style={{ width:"100%", padding:"10px 14px", background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-                                <Trash2 size={13} strokeWidth={2} />削除
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                        <RowMenu menuKey={`dr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                          items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteReport(r.id) }]} />
                       )}
                     </div>
                   </div>
