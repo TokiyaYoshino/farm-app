@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import type { CSSProperties } from "react";
-import { C } from "../ui/tokens";
+import { C, SHADOW } from "../ui/tokens";
 import {
   ChevronLeft, ChevronRight, Plus, X,
   CalendarDays, ClipboardList, UserCircle,
@@ -289,7 +289,7 @@ export default function CalendarView({
       {/* ── カレンダー本体 ── */}
       <div style={css({ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" })}>
         {/* nav */}
-        <div style={css({ background: `linear-gradient(135deg,${C.primary} 0%,${C.primary2} 100%)`, color: "#fff", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" })}>
+        <div style={css({ background: C.ink, color: "#fff", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" })}>
           <button onClick={goPrev} style={css({ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "5px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" })}>
             <ChevronLeft size={16} strokeWidth={2.5} />
           </button>
@@ -490,7 +490,7 @@ export default function CalendarView({
           onClick={detail ? undefined : closePopup}
         >
           <div
-            style={css({ background: C.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "88vh", overflowY: "auto", padding: "16px 16px 48px", boxShadow: "0 -4px 24px rgba(0,0,0,0.18)" })}
+            style={css({ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "88vh", overflowY: "auto", padding: "16px 16px 48px", boxShadow: SHADOW.float })}
             onClick={e => e.stopPropagation()}
           >
             <div style={css({ width: 36, height: 4, background: C.border, borderRadius: 4, margin: "0 auto 14px" })} />
@@ -669,7 +669,7 @@ export default function CalendarView({
                     disabled={!commentText.trim() || addingCmt}
                     style={css({
                       padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
-                      background: commentText.trim() ? `linear-gradient(135deg,${C.primary},${C.primary2})` : C.border,
+                      background: commentText.trim() ? C.ink : C.border,
                       color: commentText.trim() ? "#fff" : C.textMuted,
                       fontSize: 13, fontWeight: 700, flexShrink: 0,
                     })}
@@ -694,7 +694,7 @@ export default function CalendarView({
                       onClick={() => { setShowForm(f => !f); resetForm(); setAddError(""); }}
                       style={css({
                         display: "flex", alignItems: "center", gap: 5,
-                        background: showForm ? C.bg : `linear-gradient(135deg,${C.blue},${C.blue})`,
+                        background: showForm ? C.bg : C.info,
                         color: showForm ? C.textSub : "#fff",
                         border: showForm ? `1.5px solid ${C.border}` : "none",
                         borderRadius: 10, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
@@ -748,7 +748,7 @@ export default function CalendarView({
                       disabled={adding}
                       style={css({
                         width: "100%", padding: "11px 0", borderRadius: 8, border: "none",
-                        background: adding ? C.border : `linear-gradient(135deg,${C.blue},${C.blue})`,
+                        background: adding ? C.border : C.info,
                         color: adding ? C.textMuted : "#fff",
                         fontSize: 14, fontWeight: 700, cursor: adding ? "default" : "pointer",
                         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
