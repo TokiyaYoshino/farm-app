@@ -74,3 +74,41 @@ export const RADIUS = {
 export type Role = "admin" | "worker" | "viewer";
 export const roleLabel: Record<Role, string> = { admin: "管理者", worker: "作業者", viewer: "閲覧者" };
 export const roleColor: Record<Role, string> = { admin: C.danger, worker: C.ink, viewer: C.info };
+
+// ─── データ駆動の色（装飾ではなく「情報が持つ色」）──────────────
+// 白グレー基調の画面に彩りを足す用途。作業種別・作物のIDに紐づけ、
+// 一貫した意味を持たせる（同じ作物は常に同じドット色になる）。
+
+// 作業種別カラー（既知の8種）。未知の種別は workTypeColor() が名前ハッシュでフォールバック
+const WORK_TYPE_COLORS: Record<string, { fg: string; bg: string }> = {
+  収穫:   { fg: "#2E7D32", bg: "#E4F0E4" },
+  施肥:   { fg: "#8D6E1F", bg: "#F5EFDD" },
+  防除:   { fg: C.pesticide, bg: C.pesticideBg },
+  播種:   { fg: "#2E7D32", bg: "#E4F0E4" },
+  灌水:   { fg: C.info, bg: C.infoBg },
+  草刈り: { fg: "#5C7A2E", bg: "#EAF0DD" },
+  剪定:   { fg: "#B15A2E", bg: "#F6E7DD" },
+  その他: { fg: C.textSub, bg: C.well },
+};
+const FALLBACK_WORK_PALETTE = [
+  { fg: "#2E7D32", bg: "#E4F0E4" }, { fg: C.pesticide, bg: C.pesticideBg },
+  { fg: C.info, bg: C.infoBg },     { fg: "#B15A2E", bg: "#F6E7DD" },
+  { fg: "#8D6E1F", bg: "#F5EFDD" }, { fg: "#5C7A2E", bg: "#EAF0DD" },
+];
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+export function workTypeColor(workType: string): { fg: string; bg: string } {
+  return WORK_TYPE_COLORS[workType] ?? FALLBACK_WORK_PALETTE[hashStr(workType) % FALLBACK_WORK_PALETTE.length];
+}
+
+// 作物カラー：固定パレットから id で決定的に割当（同じ作物は常に同じ色）
+const CROP_PALETTE = [
+  "#43A047", "#C98A2E", "#C1662F", "#7B4BA8",
+  "#3773E1", "#2E9E8F", "#B54B6B", "#6B8F2E",
+];
+export function cropColor(cropId: number): string {
+  return CROP_PALETTE[Math.abs(cropId) % CROP_PALETTE.length];
+}

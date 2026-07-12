@@ -20,7 +20,7 @@ import AnalyticsView from "./components/AnalyticsView";
 import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-import { C, SHADOW, RADIUS, roleLabel, roleColor } from "./ui/tokens";
+import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
 import RowMenu from "./ui/RowMenu";
@@ -1428,19 +1428,25 @@ export default function App() {
                       <Plus size={13} strokeWidth={2.5} />作業を追加
                     </button>
                   </div>
-                ) : todaySchedsHome.map((s, i) => (
-                  <div key={s.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 0", borderTop: i === 0 ? "none" : `1px solid ${C.border}` }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:14, fontWeight:600, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{s.title}</div>
-                      {(s.work_type || s.crop || s.field) && (
-                        <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{[s.work_type, s.crop, s.field].filter(Boolean).join(" · ")}</div>
+                ) : todaySchedsHome.map((s, i) => {
+                  const wc = s.work_type ? workTypeColor(s.work_type) : null;
+                  return (
+                    <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderTop: i === 0 ? "none" : `1px solid ${C.border}` }}>
+                      {wc && (
+                        <span style={{ flexShrink:0, fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{s.work_type}</span>
                       )}
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:600, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{s.title}</div>
+                        {(s.crop || s.field) && (
+                          <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{[s.crop, s.field].filter(Boolean).join(" · ")}</div>
+                        )}
+                      </div>
+                      <button onClick={() => scheduleToReport(s)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
+                        <ClipboardList size={13} strokeWidth={2} />実績にする
+                      </button>
                     </div>
-                    <button onClick={() => scheduleToReport(s)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
-                      <ClipboardList size={13} strokeWidth={2} />実績にする
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })()}
@@ -1459,6 +1465,7 @@ export default function App() {
                   onClick={() => setExpandedCrops(prev => { const s = new Set(prev); s.has(c.id) ? s.delete(c.id) : s.add(c.id); return s; })}
                   style={{ width:"100%", background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:10 }}
                 >
+                  <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(c.id), flexShrink:0 }} />
                   <span style={{ fontWeight:700, fontSize:15, color:C.text, flex:1, textAlign:"left" }}>{c.name}</span>
                   {c.growDays !== null && (
                     <span style={{ fontSize:12, color:C.textMuted }}>{c.growDays}日目</span>
@@ -1505,14 +1512,18 @@ export default function App() {
             <div style={{ padding:"16px", color:C.textMuted, fontSize:13 }}>
               まだ作業報告がありません
             </div>
-          ) : reports.slice(0,2).map(r => (
+          ) : reports.slice(0,2).map(r => {
+            const wc = r.work_type ? workTypeColor(r.work_type) : null;
+            return (
             <div key={r.id} style={S.card}>
               <div style={S.row}>
-                <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0, flex:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0, flex:1 }}>
+                  <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(r.crop_id), flexShrink:0 }} />
                   <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{cropName(r.crop_id)}</span>
                   {r.field && <span style={{ fontSize:12, color:C.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>· {r.field}</span>}
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                  {wc && <span style={{ fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{r.work_type}</span>}
                   <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
                   {(isAdmin || r.user_id === currentUser?.id) && (
                     <RowMenu menuKey={`hr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
@@ -1523,7 +1534,6 @@ export default function App() {
               <div style={S.divider} />
               <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                 {[
-                  r.work_type,
                   r.quantity ? `${r.quantity}kg` : "",
                   (r.work_start && r.work_end) ? `${r.work_start}〜${r.work_end}` : r.work_time ? `${r.work_time}h` : "",
                   r.pesticide_id ? (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? ps.name : ""; })() : "",
@@ -1537,24 +1547,19 @@ export default function App() {
                 </div>
               )}
               {r.image_url && (
-                <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:6, marginTop:10, maxHeight:180, objectFit:"cover", display:"block" }} />
+                <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:14, marginTop:10, maxHeight:220, objectFit:"cover", display:"block" }} />
               )}
               <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                <button
-                  onClick={() => setSelectedReport(r)}
-                  style={{ flex:1, padding:"7px 0", borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textSub, fontSize:12, fontWeight:600, cursor:"pointer" }}
-                >
+                <button onClick={() => setSelectedReport(r)} style={{ ...btn("secondary", "sm"), flex:1, color:C.textSub }}>
                   詳細を見る
                 </button>
-                <button
-                  onClick={() => handleCopyReport(r)}
-                  style={{ flex:1, padding:"7px 0", borderRadius:6, border:`1px solid ${C.primary}`, background:"transparent", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
-                >
+                <button onClick={() => handleCopyReport(r)} style={{ ...btn("soft", "sm"), flex:1 }}>
                   <Copy size={12} strokeWidth={2} />コピーして作成
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
           {/* マップカード */}
           <button onClick={() => setShowMapModal(true)} style={{ ...S.card, display:"flex", alignItems:"center", gap:10, marginTop:4, cursor:"pointer", textAlign:"left" as const, width:"100%" }}>
             <MapPin size={16} color={C.textMuted} strokeWidth={1.8} style={{ flexShrink:0 }} />
