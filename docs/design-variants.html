@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>farm-app 配色バリエーション比較</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  body{background:#E5E5E7;font-family:-apple-system,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;padding:26px;color:#1a1c1e;}
+  h1{font-size:19px;font-weight:700;max-width:1180px;margin:0 auto 4px;}
+  .lead{font-size:13px;color:#66696e;max-width:1180px;margin:0 auto 22px;}
+  .grid{max-width:1180px;margin:0 auto;display:flex;gap:26px;flex-wrap:wrap;justify-content:center;}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .tag-title{font-size:13px;font-weight:700;}
+  .tag-sub{font-size:11px;color:#66696e;text-align:center;max-width:330px;line-height:1.45;}
+
+  /* ---- テーマ変数 ---- */
+  .cool{--bg:#F5F5F6;--well:#EFEFF1;--card:#FFFFFF;--text:#1A1C1E;--sub:#66696E;--muted:#9EA1A6;--hair:#EBEBED;--ink:#2E7D32;--inkSoft:#E4F0E4;}
+  .warm{--bg:#F7F6F3;--well:#EFEDE8;--card:#FFFFFF;--text:#1B1A17;--sub:#6B685F;--muted:#A09C93;--hair:#EBE8E1;--ink:#2E7D32;--inkSoft:#E5F0E2;}
+
+  .phone{width:330px;background:var(--bg);border-radius:32px;border:8px solid #fff;box-shadow:0 12px 40px rgba(16,17,20,.16);overflow:hidden;}
+  .screen{height:726px;overflow:hidden;display:flex;flex-direction:column;}
+  .appbar{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px;}
+  .appbar .t{font-size:16px;font-weight:700;color:var(--text);}
+  .circle{width:34px;height:34px;border-radius:999px;background:var(--well);display:flex;align-items:center;justify-content:center;color:var(--sub);}
+  .body{flex:1;overflow:auto;padding:2px 14px 20px;}
+  .sh{box-shadow:0 1px 2px rgba(16,17,20,.04),0 8px 24px rgba(16,17,20,.06);}
+
+  .card{background:var(--card);border-radius:18px;}
+  .lbl{font-size:11px;font-weight:500;color:var(--muted);}
+  .sec{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.06em;margin:16px 2px 8px;}
+
+  /* 今日の予定 */
+  .todo{padding:13px 15px;margin-bottom:12px;}
+  .todo .row{display:flex;align-items:center;gap:8px;padding:8px 0;}
+  .todo .row + .row{border-top:1px solid var(--hair);}
+  .todo .ti{font-size:14px;font-weight:600;color:var(--text);}
+  .todo .tm{font-size:11px;color:var(--muted);margin-top:2px;}
+  .pill{border:none;border-radius:999px;font-weight:700;font-size:12px;padding:8px 14px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;white-space:nowrap;}
+  .pill.pri{background:var(--ink);color:#fff;box-shadow:0 2px 8px rgba(46,125,50,.28);}
+  .pill.soft{background:var(--inkSoft);color:var(--ink);}
+
+  /* 作物リスト */
+  .listcard{overflow:hidden;}
+  .li{display:flex;align-items:center;gap:11px;padding:14px 15px;}
+  .li + .li{border-top:1px solid var(--hair);}
+  .li .nm{font-size:15px;font-weight:600;color:var(--text);}
+  .li .mt{font-size:12px;color:var(--muted);margin-top:2px;}
+  .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .chev{color:var(--muted);}
+
+  /* 記録カード */
+  .rec{padding:14px 15px;margin-top:8px;}
+  .rec .top{display:flex;justify-content:space-between;align-items:center;}
+  .rec .cn{font-weight:700;font-size:15px;color:var(--text);}
+  .rec .dt{font-size:11px;color:var(--muted);}
+  .rec .meta{font-size:12px;color:var(--muted);margin-top:9px;}
+  .rec .photo{height:120px;border-radius:12px;margin-top:11px;background:linear-gradient(135deg,#8FB56A,#5C8A3C 60%,#436B2C);position:relative;overflow:hidden;}
+  .rec .photo::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.25),transparent 55%);}
+  .wtag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;display:inline-block;}
+  .divider{height:1px;background:var(--hair);margin:11px -15px;}
+  .badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;}
+</style>
+</head>
+<body>
+<h1>配色バリエーション比較 — 同じ画面を3パターン</h1>
+<p class="lead">白グレーの比率は3つとも同じ。違いは①クール無彩色（現状）②暖色オフホワイト③暖色＋"意味のある色"（作物カラー・作業種別タグ・写真）。緑は3つとも据え置き。</p>
+
+<div class="grid">
+
+  <!-- ① 現状 クール -->
+  <div class="col">
+    <div class="phone cool">
+      <div class="screen">
+        <div class="appbar"><div class="t">農作業レポート</div><div class="circle">◍</div></div>
+        <div class="body">
+          <div class="card sh todo">
+            <div class="lbl" style="margin-bottom:4px">今日の予定</div>
+            <div class="row"><div style="flex:1"><div class="ti">防除（うどんこ病予防）</div><div class="tm">防除 · ほうれん草 · A-3 東畑</div></div><button class="pill pri">実績にする</button></div>
+            <div class="row"><div style="flex:1"><div class="ti">灌水</div><div class="tm">灌水 · たまねぎ · C-2</div></div><button class="pill soft">実績にする</button></div>
+          </div>
+          <div class="sec">作物サマリー</div>
+          <div class="card sh listcard">
+            <div class="li"><div style="flex:1"><div class="nm">ほうれん草</div><div class="mt">42日目 · 8回 · 84kg収穫</div></div><span class="chev">›</span></div>
+            <div class="li"><div style="flex:1"><div class="nm">にんにく</div><div class="mt">120日目 · 15回</div></div><span class="chev">›</span></div>
+            <div class="li"><div style="flex:1"><div class="nm">たまねぎ</div><div class="mt">30日目 · 4回</div></div><span class="chev">›</span></div>
+            <div class="li"><div style="flex:1"><div class="nm">ぶどう</div><div class="mt">210日目 · 32回</div></div><span class="chev">›</span></div>
+          </div>
+          <div class="sec">最新の記録</div>
+          <div class="card sh rec">
+            <div class="top"><div><span class="cn">ほうれん草</span> <span style="font-size:12px;color:var(--muted)">· A-3 東畑</span></div><span class="dt">7/14</span></div>
+            <div class="divider"></div>
+            <div class="meta">防除 · サンケイ石灰硫黄合剤 · 田中 · 晴れ 25°C</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tag-title">① 現状（クール無彩色）</div>
+    <div class="tag-sub">今の実装。整っているが、データが少ないと白の面が目立つ。</div>
+  </div>
+
+  <!-- ② 暖色 -->
+  <div class="col">
+    <div class="phone warm">
+      <div class="screen">
+        <div class="appbar"><div class="t">農作業レポート</div><div class="circle">◍</div></div>
+        <div class="body">
+          <div class="card sh todo">
+            <div class="lbl" style="margin-bottom:4px">今日の予定</div>
+            <div class="row"><div style="flex:1"><div class="ti">防除（うどんこ病予防）</div><div class="tm">防除 · ほうれん草 · A-3 東畑</div></div><button class="pill pri">実績にする</button></div>
+            <div class="row"><div style="flex:1"><div class="ti">灌水</div><div class="tm">灌水 · たまねぎ · C-2</div></div><button class="pill soft">実績にする</button></div>
+          </div>
+          <div class="sec">作物サマリー</div>
+          <div class="card sh listcard">
+            <div class="li"><div style="flex:1"><div class="nm">ほうれん草</div><div class="mt">42日目 · 8回 · 84kg収穫</div></div><span class="chev">›</span></div>
+            <div class="li"><div style="flex:1"><div class="nm">にんにく</div><div class="mt">120日目 · 15回</div></div><span class="chev">›</span></div>
+            <div class="li"><div style="flex:1"><div class="nm">たまねぎ</div><div class="mt">30日目 · 4回</div></div><span class="chev">›</span></div>
+            <div class="li"><div style="flex:1"><div class="nm">ぶどう</div><div class="mt">210日目 · 32回</div></div><span class="chev">›</span></div>
+          </div>
+          <div class="sec">最新の記録</div>
+          <div class="card sh rec">
+            <div class="top"><div><span class="cn">ほうれん草</span> <span style="font-size:12px;color:var(--muted)">· A-3 東畑</span></div><span class="dt">7/14</span></div>
+            <div class="divider"></div>
+            <div class="meta">防除 · サンケイ石灰硫黄合剤 · 田中 · 晴れ 25°C</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tag-title">② 暖色オフホワイト</div>
+    <div class="tag-sub">背景を +2°warm に（#F7F6F3系）。クリニカルさが抜け、少し有機的に。構造は無彩色のまま。</div>
+  </div>
+
+  <!-- ③ 暖色＋作物カラー -->
+  <div class="col">
+    <div class="phone warm">
+      <div class="screen">
+        <div class="appbar"><div class="t">農作業レポート</div><div class="circle">◍</div></div>
+        <div class="body">
+          <div class="card sh todo">
+            <div class="lbl" style="margin-bottom:4px">今日の予定</div>
+            <div class="row">
+              <div style="flex:1;display:flex;align-items:center;gap:9px">
+                <span class="wtag" style="background:#F3E9F8;color:#7B1FA2">防除</span>
+                <div><div class="ti">うどんこ病予防</div><div class="tm">ほうれん草 · A-3 東畑</div></div>
+              </div>
+              <button class="pill pri">実績にする</button>
+            </div>
+            <div class="row">
+              <div style="flex:1;display:flex;align-items:center;gap:9px">
+                <span class="wtag" style="background:#E7EEFC;color:#3773E1">灌水</span>
+                <div><div class="ti">灌水</div><div class="tm">たまねぎ · C-2</div></div>
+              </div>
+              <button class="pill soft">実績にする</button>
+            </div>
+          </div>
+          <div class="sec">作物サマリー</div>
+          <div class="card sh listcard">
+            <div class="li"><span class="dot" style="background:#43A047"></span><div style="flex:1"><div class="nm">ほうれん草</div><div class="mt">42日目 · 8回 · 84kg収穫</div></div><span class="chev">›</span></div>
+            <div class="li"><span class="dot" style="background:#C98A2E"></span><div style="flex:1"><div class="nm">にんにく</div><div class="mt">120日目 · 15回</div></div><span class="chev">›</span></div>
+            <div class="li"><span class="dot" style="background:#C1662F"></span><div style="flex:1"><div class="nm">たまねぎ</div><div class="mt">30日目 · 4回</div></div><span class="chev">›</span></div>
+            <div class="li"><span class="dot" style="background:#7B4BA8"></span><div style="flex:1"><div class="nm">ぶどう</div><div class="mt">210日目 · 32回</div></div><span class="chev">›</span></div>
+          </div>
+          <div class="sec">最新の記録</div>
+          <div class="card sh rec">
+            <div class="top">
+              <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:#43A047"></span><span class="cn">ほうれん草</span> <span style="font-size:12px;color:var(--muted)">· A-3</span></div>
+              <span class="wtag" style="background:#F3E9F8;color:#7B1FA2">防除</span>
+            </div>
+            <div class="photo"></div>
+            <div class="meta" style="margin-top:9px">サンケイ石灰硫黄合剤 · 田中 · 晴れ 25°C</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tag-title">③ 暖色 ＋ 作物カラー・作業タグ・写真</div>
+    <div class="tag-sub">作物ごとの色ドット／作業種別の淡色タグ／作業写真を追加。色は"情報が持つ"ので、装飾ではなくAI感も出ない。</div>
+  </div>
+
+</div>
+</body>
+</html>
