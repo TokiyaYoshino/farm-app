@@ -19,22 +19,28 @@ React + TypeScript + Supabase の農場作業記録アプリ。本番: https://k
 - 新機能追加時に既存機能を削除しない（ナビから外しても tab コンテンツは残す）
 
 ## デザイントークン（要点）
-TickTick 的なシンプルさ。色は **`src/ui/tokens.ts` の `C` に集約**（他ファイルで色を直書きしない）。
+**Soft Widget スタイル**（Notion Calendar / Family 系。2026-07 決定）。
+色・影・角丸は **`src/ui/tokens.ts` に集約**（他ファイルで直書き禁止）。詳細は `docs/design-brief-widget.md`。
 
-### カラー（緑基調＋セマンティック）
-緑をブランド／状態色として整理して使う（2026-07 決定。旧・紫アクセント案は不採用）。
-- ブランド緑 `primary #2d6a2d` = 主要CTA・アクティブ・保存。淡色は `primary3/4`
-- セマンティック: `danger #c0392b`（削除）/ `warning #f57f17`（未報告・未設定）/ `info #1976d2`（中立の強調）
-- 分野色: 農薬 `pesticide #7b1fa2` / 天気 `temp #e07020`・`rain #0288d1`
-- ニュートラル: 文字 `text #1a2e1a` / `textSub` / `textMuted`、背景 `bg #f4f7f2`、面 `card #fff`、線 `border #dde8dd`
+原則：**構造は無彩色・アクセントは明るい緑1色を塗りで・border ではなく影と面の色差で階層化・深い角丸・完全ピルのボタン・ラベル小/値大**。
 
-### ボタン階層（`src/ui/styles.ts` の `btn(variant,size)`）
-- **Primary**（塗り緑）= 画面の主操作。1画面に1つに絞る
-- **Secondary**（枠線＋緑文字）= 副操作 / **Tertiary**（文字のみ）= 補助
-- **danger**（塗り赤）= 破壊的操作の確定。削除は確認モーダルを挟む
-- サイズは lg / md / sm の3段階
+### カラー（`C`）
+- サーフェス3層: `bg #F5F5F6`（背景）> `card #FFFFFF`（浮き面）> `well #EFEFF1`（受け皿の凹み）。入れ子＝白→灰→白
+- ブランド緑（インク）: `ink #2E7D32` = CTA・アクティブ・選択・保存。`inkPress` / `inkSoft`（淡塗り）
+- セマンティック: `danger`（削除）/ `warning`（未報告）/ `info`（中立強調）。分野色 `pesticide` / `temp` / `rain`
+- ニュートラル: `text #1A1C1E`（墨・緑みなし）/ `textSub` / `textMuted` / `hairline #EBEBED`（区切り線）
+- 影 `SHADOW.card/float/pill`、角丸 `RADIUS.card20/well18/row14/pill999`
+- ※旧 `primary/border/blue*` は互換エイリアス（ink/hairline/info にマップ）。新規は canonical 名を使う
 
-### その他
-- System フォント、ウェイトは 700/600/400 の3段階。数値は太字・大きめ
-- 角丸 8px 基準。影は最小限、線とコントラストで構造化。入力欄は下線スタイル
-- アニメーションは最小限
+### ボタン（`src/ui/styles.ts` の `btn(variant,size)`、完全ピル）
+- **primary**（ink塗り）= 主操作、1画面1個 / **soft**（緑淡）= 準主操作
+- **secondary**（白＋hairline枠）= 副操作 / **tertiary**（文字のみ）= 補助
+- **danger**（赤塗り）= 破壊的操作の確定（確認モーダルを挟む）
+- サイズ lg / md / sm
+
+### レイアウト規則
+- グループ入力: 灰 well に白 row を積む（`S.wellBox` / `S.wrow` / `S.lbl2` / `S.fieldSelect`）
+- リスト: 個別カードでなく1枚のカードに hairline 区切りの行、が理想（移行中は個別ソフトカードも可）
+- モーダルは `src/ui/BottomSheet`、削除メニューは `src/ui/RowMenu`
+- カードは影で描き border は使わない。入力欄は下線 or well 行。アニメーションは最小限
+- System フォント、ウェイト 700/600/400。数値は太字・大きめ
