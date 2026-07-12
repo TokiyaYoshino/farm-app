@@ -1627,14 +1627,16 @@ export default function App() {
               <div style={{ marginTop:16 }}>
                 <div style={S.sec}>今日の予定</div>
                 {todayScheds.length === 0 ? (
-                  <div style={{ padding:"14px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, fontSize:13, color:C.textMuted }}>
+                  <div style={{ padding:"14px 16px", background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, fontSize:13, color:C.textMuted }}>
                     今日の予定はありません
                   </div>
                 ) : todayScheds.map(s => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
-                  const meta = [s.crop, s.field, assignedUser?.name, s.work_type].filter(Boolean).join(" · ");
+                  const meta = [s.crop, s.field, assignedUser?.name].filter(Boolean).join(" · ");
+                  const wc = s.work_type ? workTypeColor(s.work_type) : null;
                   return (
-                    <div key={s.id} style={{ background:C.card, borderRadius:8, padding:"10px 14px", border:`1px solid ${C.border}`, marginBottom:6, display:"flex", alignItems:"center", gap:8 }}>
+                    <div key={s.id} style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, padding:"12px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:10 }}>
+                      {wc && <span style={{ flexShrink:0, fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{s.work_type}</span>}
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{s.title}</div>
                         {meta && <div style={{ fontSize:12, color:C.textMuted, marginTop:3 }}>{meta}</div>}
@@ -1735,14 +1737,18 @@ export default function App() {
                 <div style={{ padding:"32px 16px", textAlign:"center" as const, color:C.textMuted, fontSize:13 }}>
                   {reportFilterActive ? "条件に一致する記録がありません" : "まだ作業報告がありません"}
                 </div>
-              ) : filteredReports.map(r => (
+              ) : filteredReports.map(r => {
+                const wc = r.work_type ? workTypeColor(r.work_type) : null;
+                return (
                 <div key={r.id} style={S.card}>
                   <div style={S.row}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0, flex:1 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0, flex:1 }}>
+                      <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(r.crop_id), flexShrink:0 }} />
                       <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{cropName(r.crop_id)}</span>
                       {r.field && <span style={{ fontSize:12, color:C.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>· {r.field}</span>}
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                      {wc && <span style={{ fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{r.work_type}</span>}
                       <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
                       {(isAdmin || r.user_id === currentUser?.id) && (
                         <RowMenu menuKey={`lr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
@@ -1753,7 +1759,6 @@ export default function App() {
                   <div style={S.divider} />
                   <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                     {[
-                      r.work_type,
                       r.quantity ? `${r.quantity}kg` : "",
                       (r.work_start && r.work_end) ? `${r.work_start}〜${r.work_end}` : r.work_time ? `${r.work_time}h` : "",
                       r.pesticide_id ? (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? ps.name : ""; })() : "",
@@ -1767,14 +1772,15 @@ export default function App() {
                     </div>
                   )}
                   {r.image_url && (
-                    <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:6, marginTop:10, maxHeight:180, objectFit:"cover", display:"block" }} />
+                    <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:14, marginTop:10, maxHeight:220, objectFit:"cover", display:"block" }} />
                   )}
                   <div style={{ display:"flex", gap:8, marginTop:12 }}>
                     <button onClick={() => setSelectedReport(r)} style={{ ...btn("secondary", "sm"), flex:1 }}>詳細を見る</button>
-                    <button onClick={() => handleCopyReport(r)} style={{ ...btn("secondary", "sm"), flex:1 }}><Copy size={12} strokeWidth={2} />コピーして作成</button>
+                    <button onClick={() => handleCopyReport(r)} style={{ ...btn("soft", "sm"), flex:1 }}><Copy size={12} strokeWidth={2} />コピーして作成</button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </>
           )}
         </div>
