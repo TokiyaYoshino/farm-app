@@ -191,6 +191,7 @@ const globalStyle = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: ${C.bg}; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; line-height: 1.5; }
   input, select, button { font-family: inherit; }
+  button { border: none; background: none; }
   input:focus, select:focus { outline: 2px solid ${C.primary}; outline-offset: -1px; }
   input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; width: 100%; font-size: 13px; padding: 8px 10px; }
   @keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
