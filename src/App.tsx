@@ -911,6 +911,9 @@ export default function App() {
   };
 
   // 予定を1タップで実績記録へ（クイック記録モーダルを予定内容で prefill して開く）
+  // title と work_type が同じ文字列のとき、タイトル表示は空にする（タグで表現済みのため重複を避ける）
+  const scheduleTitle = (s: Schedule) => (s.title === s.work_type ? "" : s.title);
+
   const scheduleToReport = (s: Schedule) => {
     const cropObj = crops.find(c => c.name === s.crop);
     setRForm(f => ({
@@ -1433,9 +1436,11 @@ export default function App() {
                         <span style={{ flexShrink:0, fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{s.work_type}</span>
                       )}
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:14, fontWeight:600, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{s.title}</div>
+                        {scheduleTitle(s) && (
+                          <div style={{ fontSize:14, fontWeight:600, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{scheduleTitle(s)}</div>
+                        )}
                         {(s.crop || s.field) && (
-                          <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{[s.crop, s.field].filter(Boolean).join(" · ")}</div>
+                          <div style={{ fontSize: scheduleTitle(s) ? 11 : 14, fontWeight: scheduleTitle(s) ? 400 : 600, color: scheduleTitle(s) ? C.textMuted : C.text, marginTop: scheduleTitle(s) ? 2 : 0 }}>{[s.crop, s.field].filter(Boolean).join(" · ")}</div>
                         )}
                       </div>
                       <button onClick={() => scheduleToReport(s)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
@@ -1448,115 +1453,15 @@ export default function App() {
             );
           })()}
 
-          <div style={S.sec}>作物サマリー</div>
-
-          {cropStats.length === 0 ? (
-            <div style={{ padding:"16px", color:C.textMuted, fontSize:13 }}>
-              作物が登録されていません
+          {/* 記録一覧への導線 */}
+          <button onClick={() => { setTab("report"); setReportView("list"); }} style={{ ...S.card, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const, width:"100%" }}>
+            <ClipboardList size={16} color={C.textMuted} strokeWidth={1.8} style={{ flexShrink:0 }} />
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:600, color:C.text }}>記録一覧を見る</div>
+              <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{reports.length}件の作業記録</div>
             </div>
-          ) : cropStats.map(c => {
-            const expanded = expandedCrops.has(c.id);
-            return (
-              <div key={c.id} style={S.card}>
-                <button
-                  onClick={() => setExpandedCrops(prev => { const s = new Set(prev); s.has(c.id) ? s.delete(c.id) : s.add(c.id); return s; })}
-                  style={{ width:"100%", background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:10 }}
-                >
-                  <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(c.id), flexShrink:0 }} />
-                  <span style={{ fontWeight:700, fontSize:15, color:C.text, flex:1, textAlign:"left" }}>{c.name}</span>
-                  {c.growDays !== null && (
-                    <span style={{ fontSize:12, color:C.textMuted }}>{c.growDays}日目</span>
-                  )}
-                  <ChevronRight size={16} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0, transform: expanded ? "rotate(90deg)" : "none" }} />
-                </button>
-                {expanded && (
-                  <>
-                    <div style={S.divider} />
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:0, marginBottom:12, background:C.border, borderRadius:6, overflow:"hidden" }}>
-                      <div style={{ background:C.bg, padding:"10px 6px", textAlign:"center" as const }}>
-                        <div style={{ fontSize:22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.growDays ?? "—"}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>生育日数</div>
-                      </div>
-                      <div style={{ background:C.bg, padding:"10px 6px", textAlign:"center" as const, borderLeft:`1px solid ${C.border}`, borderRight:`1px solid ${C.border}` }}>
-                        <div style={{ fontSize:22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.count}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>作業回数</div>
-                      </div>
-                      <div style={{ background:C.bg, padding:"10px 6px", textAlign:"center" as const }}>
-                        <div style={{ fontSize:c.tot > 999 ? 16 : 22, fontWeight:700, color:C.text, lineHeight:1 }}>{c.tot > 0 ? c.tot : "—"}</div>
-                        <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>{c.tot > 0 ? "kg収穫" : "収穫なし"}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={e => { e.stopPropagation(); setTab("analytics"); }}
-                      style={{ background:"none", border:"none", cursor:"pointer", color:C.primary, fontSize:13, fontWeight:600, padding:0 }}
-                    >
-                      分析で見る →
-                    </button>
-                  </>
-                )}
-              </div>
-            );
-          })}
-
-          <div style={{ ...S.sec, justifyContent:"space-between" }}>
-            <span>最新の作業報告</span>
-            {reports.length > 2 && (
-              <button onClick={() => setTab("report")} style={{ background:"none", border:"none", cursor:"pointer", fontSize:12, color:C.textMuted, fontWeight:500, flexShrink:0, whiteSpace:"nowrap" as const }}>すべて見る</button>
-            )}
-          </div>
-
-          {reports.length === 0 ? (
-            <div style={{ padding:"16px", color:C.textMuted, fontSize:13 }}>
-              まだ作業報告がありません
-            </div>
-          ) : reports.slice(0,2).map(r => {
-            const wc = r.work_type ? workTypeColor(r.work_type) : null;
-            return (
-            <div key={r.id} style={S.card}>
-              <div style={S.row}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0, flex:1 }}>
-                  <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(r.crop_id), flexShrink:0 }} />
-                  <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{cropName(r.crop_id)}</span>
-                  {r.field && <span style={{ fontSize:12, color:C.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>· {r.field}</span>}
-                </div>
-                <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                  {wc && <span style={{ fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{r.work_type}</span>}
-                  <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
-                  {(isAdmin || r.user_id === currentUser?.id) && (
-                    <RowMenu menuKey={`hr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
-                      items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteReport(r.id) }]} />
-                  )}
-                </div>
-              </div>
-              <div style={S.divider} />
-              <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
-                {[
-                  r.quantity ? `${r.quantity}kg` : "",
-                  (r.work_start && r.work_end) ? `${r.work_start}〜${r.work_end}` : r.work_time ? `${r.work_time}h` : "",
-                  r.pesticide_id ? (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? ps.name : ""; })() : "",
-                  userName(r.user_id),
-                  r.weather ? `${r.weather}${r.temp ? ` ${r.temp}°C` : ""}` : "",
-                ].filter(Boolean).join("  ·  ")}
-              </div>
-              {r.note && (
-                <div style={{ fontSize:12, color:C.textSub, marginTop:8, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
-                  {r.note}
-                </div>
-              )}
-              {r.image_url && (
-                <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:14, marginTop:10, maxHeight:220, objectFit:"cover", display:"block" }} />
-              )}
-              <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                <button onClick={() => setSelectedReport(r)} style={{ ...btn("secondary", "sm"), flex:1, color:C.textSub }}>
-                  詳細を見る
-                </button>
-                <button onClick={() => handleCopyReport(r)} style={{ ...btn("soft", "sm"), flex:1 }}>
-                  <Copy size={12} strokeWidth={2} />コピーして作成
-                </button>
-              </div>
-            </div>
-            );
-          })}
+            <ChevronRight size={16} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />
+          </button>
           {/* マップカード */}
           <button onClick={() => setShowMapModal(true)} style={{ ...S.card, display:"flex", alignItems:"center", gap:10, marginTop:4, cursor:"pointer", textAlign:"left" as const, width:"100%" }}>
             <MapPin size={16} color={C.textMuted} strokeWidth={1.8} style={{ flexShrink:0 }} />
@@ -1635,8 +1540,8 @@ export default function App() {
                     <div key={s.id} style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, padding:"12px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:10 }}>
                       {wc && <span style={{ flexShrink:0, fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{s.work_type}</span>}
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{s.title}</div>
-                        {meta && <div style={{ fontSize:12, color:C.textMuted, marginTop:3 }}>{meta}</div>}
+                        {scheduleTitle(s) && <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{scheduleTitle(s)}</div>}
+                        {meta && <div style={{ fontSize: scheduleTitle(s) ? 12 : 14, fontWeight: scheduleTitle(s) ? 400 : 600, color: scheduleTitle(s) ? C.textMuted : C.text, marginTop: scheduleTitle(s) ? 3 : 0 }}>{meta}</div>}
                       </div>
                       <button onClick={() => scheduleToReport(s)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                         <ClipboardList size={13} strokeWidth={2} />実績にする
@@ -1668,11 +1573,11 @@ export default function App() {
                       >
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
-                            <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{s.title}</span>
+                            <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{scheduleTitle(s) || s.work_type}</span>
                             <span style={{ fontSize:11, fontWeight:600, color:C.warning, flexShrink:0 }}>未報告</span>
                           </div>
                           <div style={{ fontSize:11, color:C.textSub, marginTop:4 }}>
-                            {[s.date, s.crop, assignedUser?.name, s.work_type].filter(Boolean).join(" · ")}
+                            {[s.date, s.crop, assignedUser?.name].filter(Boolean).join(" · ")}
                           </div>
                         </div>
                         <ChevronRight size={16} color={C.textMuted} strokeWidth={2} />
@@ -1819,21 +1724,59 @@ export default function App() {
                 <div style={{ fontSize:13, color:C.textMuted }}>作物が登録されていません</div>
               </div>
             ) : crops.map(c => {
+              const stat = cropStats.find(cs => cs.id === c.id);
+              const expanded = expandedCrops.has(c.id);
               return (
-                <div key={c.id} style={{ ...S.card, cursor:"pointer" }} onClick={() => setSelectedCropId(c.id)}>
+                <div key={c.id} style={S.card}>
                   <div style={S.row}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1 }}>
+                    <button
+                      onClick={() => setSelectedCropId(c.id)}
+                      style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1, background:"none", border:"none", cursor:"pointer", padding:0, textAlign:"left" as const }}
+                    >
                       <span style={{ width:10, height:10, borderRadius:"50%", background:cropColor(c.id), flexShrink:0 }} />
-                      <div style={{ minWidth:0 }}>
+                      <div style={{ minWidth:0, flex:1 }}>
                         <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
-                        <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{c.start_date}</div>
+                        <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{c.start_date}{stat?.growDays != null ? ` · ${stat.growDays}日目` : ""}</div>
                       </div>
+                    </button>
+                    <div style={{ display:"flex", alignItems:"center", gap:2, flexShrink:0 }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); setExpandedCrops(prev => { const s = new Set(prev); s.has(c.id) ? s.delete(c.id) : s.add(c.id); return s; }); }}
+                        style={{ ...S.circleBtn }}
+                      >
+                        <ChevronRight size={16} strokeWidth={2} style={{ transform: expanded ? "rotate(90deg)" : "none", transition:"transform .15s" }} />
+                      </button>
+                      {isAdmin && (
+                        <RowMenu menuKey={`mc${c.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                          items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteCrop(c.id) }]} />
+                      )}
                     </div>
-                    {isAdmin && (
-                      <RowMenu menuKey={`mc${c.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
-                        items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteCrop(c.id) }]} />
-                    )}
                   </div>
+                  {expanded && stat && (
+                    <>
+                      <div style={S.divider} />
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:0, marginBottom:12, background:C.hairline, borderRadius:10, overflow:"hidden" }}>
+                        <div style={{ background:C.well, padding:"10px 6px", textAlign:"center" as const }}>
+                          <div style={{ fontSize:22, fontWeight:700, color:C.text, lineHeight:1 }}>{stat.growDays ?? "—"}</div>
+                          <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>生育日数</div>
+                        </div>
+                        <div style={{ background:C.well, padding:"10px 6px", textAlign:"center" as const, borderLeft:`1px solid ${C.hairline}`, borderRight:`1px solid ${C.hairline}` }}>
+                          <div style={{ fontSize:22, fontWeight:700, color:C.text, lineHeight:1 }}>{stat.count}</div>
+                          <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>作業回数</div>
+                        </div>
+                        <div style={{ background:C.well, padding:"10px 6px", textAlign:"center" as const }}>
+                          <div style={{ fontSize:stat.tot > 999 ? 16 : 22, fontWeight:700, color:C.text, lineHeight:1 }}>{stat.tot > 0 ? stat.tot : "—"}</div>
+                          <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>{stat.tot > 0 ? "kg収穫" : "収穫なし"}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={e => { e.stopPropagation(); setTab("analytics"); }}
+                        style={{ background:"none", border:"none", cursor:"pointer", color:C.ink, fontSize:13, fontWeight:600, padding:0 }}
+                      >
+                        分析で見る →
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -2258,7 +2201,7 @@ export default function App() {
               {/* ヘッダー */}
               <div style={{ padding:"6px 16px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <div>
-                  <div style={{ fontWeight:700, fontSize:17, color:C.text }}>{s.title}</div>
+                  <div style={{ fontWeight:700, fontSize:17, color:C.text }}>{scheduleTitle(s) || s.work_type}</div>
                   <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                     {s.date}{s.crop && ` · ${s.crop}`}
                   </div>
@@ -2271,7 +2214,7 @@ export default function App() {
               <div style={{ padding:"0 16px" }}>
                 {/* 基本情報 */}
                 <div style={{ background:C.well, borderRadius:14, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                  {s.work_type && (
+                  {s.work_type && scheduleTitle(s) && (
                     <div>
                       <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業種別</div>
                       {(() => { const wc = workTypeColor(s.work_type); return (
