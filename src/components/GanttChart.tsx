@@ -4,7 +4,8 @@ import {
   ChevronLeft, ChevronRight, Plus, X, Save, RefreshCw,
   Trash2, Leaf, MapPin, CalendarDays, ClipboardList,
 } from "lucide-react";
-import { C } from "../ui/tokens";
+import { C, SHADOW, RADIUS } from "../ui/tokens";
+import { btn } from "../ui/styles";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
@@ -62,9 +63,9 @@ function endOfMonth(y: number, m: number): Date {
 
 // ── フォームスタイル ────────────────────────────────────────
 const lbl = { fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 } as const;
-const inp = { width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text, boxSizing:"border-box" } as const;
-const sel = { width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, marginBottom:12, background:"#fafcfa", color:C.text } as const;
-const btnPrimary = { background:C.primary, color:"#fff", border:"none", borderRadius:10, padding:"13px 0", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 } as const;
+const inp = { width:"100%", padding:"11px 14px", borderRadius:12, border:"none", fontSize:15, marginBottom:12, background:C.well, color:C.text, boxSizing:"border-box" } as const;
+const sel = { width:"100%", padding:"11px 14px", borderRadius:12, border:"none", fontSize:15, marginBottom:12, background:C.well, color:C.text } as const;
+const btnPrimary = btn("primary", "lg");
 
 // ── テーブルセルの共通ボーダースタイル ──────────────────────
 const cellBorder = { borderBottom:`1px solid ${C.border}`, borderRight:`1px solid ${C.border}` };
@@ -186,7 +187,7 @@ export default function GanttChart({
         <div style={{ display:"flex", alignItems:"center", gap:6 }}>
           <button
             onClick={() => setViewStart(d => addMonths(d, -1))}
-            style={{ background:C.primary3, border:"none", borderRadius:8, padding:"6px 10px", cursor:"pointer", color:C.primary, display:"flex" }}
+            style={{ width:32, height:32, background:C.well, border:"none", borderRadius:999, cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center", justifyContent:"center" }}
           >
             <ChevronLeft size={16} strokeWidth={2.5} />
           </button>
@@ -195,16 +196,13 @@ export default function GanttChart({
           </span>
           <button
             onClick={() => setViewStart(d => addMonths(d, 1))}
-            style={{ background:C.primary3, border:"none", borderRadius:8, padding:"6px 10px", cursor:"pointer", color:C.primary, display:"flex" }}
+            style={{ width:32, height:32, background:C.well, border:"none", borderRadius:999, cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center", justifyContent:"center" }}
           >
             <ChevronRight size={16} strokeWidth={2.5} />
           </button>
         </div>
         {isAdmin && (
-          <button
-            onClick={openAdd}
-            style={{ display:"flex", alignItems:"center", gap:5, background:C.primary, color:"#fff", border:"none", borderRadius:9, padding:"7px 13px", fontSize:13, fontWeight:700, cursor:"pointer" }}
-          >
+          <button onClick={openAdd} style={btn("primary", "sm")}>
             <Plus size={14} strokeWidth={2.5} />計画を追加
           </button>
         )}
@@ -212,7 +210,7 @@ export default function GanttChart({
 
 
       {/* ── ガントチャート本体 ─────────────────────────────────── */}
-      <div style={{ overflowX:"auto" as const, border:`1px solid ${C.border}`, borderRadius:12, background:C.card, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+      <div style={{ overflowX:"auto" as const, borderRadius:RADIUS.card, background:C.card, boxShadow:SHADOW.card }}>
         <table style={{ tableLayout:"fixed" as const, borderCollapse:"collapse" as const, width:tableW, minWidth:tableW }}>
           <colgroup>
             <col style={{ width:LABEL_W }} />
@@ -264,10 +262,10 @@ export default function GanttChart({
                   key={i}
                   style={{
                     ...cellBorder,
-                    background:   d.isToday ? C.primary3 : "transparent",
+                    background:   d.isToday ? C.inkSoft : "transparent",
                     fontSize:     10,
                     fontWeight:   d.isToday ? 700 : 400,
-                    color:        d.isToday ? C.primary : d.isWeekend ? C.danger : C.textSub,
+                    color:        d.isToday ? C.ink : d.isWeekend ? C.danger : C.textSub,
                     textAlign:    "center" as const,
                     padding:      0,
                     verticalAlign:"middle" as const,
@@ -333,7 +331,7 @@ export default function GanttChart({
                     {/* 日付セル */}
                     {dayList.map((d, di) => {
                       const bar   = getBar(p, di);
-                      const cellBg = d.isToday ? C.primary3 : rowBg;
+                      const cellBg = d.isToday ? C.inkSoft : rowBg;
 
                       // バーなし
                       if (!bar) {
@@ -414,17 +412,16 @@ export default function GanttChart({
           onClick={closeModal}
         >
           <div
-            style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"88vh", overflowY:"auto", paddingBottom:32 }}
+            style={{ background:C.card, borderRadius:"24px 24px 0 0", width:"100%", maxHeight:"88vh", overflowY:"auto", paddingBottom:32, boxShadow:SHADOW.float }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"12px auto 0" }} />
+            <div style={{ width:38, height:4, background:C.well, borderRadius:4, margin:"12px auto 0" }} />
             <div style={{ padding:"16px 16px 0" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
-                <div style={{ fontWeight:700, fontSize:16, color:C.text, display:"flex", alignItems:"center", gap:7 }}>
-                  <CalendarDays size={17} color={C.primary} strokeWidth={2} />
+                <div style={{ fontWeight:700, fontSize:17, color:C.text }}>
                   {showAdd ? "新しい計画を登録" : "計画を編集"}
                 </div>
-                <button onClick={closeModal} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"5px 10px", cursor:"pointer", color:C.textSub, display:"flex" }}>
+                <button onClick={closeModal} style={{ width:32, height:32, background:C.well, border:"none", borderRadius:999, cursor:"pointer", color:C.textSub, display:"flex", alignItems:"center", justifyContent:"center" }}>
                   <X size={16} strokeWidth={2} />
                 </button>
               </div>
@@ -487,17 +484,11 @@ export default function GanttChart({
                     : <><Save size={16} strokeWidth={2} />{showAdd ? "追加する" : "保存する"}</>}
                 </button>
                 {!showAdd && isAdmin && (
-                  <button
-                    onClick={handleDelete}
-                    style={{ flex:1, width:"auto", padding:"13px 0", borderRadius:10, border:`1.5px solid ${C.danger}44`, background:C.dangerBg, color:C.danger, fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
-                  >
+                  <button onClick={handleDelete} style={{ ...btn("dangerOutline", "lg"), flex:1, width:"auto" }}>
                     <Trash2 size={15} strokeWidth={2} />削除
                   </button>
                 )}
-                <button
-                  onClick={closeModal}
-                  style={{ flex:1, width:"auto", padding:"13px 0", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:600, cursor:"pointer" }}
-                >
+                <button onClick={closeModal} style={{ ...btn("secondary", "lg"), flex:1, width:"auto" }}>
                   キャンセル
                 </button>
               </div>

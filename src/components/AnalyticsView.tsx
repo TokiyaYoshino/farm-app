@@ -6,14 +6,14 @@ import {
   CartesianGrid, Legend,
 } from "recharts";
 import { BarChart2, Leaf, Thermometer, CloudRain, Clock, FlaskConical } from "lucide-react";
-import { C } from "../ui/tokens";
+import { C, SHADOW, RADIUS } from "../ui/tokens";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 );
 
-const CHART_COLORS = ["#2d6a2d","#1976d2","#e07020","#9c27b0","#00838f","#c62828","#558b2f","#4527a0"];
+const CHART_COLORS = [C.ink,"#1976d2","#e07020","#9c27b0","#00838f","#c62828","#558b2f","#4527a0"];
 
 interface HarvestRow {
   date: string;
@@ -56,11 +56,10 @@ interface Props {
 
 const cardStyle = {
   background: C.card,
-  borderRadius: 14,
+  borderRadius: RADIUS.card,
   padding: "16px",
   marginBottom: 12,
-  boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-  border: `1px solid ${C.border}`,
+  boxShadow: SHADOW.card,
 };
 
 const secStyle = {
@@ -77,11 +76,11 @@ const secStyle = {
 };
 
 const selectStyle = {
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: `1.5px solid ${C.border}`,
+  padding: "8px 14px",
+  borderRadius: 999,
+  border: "none",
   fontSize: 13,
-  background: "#fafcfa",
+  background: C.well,
   color: C.text,
   marginRight: 8,
   marginBottom: 8,
@@ -255,13 +254,13 @@ export default function AnalyticsView({ currentOrg }: Props) {
         <div style={{ display:"flex", gap:8, marginBottom:12 }}>
           <button
             onClick={() => setS2Axis("temp")}
-            style={{ padding:"6px 14px", borderRadius:8, border:`1.5px solid ${s2Axis==="temp" ? C.primary : C.border}`, background: s2Axis==="temp" ? C.primary3 : "#fff", color: s2Axis==="temp" ? C.primary : C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer" }}
+            style={{ padding:"7px 15px", borderRadius:999, border:"none", background: s2Axis==="temp" ? C.inkSoft : C.well, color: s2Axis==="temp" ? C.ink : C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer" }}
           >
             <Thermometer size={12} style={{ verticalAlign:"middle", marginRight:4 }} />気温
           </button>
           <button
             onClick={() => setS2Axis("rain")}
-            style={{ padding:"6px 14px", borderRadius:8, border:`1.5px solid ${s2Axis==="rain" ? C.primary : C.border}`, background: s2Axis==="rain" ? C.primary3 : "#fff", color: s2Axis==="rain" ? C.primary : C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer" }}
+            style={{ padding:"7px 15px", borderRadius:999, border:"none", background: s2Axis==="rain" ? C.inkSoft : C.well, color: s2Axis==="rain" ? C.ink : C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer" }}
           >
             <CloudRain size={12} style={{ verticalAlign:"middle", marginRight:4 }} />雨量
           </button>
