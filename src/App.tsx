@@ -1161,7 +1161,7 @@ export default function App() {
 
   // ─── スタイル ─────────────────────────────────────────
   const S = {
-    wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:80 }),
+    wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:88 }),
     header:  css({ background:"#fff", color:C.text, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${C.border}`, position:"sticky" as const, top:0, zIndex:90 }),
     headerTitle: css({ fontSize:16, fontWeight:700, color:C.text, letterSpacing:-0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
     headerSub: css({ background:"#fff", borderBottom:`1px solid ${C.border}`, display:"flex", paddingLeft:4, paddingRight:4, gap:0 }),
@@ -1193,11 +1193,11 @@ export default function App() {
 
 
   const navBtn = (active: boolean): CSSProperties => ({
-    flex:1, padding:"10px 0", border:"none", background:"none", cursor:"pointer",
-    display:"flex", flexDirection:"column", alignItems:"center", gap:4,
+    flex:1, padding:"13px 0", border:"none", background:"none", cursor:"pointer",
+    display:"flex", flexDirection:"column", alignItems:"center", gap:5,
     color: active ? C.ink : C.textMuted,
-    fontSize:10, fontWeight: active ? 700 : 500,
-    minHeight:54,
+    fontSize:11, fontWeight: active ? 700 : 500,
+    minHeight:62,
   });
 
   const tagStyle = (role: Role): CSSProperties => ({
@@ -2278,7 +2278,7 @@ export default function App() {
           : chartData;
         const stat = cropStats.find(c => c.id === selectedCropId);
         return (
-          <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:95, overflowY:"auto", paddingBottom:80 }} className="anim-slideUp">
+          <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:95, overflowY:"auto", paddingBottom:88 }} className="anim-slideUp">
             <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, position:"sticky", top:0, zIndex:10 }}>
               <button onClick={() => setSelectedCropId(null)} style={{ background:"none", border:"none", padding:"6px 6px", color:C.textSub, cursor:"pointer", display:"flex", flexShrink:0 }}>
                 <ChevronLeft size={18} strokeWidth={2.5} />
@@ -2494,7 +2494,7 @@ export default function App() {
       <button
         onClick={() => setShowQuickReport(true)}
         aria-label="作業を記録"
-        style={{ position:"fixed", right:16, bottom:78, zIndex:90, display:"flex", alignItems:"center", gap:7, background:C.ink, color:"#fff", border:"none", borderRadius:999, padding:"14px 22px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 6px 18px rgba(46,125,50,0.32)" }}
+        style={{ position:"fixed", right:16, bottom:86, zIndex:90, display:"flex", alignItems:"center", gap:7, background:C.ink, color:"#fff", border:"none", borderRadius:999, padding:"14px 22px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 6px 18px rgba(46,125,50,0.32)" }}
       >
         <Plus size={20} strokeWidth={2.5} />記録
       </button>
@@ -2503,7 +2503,7 @@ export default function App() {
       <nav style={S.nav}>
         {navItems.map(n => (
           <button key={n.key} style={navBtn(tab === n.key)} onClick={() => setTab(n.key)}>
-            <n.Icon size={22} strokeWidth={tab === n.key ? 2.2 : 1.8} />
+            <n.Icon size={24} strokeWidth={tab === n.key ? 2.2 : 1.8} />
             {n.label}
           </button>
         ))}
