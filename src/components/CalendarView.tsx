@@ -94,7 +94,7 @@ export default function CalendarView({
   const [filterUserId, setFilterUserId]   = useState<number>(0);
   const [currentSort, setCurrentSort]     = useState<"date-desc"|"date-asc"|"user"|"work_type">("date-desc");
   const [showSortMenu, setShowSortMenu]   = useState(false);
-  const [calView, setCalView]             = useState<"week"|"month">("week");
+  const [calView, setCalView]             = useState<"week"|"month">("month");
   const [weekStart, setWeekStart]         = useState<string>(() => {
     const d = new Date();
     const dow = d.getDay();
@@ -303,7 +303,7 @@ export default function CalendarView({
               onClick={() => setCalView(v => v === "week" ? "month" : "week")}
               style={css({ background: C.well, border: "none", borderRadius: 999, padding: "5px 12px", color: C.textSub, cursor: "pointer", fontSize: 11, fontWeight: 700 })}
             >
-              {calView === "week" ? "月表示" : "週表示"}
+              {calView === "week" ? "週表示" : "月表示"}
             </button>
           </div>
           <button onClick={goNext} style={css({ width: 34, height: 34, background: C.well, border: "none", borderRadius: 999, color: C.textSub, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" })}>
