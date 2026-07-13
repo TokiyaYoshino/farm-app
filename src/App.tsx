@@ -6,7 +6,7 @@ import {
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
   Snowflake, CloudLightning, MapPin, RefreshCw, AlertCircle,
   PackageCheck, CalendarDays,
-  UserCircle, Trash2, PlusCircle, ClipboardList, Check,
+  UserCircle, Trash2, PlusCircle, ClipboardList, Check, MessageSquare,
   Wind, Camera, X, Navigation, Search, Save,
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
@@ -24,6 +24,7 @@ import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } fro
 import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
 import RowMenu from "./ui/RowMenu";
+import CommentThread from "./ui/CommentThread";
 
 const makePin = (color: string) => L.divIcon({
   className: "",
@@ -228,6 +229,7 @@ export default function App() {
   const [pesticides, setPesticides]       = useState<Pesticide[]>([]);
   const [projects, setProjects]           = useState<Project[]>([]);
   const [tickets, setTickets]             = useState<Ticket[]>([]);
+  const [allComments, setAllComments]     = useState<Comment[]>([]);
   const [pForm, setPForm]                 = useState({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
   const [pManualMode, setPManualMode]     = useState(false);
   const [masterSearch, setMasterSearch]   = useState("");
@@ -333,7 +335,7 @@ export default function App() {
 
       // org でフィルタしてデータ取得
       const orgUserIds = userList.filter(x => x.org === org).map(u => u.id);
-      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: tkt }, { data: wc }] = await Promise.all([
+      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: tkt }, { data: wc }, { data: cmts }] = await Promise.all([
         supabase.from("crops").select("*").eq("org", org).order("id"),
         supabase.from("fields").select("*").eq("org", org).order("id"),
         supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
@@ -345,6 +347,7 @@ export default function App() {
         supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
         supabase.from("tickets").select("*").eq("org", org),
         supabase.from("work_categories").select("*").order("id"),
+        supabase.from("comments").select("*").order("created_at", { ascending: false }),
       ]);
       if (cErr)  console.error("crops fetch error:",   cErr);
       if (fdErr) console.error("fields fetch error:",  fdErr);
@@ -363,6 +366,14 @@ export default function App() {
       if (prj) setProjects(prj as Project[]);
       if (tkt) setTickets(tkt as Ticket[]);
       if (wc) setWorkCategories(wc as WorkCategory[]);
+      if (cmts) {
+        // comments に org 列がないため、org 内の報告/予定に紐づくものだけ残す
+        const reportIds   = new Set((r ?? []).map((x: Report) => String(x.id)));
+        const scheduleIds = new Set(((sch ?? []) as Schedule[]).map(x => x.id));
+        setAllComments((cmts as Comment[]).filter(cm =>
+          cm.target_type === "report" ? reportIds.has(cm.target_id) : scheduleIds.has(cm.target_id)
+        ));
+      }
       setLoading(false);
       } catch (e) {
         console.error("Startup error:", e);
@@ -1030,17 +1041,27 @@ export default function App() {
 
   const addComment = async (targetType: string, targetId: string, message: string): Promise<boolean> => {
     if (!currentUser) return false;
-    const { error } = await supabase.from("comments").insert([{
+    const { data, error } = await supabase.from("comments").insert([{
       target_type: targetType, target_id: targetId,
       user_id: currentUser.id, message,
-    }]);
+    }]).select().single();
+    if (!error && data) setAllComments(prev => [data as Comment, ...prev]);
     return !error;
   };
 
   const editComment = async (id: string, message: string): Promise<boolean> => {
     const { error } = await supabase.from("comments").update({ message }).eq("id", id);
+    if (!error) setAllComments(prev => prev.map(cm => cm.id === id ? { ...cm, message } : cm));
     return !error;
   };
+
+  // コメント件数マップ（"report:123" / "schedule:uuid" → 件数）
+  const commentCounts = (() => {
+    const m: Record<string, number> = {};
+    allComments.forEach(cm => { const k = `${cm.target_type}:${cm.target_id}`; m[k] = (m[k] ?? 0) + 1; });
+    return m;
+  })();
+  const commentCountOf = (type: "report" | "schedule", id: number | string) => commentCounts[`${type}:${id}`] ?? 0;
 
 
   const autoMatchTicket = async (report: Report) => {
@@ -1454,6 +1475,42 @@ export default function App() {
             );
           })()}
 
+          {/* 新着コメント */}
+          {(() => {
+            const feed = allComments
+              .map(cm => {
+                if (cm.target_type === "report") {
+                  const r = reports.find(x => String(x.id) === cm.target_id);
+                  return r ? { cm, label: `${cropName(r.crop_id)} · ${r.date}`, open: () => setSelectedReport(r) } : null;
+                }
+                const sc = schedules.find(x => x.id === cm.target_id);
+                return sc ? { cm, label: `${sc.work_type || sc.title} · ${sc.date}`, open: () => setSelectedSchedule(sc) } : null;
+              })
+              .filter((x): x is NonNullable<typeof x> => x !== null)
+              .slice(0, 3);
+            if (feed.length === 0) return null;
+            return (
+              <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, padding:"14px 16px", marginBottom:12 }}>
+                <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>
+                  <MessageSquare size={11} strokeWidth={2} />新着コメント
+                </div>
+                {feed.map(({ cm, label, open }, i) => (
+                  <button key={cm.id} onClick={open}
+                    style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 0", border:"none", borderTop: i === 0 ? "none" : `1px solid ${C.border}`, background:"none", cursor:"pointer", textAlign:"left" as const }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+                        <span style={{ fontWeight:700 }}>{userName(cm.user_id)}</span>
+                        <span style={{ color:C.textSub }}>：{cm.message}</span>
+                      </div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{label}</div>
+                    </div>
+                    <ChevronRight size={14} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+
           {/* 記録一覧への導線 */}
           <button onClick={() => { setTab("report"); setReportView("list"); }} style={{ ...S.card, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const, width:"100%" }}>
             <ClipboardList size={16} color={C.textMuted} strokeWidth={1.8} style={{ flexShrink:0 }} />
@@ -1575,6 +1632,11 @@ export default function App() {
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
                             <span style={{ fontWeight:700, fontSize:13, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, flex:1 }}>{scheduleTitle(s) || s.work_type}</span>
+                            {commentCountOf("schedule", s.id) > 0 && (
+                              <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.ink, flexShrink:0 }}>
+                                <MessageSquare size={11} strokeWidth={2} />{commentCountOf("schedule", s.id)}
+                              </span>
+                            )}
                             <span style={{ fontSize:11, fontWeight:600, color:C.warning, flexShrink:0 }}>未報告</span>
                           </div>
                           <div style={{ fontSize:11, color:C.textSub, marginTop:4 }}>
@@ -1652,6 +1714,11 @@ export default function App() {
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                       {wc && <span style={{ fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{r.work_type}</span>}
+                      {commentCountOf("report", r.id) > 0 && (
+                        <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.ink, background:C.inkSoft, borderRadius:999, padding:"3px 8px" }}>
+                          <MessageSquare size={11} strokeWidth={2} />{commentCountOf("report", r.id)}
+                        </span>
+                      )}
                       <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
                       {(isAdmin || r.user_id === currentUser?.id) && (
                         <RowMenu menuKey={`lr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
@@ -2169,7 +2236,7 @@ export default function App() {
                 )}
 
                 {/* アクション */}
-                <div style={{ display:"flex", gap:8 }}>
+                <div style={{ display:"flex", gap:8, marginBottom:16 }}>
                   <button
                     onClick={() => { setSelectedReport(null); handleCopyReport(r); }}
                     style={{ ...btn("soft", "md"), flex:1 }}
@@ -2185,6 +2252,13 @@ export default function App() {
                     </button>
                   )}
                 </div>
+
+                {/* コメント */}
+                <CommentThread
+                  targetType="report" targetId={String(r.id)}
+                  currentUserId={currentUser?.id ?? 0} userName={userName}
+                  onLoad={loadComments} onAdd={addComment} onEdit={editComment}
+                />
               </div>
           </>
         );
@@ -2255,6 +2329,15 @@ export default function App() {
                 >
                   <ClipboardList size={16} strokeWidth={2} />この予定の報告を入力
                 </button>
+
+                {/* コメント */}
+                <div style={{ marginTop:16 }}>
+                  <CommentThread
+                    targetType="schedule" targetId={s.id}
+                    currentUserId={currentUser?.id ?? 0} userName={userName}
+                    onLoad={loadComments} onAdd={addComment} onEdit={editComment}
+                  />
+                </div>
               </div>
           </>
         );
