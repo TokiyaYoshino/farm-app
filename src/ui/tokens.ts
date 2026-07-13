@@ -44,16 +44,13 @@ export const C = {
   textMuted: "#9EA1A6",
   hairline:  "#EBEBED", // 区切り線・secondaryボタン枠
 
-  // ── 後方互換エイリアス（旧コードが参照。段階移行後に整理）
-  //    旧 primary* → ink 系にマップし、緑CTAの見た目を保ちつつ緑ウォッシュを除去
+  // ── 後方互換エイリアス（値は ink/hairline/info と同一。呼び出し側の
+  //    可読性のために残置。primary3/primary4/blueBg/blue4 は根絶済み
+  //    ＝ 淡色bg＋同系枠の装飾ボックスは全て well/inkSoft/infoBg に統一）
   primary:   "#2E7D32", // = ink
   primary2:  "#256628", // = inkPress
-  primary3:  "#E4F0E4", // = inkSoft
-  primary4:  "#CBE3CC", // 淡い緑枠（移行用）
   border:    "#EBEBED", // = hairline
   blue:      "#3773E1", // = info
-  blueBg:    "#E7EEFC",
-  blue4:     "#C7D8F7",
 } as const;
 
 // ── 影（構造の主役。border と併用しない）
