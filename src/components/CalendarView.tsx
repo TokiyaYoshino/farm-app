@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import type { CSSProperties } from "react";
-import { C, SHADOW } from "../ui/tokens";
+import { C, SHADOW, workTypeColor } from "../ui/tokens";
 import {
   ChevronLeft, ChevronRight, Plus, X,
   CalendarDays, ClipboardList, UserCircle,
@@ -287,35 +287,34 @@ export default function CalendarView({
   return (
     <>
       {/* ── カレンダー本体 ── */}
-      <div style={css({ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" })}>
+      <div style={css({ background: C.card, borderRadius: 20, overflow: "hidden", marginBottom: 14, boxShadow: SHADOW.card })}>
         {/* nav */}
-        <div style={css({ background: C.ink, color: "#fff", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" })}>
-          <button onClick={goPrev} style={css({ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "5px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" })}>
+        <div style={css({ padding: "12px 14px 6px", display: "flex", alignItems: "center", justifyContent: "space-between" })}>
+          <button onClick={goPrev} style={css({ width: 34, height: 34, background: C.well, border: "none", borderRadius: 999, color: C.textSub, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" })}>
             <ChevronLeft size={16} strokeWidth={2.5} />
           </button>
           <div style={css({ display: "flex", alignItems: "center", gap: 8 })}>
-            <div style={css({ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 14 })}>
-              <CalendarDays size={14} strokeWidth={2} />
+            <div style={css({ fontWeight: 700, fontSize: 15, color: C.text })}>
               {calView === "week"
                 ? `${weekDays[0].slice(5).replace("-","/")} 〜 ${weekDays[6].slice(5).replace("-","/")} `
                 : `${viewYear}年${viewMonth + 1}月`}
             </div>
             <button
               onClick={() => setCalView(v => v === "week" ? "month" : "week")}
-              style={css({ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: 6, padding: "3px 9px", color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700 })}
+              style={css({ background: C.well, border: "none", borderRadius: 999, padding: "5px 12px", color: C.textSub, cursor: "pointer", fontSize: 11, fontWeight: 700 })}
             >
               {calView === "week" ? "月表示" : "週表示"}
             </button>
           </div>
-          <button onClick={goNext} style={css({ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "5px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" })}>
+          <button onClick={goNext} style={css({ width: 34, height: 34, background: C.well, border: "none", borderRadius: 999, color: C.textSub, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" })}>
             <ChevronRight size={16} strokeWidth={2.5} />
           </button>
         </div>
 
         {/* Day-of-week header */}
-        <div style={css({ display: "grid", gridTemplateColumns: "repeat(7,1fr)", background: C.primary3 })}>
-          {DOW.map((d, i) => (
-            <div key={d} style={css({ textAlign: "center" as const, padding: "5px 0", fontSize: 11, fontWeight: 700, color: i === 0 ? C.danger : i === 6 ? C.blue : C.textSub })}>
+        <div style={css({ display: "grid", gridTemplateColumns: "repeat(7,1fr)" })}>
+          {DOW.map((d) => (
+            <div key={d} style={css({ textAlign: "center" as const, padding: "5px 0", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: C.textMuted })}>
               {d}
             </div>
           ))}
@@ -333,7 +332,7 @@ export default function CalendarView({
                 <div
                   key={date}
                   onClick={() => setSelectedDate(isSel ? null : date)}
-                  style={css({ background: isSel ? C.primary3 : C.card, minHeight: 80, padding: "4px 2px 3px", cursor: "pointer", userSelect: "none" as const, overflow: "hidden" })}
+                  style={css({ background: isSel ? C.inkSoft : C.card, minHeight: 80, padding: "4px 2px 3px", cursor: "pointer", userSelect: "none" as const, overflow: "hidden" })}
                 >
                   <div style={css({
                     fontSize: 12, fontWeight: isToday ? 800 : 500,
@@ -346,7 +345,7 @@ export default function CalendarView({
                     {Number(date.slice(8))}
                   </div>
                   {items.map((it, i) => (
-                    <div key={i} style={css({ fontSize: 9, padding: "1px 2px", borderRadius: 3, marginBottom: 1, overflow: "hidden", whiteSpace: "nowrap" as const, textOverflow: "ellipsis", background: it.type === "r" ? C.primary3 : C.blueBg, color: it.type === "r" ? C.primary : C.blue, fontWeight: 600 })}>
+                    <div key={i} style={css({ fontSize: 9, padding: "1px 2px", borderRadius: 3, marginBottom: 1, overflow: "hidden", whiteSpace: "nowrap" as const, textOverflow: "ellipsis", background: it.type === "r" ? C.inkSoft : C.infoBg, color: it.type === "r" ? C.ink : C.info, fontWeight: 600 })}>
                       {it.label}
                     </div>
                   ))}
@@ -369,7 +368,7 @@ export default function CalendarView({
               <div
                 key={idx}
                 onClick={() => date && setSelectedDate(isSel ? null : date)}
-                style={css({ background: isSel ? C.primary3 : C.card, minHeight: 60, padding: "4px 2px 3px", cursor: date ? "pointer" : "default", userSelect: "none" as const, overflow: "hidden" })}
+                style={css({ background: isSel ? C.inkSoft : C.card, minHeight: 60, padding: "4px 2px 3px", cursor: date ? "pointer" : "default", userSelect: "none" as const, overflow: "hidden" })}
               >
                 {date && (
                   <>
@@ -388,9 +387,8 @@ export default function CalendarView({
                         fontSize: 9, fontWeight: 700, lineHeight: "1.3",
                         padding: "1px 3px", borderRadius: 3, marginBottom: 1,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
-                        background: item.type === "r" ? C.primary3 : C.blueBg,
-                        color: item.type === "r" ? C.primary : C.blue,
-                        border: `1px solid ${item.type === "r" ? C.primary4 : C.blue4}`,
+                        background: item.type === "r" ? C.inkSoft : C.infoBg,
+                        color: item.type === "r" ? C.ink : C.info,
                       })}>
                         {item.label}
                       </div>
@@ -419,10 +417,10 @@ export default function CalendarView({
                   key={f}
                   onClick={() => { setCurrentFilter(f); setShowSortMenu(false); }}
                   style={css({
-                    padding: "4px 8px", borderRadius: 10, fontSize: 11, fontWeight: active ? 700 : 500,
-                    border: active ? `1.5px solid ${C.primary}` : `1px solid ${C.border}`,
-                    background: active ? C.primary3 : "transparent",
-                    color: active ? C.primary : C.textMuted,
+                    padding: "5px 11px", borderRadius: 999, fontSize: 11, fontWeight: active ? 700 : 500,
+                    border: "none",
+                    background: active ? C.inkSoft : C.well,
+                    color: active ? C.ink : C.textSub,
                     cursor: "pointer", whiteSpace: "nowrap" as const, flexShrink: 0,
                   })}
                 >
@@ -434,10 +432,10 @@ export default function CalendarView({
             <button
               onClick={() => setShowSortMenu(s => !s)}
               style={css({
-                flexShrink: 0, padding: "4px 7px", borderRadius: 10, fontSize: 11, fontWeight: 500,
-                border: `1px solid ${showSortMenu ? C.primary : C.border}`,
-                background: showSortMenu ? C.primary3 : "transparent",
-                color: showSortMenu ? C.primary : C.textMuted,
+                flexShrink: 0, padding: "5px 10px", borderRadius: 999, fontSize: 11, fontWeight: 500,
+                border: "none",
+                background: showSortMenu ? C.inkSoft : C.well,
+                color: showSortMenu ? C.ink : C.textSub,
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 3,
               })}
             >
@@ -449,7 +447,7 @@ export default function CalendarView({
               <select
                 value={filterUserId}
                 onChange={e => setFilterUserId(Number(e.target.value))}
-                style={css({ width: "100%", padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${C.primary4}`, fontSize: 12, background: "#fff", color: C.text, boxSizing: "border-box" })}
+                style={css({ width: "100%", padding: "7px 12px", borderRadius: 999, border: `1px solid ${C.hairline}`, fontSize: 12, background: C.card, color: C.text, boxSizing: "border-box" })}
               >
                 <option value={0}>全員</option>
                 {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -468,10 +466,10 @@ export default function CalendarView({
                   key={key}
                   onClick={() => { setCurrentSort(key); setShowSortMenu(false); }}
                   style={css({
-                    padding: "4px 9px", borderRadius: 8, fontSize: 11, fontWeight: currentSort === key ? 700 : 400,
-                    border: currentSort === key ? `1.5px solid ${C.primary}` : `1px solid ${C.border}`,
-                    background: currentSort === key ? C.primary3 : "#fff",
-                    color: currentSort === key ? C.primary : C.textSub,
+                    padding: "5px 11px", borderRadius: 999, fontSize: 11, fontWeight: currentSort === key ? 700 : 400,
+                    border: "none",
+                    background: currentSort === key ? C.inkSoft : C.well,
+                    color: currentSort === key ? C.ink : C.textSub,
                     cursor: "pointer",
                   })}
                 >
@@ -502,7 +500,7 @@ export default function CalendarView({
                 <div style={css({ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 })}>
                   <button
                     onClick={backToList}
-                    style={css({ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: C.textSub })}
+                    style={css({ background: C.well, border: "none", borderRadius: 999, padding: "7px 13px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: C.textSub })}
                   >
                     <ChevronLeft size={14} strokeWidth={2.5} />戻る
                   </button>
@@ -511,7 +509,7 @@ export default function CalendarView({
                       ? `${userName(detail.data.user_id)} の作業報告`
                       : `${userName(detail.data.assigned_user_id ?? detail.data.user_id)} の予定`}
                   </span>
-                  <button onClick={closePopup} style={css({ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 8px", cursor: "pointer", display: "flex", color: C.textMuted })}>
+                  <button onClick={closePopup} style={css({ width: 32, height: 32, background: C.well, border: "none", borderRadius: 999, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted })}>
                     <X size={15} strokeWidth={2} />
                   </button>
                 </div>
@@ -520,10 +518,12 @@ export default function CalendarView({
                 {detail.kind === "report" && (() => {
                   const r = detail.data;
                   return (
-                    <div style={css({ background: C.primary3, borderRadius: 12, padding: 14, marginBottom: 14, border: `1px solid ${C.primary4}` })}>
+                    <div style={css({ background: C.well, borderRadius: 14, padding: 14, marginBottom: 14 })}>
                       <div style={css({ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 })}>
-                        <span style={css({ fontWeight: 800, fontSize: 16, color: C.primary })}>{r.work_type}</span>
-                        {r.field && <span style={css({ fontSize: 12, background: "#fff", borderRadius: 6, padding: "2px 8px", color: C.textSub, fontWeight: 600 })}>{r.field}</span>}
+                        {(() => { const wc = workTypeColor(r.work_type); return (
+                          <span style={css({ fontSize: 12, fontWeight: 700, color: wc.fg, background: wc.bg, borderRadius: 999, padding: "3px 10px" })}>{r.work_type}</span>
+                        ); })()}
+                        {r.field && <span style={css({ fontSize: 12, background: C.card, borderRadius: 999, padding: "3px 10px", color: C.textSub, fontWeight: 600 })}>{r.field}</span>}
                         <span style={css({ fontSize: 12, color: C.textMuted, marginLeft: "auto" })}>{r.date}</span>
                       </div>
                       <div style={css({ display: "flex", flexWrap: "wrap" as const, gap: 8, fontSize: 12, marginBottom: 8 })}>
@@ -548,7 +548,7 @@ export default function CalendarView({
                         </div>
                       )}
                       {r.note && (
-                        <div style={css({ fontSize: 12, color: C.textSub, padding: "7px 10px", background: "rgba(255,255,255,0.7)", borderRadius: 8, borderLeft: `3px solid ${C.primary4}`, marginBottom: r.image_url ? 10 : 0 })}>
+                        <div style={css({ fontSize: 12, color: C.textSub, padding: "8px 12px", background: C.card, borderRadius: 10, marginBottom: r.image_url ? 10 : 0 })}>
                           {r.note}
                         </div>
                       )}
@@ -562,9 +562,11 @@ export default function CalendarView({
                 {detail.kind === "schedule" && (() => {
                   const s = detail.data;
                   return (
-                    <div style={css({ background: C.blueBg, borderRadius: 12, padding: 14, marginBottom: 14, border: `1px solid ${C.blue4}` })}>
+                    <div style={css({ background: C.well, borderRadius: 14, padding: 14, marginBottom: 14 })}>
                       <div style={css({ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 })}>
-                        <span style={css({ fontWeight: 800, fontSize: 16, color: C.blue })}>{s.work_type || s.title}</span>
+                        {(() => { const wc = workTypeColor(s.work_type || s.title); return (
+                          <span style={css({ fontSize: 12, fontWeight: 700, color: wc.fg, background: wc.bg, borderRadius: 999, padding: "3px 10px" })}>{s.work_type || s.title}</span>
+                        ); })()}
                         <span style={css({ fontSize: 12, color: C.textMuted, marginLeft: "auto" })}>{s.date}</span>
                       </div>
                       <div style={css({ display: "flex", flexWrap: "wrap" as const, gap: 8, fontSize: 12 })}>
@@ -572,7 +574,7 @@ export default function CalendarView({
                         {s.crop && <span style={css({ display: "flex", alignItems: "center", gap: 4, color: C.textSub })}><Leaf size={12} strokeWidth={2} />{s.crop}</span>}
                       </div>
                       {s.note && (
-                        <div style={css({ fontSize: 12, color: C.textSub, marginTop: 8, padding: "7px 10px", background: "rgba(255,255,255,0.7)", borderRadius: 8, borderLeft: `3px solid ${C.blue4}` })}>
+                        <div style={css({ fontSize: 12, color: C.textSub, marginTop: 8, padding: "8px 12px", background: C.card, borderRadius: 10 })}>
                           {s.note}
                         </div>
                       )}
@@ -619,19 +621,19 @@ export default function CalendarView({
                                   autoFocus
                                   value={editingText}
                                   onChange={e => setEditingText(e.target.value)}
-                                  style={css({ width: "100%", padding: "8px 10px", borderRadius: 10, border: `1.5px solid ${C.primary4}`, fontSize: 13, lineHeight: 1.5, resize: "none" as const, background: "#fff", color: C.text, minHeight: 60, boxSizing: "border-box" })}
+                                  style={css({ width: "100%", padding: "8px 10px", borderRadius: 10, border: `1px solid ${C.hairline}`, fontSize: 13, lineHeight: 1.5, resize: "none" as const, background: C.card, color: C.text, minHeight: 60, boxSizing: "border-box" })}
                                 />
                                 <div style={css({ display: "flex", gap: 5, justifyContent: "flex-end" })}>
                                   <button
                                     onClick={() => { setEditingCmtId(null); setEditingText(""); }}
-                                    style={css({ padding: "4px 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.bg, color: C.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 })}
+                                    style={css({ padding: "5px 12px", borderRadius: 999, border: "none", background: C.well, color: C.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 })}
                                   >
                                     <X size={11} strokeWidth={2} />キャンセル
                                   </button>
                                   <button
                                     onClick={saveEdit}
                                     disabled={!editingText.trim()}
-                                    style={css({ padding: "4px 10px", borderRadius: 7, border: "none", background: editingText.trim() ? C.primary : C.border, color: editingText.trim() ? "#fff" : C.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 })}
+                                    style={css({ padding: "5px 12px", borderRadius: 999, border: "none", background: editingText.trim() ? C.ink : C.well, color: editingText.trim() ? "#fff" : C.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 })}
                                   >
                                     <Check size={11} strokeWidth={2.5} />保存
                                   </button>
@@ -640,9 +642,9 @@ export default function CalendarView({
                             ) : (
                               <div style={css({
                                 fontSize: 13, padding: "8px 11px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
-                                background: isMe ? C.primary : C.card,
+                                background: isMe ? C.ink : C.well,
                                 color: isMe ? "#fff" : C.text,
-                                border: isMe ? "none" : `1px solid ${C.border}`,
+                                border: "none",
                                 lineHeight: 1.5,
                               })}>
                                 {c.message}
@@ -658,7 +660,7 @@ export default function CalendarView({
                 {/* コメント入力 */}
                 <div style={css({ display: "flex", gap: 8, alignItems: "flex-end" })}>
                   <input
-                    style={css({ flex: 1, padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 14, background: C.bg, color: C.text, boxSizing: "border-box" })}
+                    style={css({ flex: 1, padding: "11px 16px", borderRadius: 999, border: "none", fontSize: 14, background: C.well, color: C.text, boxSizing: "border-box", outline: "none" })}
                     placeholder="コメントを入力..."
                     value={commentText}
                     onChange={e => setCommentText(e.target.value)}
@@ -668,10 +670,10 @@ export default function CalendarView({
                     onClick={submitComment}
                     disabled={!commentText.trim() || addingCmt}
                     style={css({
-                      padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
-                      background: commentText.trim() ? C.ink : C.border,
+                      width: 42, height: 42, borderRadius: 999, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                      background: commentText.trim() ? C.ink : C.well,
                       color: commentText.trim() ? "#fff" : C.textMuted,
-                      fontSize: 13, fontWeight: 700, flexShrink: 0,
+                      flexShrink: 0,
                     })}
                   >
                     {addingCmt ? <RefreshCw size={14} strokeWidth={2} /> : <Send size={14} strokeWidth={2} />}
@@ -683,27 +685,22 @@ export default function CalendarView({
               <>
                 {/* Sheet header */}
                 <div style={css({ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 })}>
-                  <div style={css({ display: "flex", alignItems: "center", gap: 8 })}>
-                    <div style={css({ background: C.primary3, borderRadius: 8, padding: "5px 7px" })}>
-                      <CalendarDays size={15} color={C.primary} strokeWidth={2} />
-                    </div>
-                    <span style={css({ fontWeight: 700, fontSize: 15, color: C.text })}>{selectedDate}</span>
-                  </div>
+                  <span style={css({ fontWeight: 700, fontSize: 17, color: C.text })}>{selectedDate}</span>
                   <div style={css({ display: "flex", gap: 6 })}>
                     <button
                       onClick={() => { setShowForm(f => !f); resetForm(); setAddError(""); }}
                       style={css({
                         display: "flex", alignItems: "center", gap: 5,
-                        background: showForm ? C.bg : C.info,
+                        background: showForm ? C.well : C.ink,
                         color: showForm ? C.textSub : "#fff",
-                        border: showForm ? `1.5px solid ${C.border}` : "none",
-                        borderRadius: 10, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        border: "none",
+                        borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer",
                       })}
                     >
                       {showForm ? <X size={13} strokeWidth={2.5} /> : <Plus size={13} strokeWidth={2.5} />}
                       {showForm ? "キャンセル" : "予定を追加"}
                     </button>
-                    <button onClick={closePopup} style={css({ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 10px", cursor: "pointer", display: "flex", color: C.textMuted })}>
+                    <button onClick={closePopup} style={css({ width: 32, height: 32, background: C.well, border: "none", borderRadius: 999, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted })}>
                       <X size={15} strokeWidth={2} />
                     </button>
                   </div>
@@ -711,10 +708,10 @@ export default function CalendarView({
 
                 {/* 予定追加フォーム */}
                 {showForm && (
-                  <div style={css({ background: C.blueBg, borderRadius: 12, padding: 14, marginBottom: 14, border: `1px solid ${C.blue4}` })}>
-                    <div style={css({ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 10 })}>新しい予定</div>
+                  <div style={css({ background: C.well, borderRadius: 14, padding: 14, marginBottom: 14 })}>
+                    <div style={css({ fontSize: 12, fontWeight: 700, color: C.textSub, marginBottom: 10 })}>新しい予定</div>
                     <select autoFocus
-                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.blue4}`, fontSize: 14, marginBottom: 8, background: "#fff", color: C.text, boxSizing: "border-box" })}
+                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                       value={form.assignedUserId || ""}
                       onChange={e => setForm(f => ({ ...f, assignedUserId: e.target.value ? Number(e.target.value) : 0 }))}
                     >
@@ -722,14 +719,14 @@ export default function CalendarView({
                       {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                     <select
-                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.blue4}`, fontSize: 14, marginBottom: 8, background: "#fff", color: C.text, boxSizing: "border-box" })}
+                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                       value={form.workType}
                       onChange={e => setForm(f => ({ ...f, workType: e.target.value }))}
                     >
                       {WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <select
-                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.blue4}`, fontSize: 14, marginBottom: 8, background: "#fff", color: C.text, boxSizing: "border-box" })}
+                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                       value={form.crop}
                       onChange={e => setForm(f => ({ ...f, crop: e.target.value }))}
                     >
@@ -737,7 +734,7 @@ export default function CalendarView({
                       {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                     <input
-                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.blue4}`, fontSize: 14, marginBottom: 10, background: "#fff", color: C.text, boxSizing: "border-box" })}
+                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 10, background: C.card, color: C.text, boxSizing: "border-box" })}
                       placeholder="メモ（任意）"
                       value={form.note}
                       onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
@@ -762,19 +759,21 @@ export default function CalendarView({
                 {/* 作業報告リスト */}
                 {dayReports.length > 0 && (
                   <div style={css({ marginBottom: 14 })}>
-                    <div style={css({ fontSize: 12, fontWeight: 700, color: C.primary, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 })}>
-                      <ClipboardList size={13} strokeWidth={2} color={C.primary} />
+                    <div style={css({ fontSize: 12, fontWeight: 700, color: C.textSub, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 })}>
+                      <ClipboardList size={13} strokeWidth={2} color={C.textMuted} />
                       作業報告 {dayReports.length}件
                     </div>
-                    {dayReports.map(r => (
+                    {dayReports.map(r => {
+                      const wc = workTypeColor(r.work_type);
+                      return (
                       <button
                         key={r.id}
                         onClick={() => openDetail({ kind: "report", data: r })}
-                        style={css({ width: "100%", background: C.primary3, borderRadius: 10, padding: "10px 12px", marginBottom: 7, border: `1px solid ${C.primary4}`, textAlign: "left" as const, cursor: "pointer" })}
+                        style={css({ width: "100%", background: C.well, borderRadius: 14, padding: "10px 12px", marginBottom: 7, border: "none", textAlign: "left" as const, cursor: "pointer" })}
                       >
                         <div style={css({ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 })}>
-                          <span style={css({ fontWeight: 700, fontSize: 13, color: C.primary })}>{r.work_type}</span>
-                          {r.field && <span style={css({ fontSize: 11, background: "#fff", borderRadius: 5, padding: "1px 7px", color: C.textSub, fontWeight: 600 })}>{r.field}</span>}
+                          <span style={css({ fontWeight: 700, fontSize: 11, color: wc.fg, background: wc.bg, borderRadius: 999, padding: "2px 8px" })}>{r.work_type}</span>
+                          {r.field && <span style={css({ fontSize: 11, background: C.card, borderRadius: 999, padding: "2px 8px", color: C.textSub, fontWeight: 600 })}>{r.field}</span>}
                           <span style={css({ fontSize: 11, color: C.textMuted, marginLeft: "auto" })}>{cropName(r.crop_id)}</span>
                         </div>
                         <div style={css({ display: "flex", gap: 8, fontSize: 11, color: C.textMuted, alignItems: "center", flexWrap: "wrap" as const })}>
@@ -783,35 +782,38 @@ export default function CalendarView({
                           {(r.work_start && r.work_end)
                             ? <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Clock size={10} strokeWidth={2} />{r.work_start}〜{r.work_end}</span>
                             : r.work_time ? <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Clock size={10} strokeWidth={2} />{r.work_time}h</span> : null}
-                          {r.image_url && <span style={{ display: "flex", alignItems: "center", gap: 3, color: C.primary }}>📷 写真あり</span>}
+                          {r.image_url && <span style={{ display: "flex", alignItems: "center", gap: 3, color: C.textSub }}>📷 写真あり</span>}
                         </div>
                         {r.note && (
-                          <div style={css({ fontSize: 11, color: C.textSub, marginTop: 5, padding: "4px 7px", background: "rgba(255,255,255,0.6)", borderRadius: 6, borderLeft: `3px solid ${C.primary4}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const })}>
+                          <div style={css({ fontSize: 11, color: C.textSub, marginTop: 5, padding: "4px 7px", background: C.card, borderRadius: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const })}>
                             {r.note}
                           </div>
                         )}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 {/* 予定リスト */}
                 {daySchedules.length > 0 && (
                   <div>
-                    <div style={css({ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 })}>
-                      <CalendarDays size={13} strokeWidth={2} color={C.blue} />
+                    <div style={css({ fontSize: 12, fontWeight: 700, color: C.textSub, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 })}>
+                      <CalendarDays size={13} strokeWidth={2} color={C.textMuted} />
                       予定 {daySchedules.length}件
                     </div>
-                    {daySchedules.map(s => (
+                    {daySchedules.map(s => {
+                      const wc = workTypeColor(s.work_type || s.title);
+                      return (
                       <button
                         key={s.id}
                         onClick={() => openDetail({ kind: "schedule", data: s })}
-                        style={css({ width: "100%", background: C.blueBg, borderRadius: 10, padding: "10px 12px", marginBottom: 7, border: `1px solid ${C.blue4}`, textAlign: "left" as const, cursor: "pointer" })}
+                        style={css({ width: "100%", background: C.well, borderRadius: 14, padding: "10px 12px", marginBottom: 7, border: "none", textAlign: "left" as const, cursor: "pointer" })}
                       >
                         <div style={css({ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 })}>
-                          <span style={css({ fontWeight: 700, fontSize: 13, color: C.blue })}>{s.work_type || s.title}</span>
+                          <span style={css({ fontWeight: 700, fontSize: 11, color: wc.fg, background: wc.bg, borderRadius: 999, padding: "2px 8px" })}>{s.work_type || s.title}</span>
                           {s.assigned_user_id && (
-                            <span style={css({ fontSize: 11, background: "#fff", borderRadius: 5, padding: "1px 7px", color: C.textSub, fontWeight: 600, display: "flex", alignItems: "center", gap: 3 })}>
+                            <span style={css({ fontSize: 11, background: C.card, borderRadius: 999, padding: "2px 8px", color: C.textSub, fontWeight: 600, display: "flex", alignItems: "center", gap: 3 })}>
                               <UserCircle size={10} strokeWidth={2} />{userName(s.assigned_user_id)}
                             </span>
                           )}
@@ -819,7 +821,8 @@ export default function CalendarView({
                         {s.crop && <div style={css({ fontSize: 11, color: C.textMuted, display: "flex", alignItems: "center", gap: 4 })}><Leaf size={10} strokeWidth={2} />{s.crop}</div>}
                         {s.note && <div style={css({ fontSize: 11, color: C.textSub, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const })}>{s.note}</div>}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
