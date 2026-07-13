@@ -1095,9 +1095,9 @@ export default function App() {
   })();
   const reportFilterActive = !!(reportQuery.trim() || filterCrop || filterField || filterWorkType || filterUser);
   const chipSelect = (active: boolean): CSSProperties => ({
-    flexShrink: 0, appearance: "none", WebkitAppearance: "none", padding: "7px 12px", borderRadius: 20,
-    border: `1.5px solid ${active ? C.primary : C.border}`,
-    background: active ? C.primary3 : C.card, color: active ? C.primary : C.textSub,
+    flexShrink: 0, appearance: "none", WebkitAppearance: "none", padding: "7px 12px", borderRadius: 999,
+    border: "none",
+    background: active ? C.inkSoft : C.well, color: active ? C.ink : C.textSub,
     fontSize: 12, fontWeight: 600, cursor: "pointer",
   });
 
@@ -1341,7 +1341,7 @@ export default function App() {
         <div style={S.page}>
           {/* 作業セッション（作業中のみ表示） */}
           {workSession && (
-            <div style={{ background:C.card, borderRadius:8, padding:"12px 14px", marginBottom:4, border:`1px solid ${C.border}` }}>
+            <div style={{ background:C.card, borderRadius:RADIUS.card, padding:"12px 14px", marginBottom:12, boxShadow:SHADOW.card }}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <div style={{ width:7, height:7, borderRadius:"50%", background:C.danger, flexShrink:0 }} />
                 <span style={{ fontSize:14, fontWeight:700, color:C.text, flex:1 }}>作業中</span>
@@ -1350,19 +1350,16 @@ export default function App() {
                 </span>
                 <button
                   onClick={toggleVoice}
-                  style={{ padding:"5px 10px", borderRadius:6, border:`1px solid ${isListening ? C.danger : C.border}`, background:"transparent", color: isListening ? C.danger : C.textMuted, fontWeight:600, fontSize:12, cursor:"pointer", flexShrink:0 }}
+                  style={{ width:30, height:30, borderRadius:999, border:"none", background: isListening ? C.dangerBg : C.well, color: isListening ? C.danger : C.textMuted, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}
                 >
                   {isListening ? <MicOff size={13} strokeWidth={2} /> : <Mic size={13} strokeWidth={2} />}
                 </button>
-                <button
-                  onClick={stopWork}
-                  style={{ padding:"7px 14px", borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textSub, fontWeight:600, fontSize:13, cursor:"pointer", flexShrink:0 }}
-                >
+                <button onClick={stopWork} style={btn("secondary", "sm")}>
                   終了する
                 </button>
               </div>
               {voiceTranscript && (
-                <div style={{ marginTop:10, fontSize:12, color:C.textSub, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
+                <div style={{ marginTop:10, fontSize:12, color:C.textSub, background:C.well, borderRadius:10, padding:"8px 10px" }}>
                   {voiceTranscript}
                 </div>
               )}
@@ -1370,25 +1367,25 @@ export default function App() {
           )}
           {/* 天気カード */}
           {wxLoading ? null : wxAuto ? (
-            <div style={{ background:C.primary, borderRadius:14, padding:14, color:"#fff", marginBottom:12 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
-                <div>
-                  <div style={{ fontSize:36, fontWeight:700, lineHeight:1 }}>{wxAuto.temp}°</div>
-                  <div style={{ fontSize:13, opacity:0.85, marginTop:3 }}>
+            <div style={{ background:C.card, borderRadius:RADIUS.card, padding:"14px 16px", marginBottom:12, boxShadow:SHADOW.card }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                  <span style={{ fontSize:30, fontWeight:700, color:C.text, lineHeight:1 }}>{wxAuto.temp}°</span>
+                  <span style={{ fontSize:13, color:C.textSub }}>
                     {wxAuto.label}{weatherCoords?.name ? ` · ${weatherCoords.name}` : ""}
-                  </div>
+                  </span>
                 </div>
                 {(wxAuto.humidity !== undefined || wxAuto.rain !== undefined) && (
-                  <div style={{ display:"flex", flexDirection:"column", gap:6, alignItems:"flex-end" }}>
+                  <div style={{ display:"flex", gap:10 }}>
                     {wxAuto.humidity !== undefined && (
-                      <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:6, padding:"4px 10px", fontSize:12, display:"flex", alignItems:"center", gap:5, color:"#fff" }}>
-                        <Droplets size={13} strokeWidth={2} />湿度 {wxAuto.humidity}%
-                      </div>
+                      <span style={{ fontSize:12, display:"flex", alignItems:"center", gap:4, color:C.textSub }}>
+                        <Droplets size={13} strokeWidth={2} color={C.info} />{wxAuto.humidity}%
+                      </span>
                     )}
                     {wxAuto.rain !== undefined && (
-                      <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:6, padding:"4px 10px", fontSize:12, display:"flex", alignItems:"center", gap:5, color:"#fff" }}>
-                        <CloudRain size={13} strokeWidth={2} />雨量 {wxAuto.rain}mm
-                      </div>
+                      <span style={{ fontSize:12, display:"flex", alignItems:"center", gap:4, color:C.textSub }}>
+                        <CloudRain size={13} strokeWidth={2} color={C.rain} />{wxAuto.rain}mm
+                      </span>
                     )}
                   </div>
                 )}
@@ -1870,7 +1867,7 @@ export default function App() {
                   </div>
                   {isAdmin && (
                     <div style={{ display:"flex", gap:6, flexShrink:0 }} onClick={e => e.stopPropagation()}>
-                      <button style={{ ...S.btnSm, background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }} onClick={() => setFieldLocation(f.id)}>
+                      <button style={{ ...btn("soft", "sm") }} onClick={() => setFieldLocation(f.id)}>
                         <Navigation size={12} strokeWidth={2} />現在地
                       </button>
                       <RowMenu menuKey={`mf${f.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
@@ -1944,8 +1941,8 @@ export default function App() {
                         )}
                       </div>
                       {selectedMaster && (
-                        <div style={{ background:C.primary3, borderRadius:8, padding:"10px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:8 }}>
-                          <FlaskConical size={14} color={C.primary} strokeWidth={2} />
+                        <div style={{ background:C.inkSoft, borderRadius:14, padding:"10px 12px", marginBottom:12, display:"flex", alignItems:"center", gap:8 }}>
+                          <FlaskConical size={14} color={C.ink} strokeWidth={2} />
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{selectedMaster.name}</div>
                             <div style={{ fontSize:11, color:C.textMuted }}>{selectedMaster.type}{selectedMaster.dilution_rate ? ` / ${selectedMaster.dilution_rate}` : ""}</div>
@@ -2049,7 +2046,7 @@ export default function App() {
               </button>
             </div>
             {locPreview && (
-              <div style={{ background:C.primary3, borderRadius:8, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}` }}>
+              <div style={{ background:C.inkSoft, borderRadius:14, padding:"10px 14px", marginBottom:12 }}>
                 <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:4 }}>{locPreview.name}</div>
                 <div style={{ fontSize:11, color:C.textMuted }}>緯度: {locPreview.lat.toFixed(4)}　経度: {locPreview.lng.toFixed(4)}</div>
               </div>
@@ -2104,7 +2101,7 @@ export default function App() {
               </div>
               <div style={{ display:"flex", gap:8 }}>
                 <button
-                  style={{ ...S.btnSm, flex:1, justifyContent:"center", background:C.primary3, color:C.primary, border:`1.5px solid ${C.primary4}` }}
+                  style={{ ...btn("soft", "sm"), flex:1, justifyContent:"center" }}
                   onClick={() => { setSetAuthTarget(u); setSetAuthFormState({ login_id: u.login_id || "", password:"", confirmPass:"" }); }}
                 >
                   <KeyRound size={12} strokeWidth={2} />{u.auth_id ? "変更" : "設定"}
@@ -2120,33 +2117,32 @@ export default function App() {
       )}
 
       {/* ───── レポート詳細モーダル ───── */}
-      {selectedReport && (() => {
+      <BottomSheet open={!!selectedReport} onClose={() => setSelectedReport(null)}>
+        {selectedReport && (() => {
         const r = selectedReport;
         return (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:300, display:"flex", alignItems:"flex-end" }}
-            onClick={() => setSelectedReport(null)}>
-            <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"90vh", overflowY:"auto", paddingBottom:40 }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"12px auto 0" }} />
+          <>
               {/* ヘッダー */}
-              <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+              <div style={{ padding:"6px 16px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <div>
-                  <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{cropName(r.crop_id)}</div>
+                  <div style={{ fontWeight:700, fontSize:17, color:C.text }}>{cropName(r.crop_id)}</div>
                   <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                     {r.date}{r.field && ` · ${r.field}`}
                   </div>
                 </div>
-                <button onClick={() => setSelectedReport(null)} style={{ background:"none", border:"none", padding:"6px", cursor:"pointer", display:"flex", color:C.textMuted }}>
-                  <X size={18} strokeWidth={2} />
+                <button onClick={() => setSelectedReport(null)} style={S.circleBtn}>
+                  <X size={16} strokeWidth={2} />
                 </button>
               </div>
 
               <div style={{ padding:"0 16px" }}>
                 {/* 基本情報 */}
-                <div style={{ background:C.bg, borderRadius:8, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div style={{ background:C.well, borderRadius:14, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   <div>
                     <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業種別</div>
-                    <div style={{ fontWeight:700, fontSize:14, color:C.primary }}>{r.work_type}</div>
+                    {(() => { const wc = workTypeColor(r.work_type); return (
+                      <span style={{ display:"inline-block", fontWeight:700, fontSize:12, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 10px" }}>{r.work_type}</span>
+                    ); })()}
                   </div>
                   <div>
                     <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>担当者</div>
@@ -2179,7 +2175,7 @@ export default function App() {
 
                 {/* 天気 */}
                 {r.weather && (
-                  <div style={{ background:C.primary3, borderRadius:8, padding:"10px 14px", marginBottom:12, border:`1px solid ${C.primary4}`, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" as const }}>
+                  <div style={{ background:C.well, borderRadius:14, padding:"10px 14px", marginBottom:12, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" as const }}>
                     <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{r.weather}</span>
                     {r.temp && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Thermometer size={13} color={C.temp} strokeWidth={2}/>{r.temp}°C</span>}
                     {r.humidity && <span style={{ fontSize:13, color:C.textSub, display:"flex", alignItems:"center", gap:3 }}><Droplets size={13} color={C.info} strokeWidth={2}/>{r.humidity}%</span>}
@@ -2232,57 +2228,55 @@ export default function App() {
                 <div style={{ display:"flex", gap:8 }}>
                   <button
                     onClick={() => { setSelectedReport(null); handleCopyReport(r); }}
-                    style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 0", borderRadius:8, border:`1px solid ${C.primary}`, background:"transparent", color:C.primary, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                    style={{ ...btn("soft", "md"), flex:1 }}
                   >
                     <Copy size={14} strokeWidth={2} />コピーして作成
                   </button>
                   {(isAdmin || r.user_id === currentUser?.id) && (
                     <button
                       onClick={() => { setSelectedReport(null); deleteReport(r.id); }}
-                      style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"12px 16px", borderRadius:8, border:`1.5px solid ${C.danger}22`, background:C.dangerBg, color:C.danger, fontSize:13, fontWeight:700, cursor:"pointer" }}
+                      style={btn("dangerOutline", "md")}
                     >
                       <Trash2 size={14} strokeWidth={2} />削除
                     </button>
                   )}
                 </div>
               </div>
-            </div>
-          </div>
+          </>
         );
       })()}
+      </BottomSheet>
 
       {/* ───── 予定詳細（未報告） ───── */}
-      {selectedSchedule && (() => {
+      <BottomSheet open={!!selectedSchedule} onClose={() => setSelectedSchedule(null)}>
+        {selectedSchedule && (() => {
         const s = selectedSchedule;
         const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
         const cropObj = crops.find(c => c.name === s.crop);
         return (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:300, display:"flex", alignItems:"flex-end" }}
-            onClick={() => setSelectedSchedule(null)}>
-            <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"85vh", overflowY:"auto", paddingBottom:40 }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"12px auto 0" }} />
-
+          <>
               {/* ヘッダー */}
-              <div style={{ padding:"14px 16px 0", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+              <div style={{ padding:"6px 16px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <div>
-                  <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{s.title}</div>
+                  <div style={{ fontWeight:700, fontSize:17, color:C.text }}>{s.title}</div>
                   <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                     {s.date}{s.crop && ` · ${s.crop}`}
                   </div>
                 </div>
-                <button onClick={() => setSelectedSchedule(null)} style={{ background:"none", border:"none", padding:"6px", cursor:"pointer", display:"flex", color:C.textMuted }}>
-                  <X size={18} strokeWidth={2} />
+                <button onClick={() => setSelectedSchedule(null)} style={S.circleBtn}>
+                  <X size={16} strokeWidth={2} />
                 </button>
               </div>
 
               <div style={{ padding:"0 16px" }}>
                 {/* 基本情報 */}
-                <div style={{ background:C.bg, borderRadius:8, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div style={{ background:C.well, borderRadius:14, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   {s.work_type && (
                     <div>
                       <div style={{ fontSize:11, color:C.textMuted, marginBottom:3 }}>作業種別</div>
-                      <div style={{ fontWeight:700, fontSize:14, color:C.primary }}>{s.work_type}</div>
+                      {(() => { const wc = workTypeColor(s.work_type); return (
+                        <span style={{ display:"inline-block", fontWeight:700, fontSize:12, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 10px" }}>{s.work_type}</span>
+                      ); })()}
                     </div>
                   )}
                   {assignedUser && (
@@ -2313,15 +2307,15 @@ export default function App() {
                     setRForm(f => ({ ...f, user_id: s.assigned_user_id ?? s.user_id, crop_id: cropObj?.id ?? f.crop_id, date: s.date, work_type: s.work_type ?? f.work_type, note: s.note ?? "" }));
                     setShowQuickReport(true);
                   }}
-                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"14px 0", borderRadius:8, border:"none", background:C.primary, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}
+                  style={btn("primary", "lg")}
                 >
                   <ClipboardList size={16} strokeWidth={2} />この予定の報告を入力
                 </button>
               </div>
-            </div>
-          </div>
+          </>
         );
       })()}
+      </BottomSheet>
 
       {/* ───── 作物詳細 ───── */}
       {selectedCropId !== null && (() => {
@@ -2354,7 +2348,7 @@ export default function App() {
                   { label:"作業回数", value:stat?.count ?? 0 },
                   { label: stat?.tot ? "kg総収穫" : "収穫なし", value: stat?.tot ?? "—" },
                 ].map(({ label, value }) => (
-                  <div key={label} style={{ background:C.card, borderRadius:8, padding:"14px 8px", textAlign:"center", border:`1px solid ${C.border}` }}>
+                  <div key={label} style={{ background:C.card, borderRadius:16, padding:"14px 8px", textAlign:"center", boxShadow:SHADOW.card }}>
                     <div style={{ fontSize:String(value).length > 4 ? 18 : 26, fontWeight:700, color:C.text, lineHeight:1 }}>{value}</div>
                     <div style={{ fontSize:11, color:C.textMuted, marginTop:6 }}>{label}</div>
                   </div>
@@ -2366,7 +2360,7 @@ export default function App() {
                 const lastDate = crop.last_work_date || stat?.last?.date || null;
                 const isManual = !!crop.last_work_date;
                 return (
-                  <div style={{ background:C.card, borderRadius:8, padding:"12px 16px", marginBottom:16, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+                  <div style={{ background:C.card, borderRadius:16, padding:"12px 16px", marginBottom:16, boxShadow:SHADOW.card }}>
                     {/* 作付け日 */}
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingBottom:10, borderBottom:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:12, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
@@ -2401,7 +2395,7 @@ export default function App() {
               })()}
 
               {/* 目標収穫量 編集行 */}
-              <div style={{ background:C.card, borderRadius:8, padding:"12px 16px", marginBottom:16, border:`1px solid ${C.border}`, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" }}>
+              <div style={{ background:C.card, borderRadius:16, padding:"12px 16px", marginBottom:16, boxShadow:SHADOW.card }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                   <span style={{ fontSize:12, color:C.textSub, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
                     <PackageCheck size={12} strokeWidth={2} />目標収穫量（kg/年）
@@ -2413,10 +2407,10 @@ export default function App() {
                         value={targetYieldInput}
                         onChange={e => setTargetYieldInput(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && updateTargetYield(crop.id, targetYieldInput)}
-                        style={{ width:100, padding:"5px 9px", borderRadius:8, border:`1.5px solid ${C.primary4}`, fontSize:13, background:"#fff", color:C.text, boxSizing:"border-box" as const }}
+                        style={{ width:100, padding:"6px 11px", borderRadius:999, border:`1px solid ${C.hairline}`, fontSize:13, background:C.card, color:C.text, boxSizing:"border-box" as const }}
                       />
-                      <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={{ background:C.primary, border:"none", borderRadius:8, padding:"5px 11px", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>保存</button>
-                      <button onClick={() => setEditingTargetYield(false)} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"5px 9px", color:C.textSub, fontSize:12, cursor:"pointer" }}>×</button>
+                      <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={btn("primary", "sm")}>保存</button>
+                      <button onClick={() => setEditingTargetYield(false)} style={btn("secondary", "sm")}>×</button>
                     </div>
                   ) : (
                     <button
@@ -2437,7 +2431,7 @@ export default function App() {
                       <button
                         onClick={() => setChartYear(y => y - 1)}
                         disabled={cropYears.length === 0 || safeYear <= cropYears[0]}
-                        style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear <= cropYears[0]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear <= cropYears[0]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center" }}
+                        style={{ width:26, height:26, background:C.well, border:"none", borderRadius:999, cursor:(cropYears.length === 0 || safeYear <= cropYears[0]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear <= cropYears[0]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center", justifyContent:"center" }}
                       >
                         <ChevronLeft size={14} strokeWidth={2.5} />
                       </button>
@@ -2445,13 +2439,13 @@ export default function App() {
                       <button
                         onClick={() => setChartYear(y => y + 1)}
                         disabled={cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]}
-                        style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 7px", cursor:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center" }}
+                        style={{ width:26, height:26, background:C.well, border:"none", borderRadius:999, cursor:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? "default":"pointer", color:(cropYears.length === 0 || safeYear >= cropYears[cropYears.length-1]) ? C.textMuted:C.textSub, display:"flex", alignItems:"center", justifyContent:"center" }}
                       >
                         <ChevronRight size={14} strokeWidth={2.5} />
                       </button>
                     </div>
                   </div>
-                  <div style={{ background:C.card, borderRadius:8, padding:"16px 6px 8px", marginBottom:14, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", border:`1px solid ${C.border}` }}>
+                  <div style={{ background:C.card, borderRadius:16, padding:"16px 6px 8px", marginBottom:14, boxShadow:SHADOW.card }}>
                     {yearTotal === 0 ? (
                       <div style={{ textAlign:"center" as const, padding:"32px 0", color:C.textMuted, fontSize:13 }}>{safeYear}年の収穫記録はありません</div>
                     ) : (
@@ -2460,7 +2454,7 @@ export default function App() {
                           <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} axisLine={false} tickLine={false} />
                           <YAxis tick={{ fontSize:10, fill:C.textMuted }} axisLine={false} tickLine={false} />
                           <Tooltip
-                            contentStyle={{ fontSize:12, borderRadius:8, border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(0,0,0,0.1)" }}
+                            contentStyle={{ fontSize:12, borderRadius:10, border:"none", boxShadow:SHADOW.float }}
                             formatter={(v: unknown, name: unknown) => [`${Number(v)}kg`, name === "target" ? "月別目標" : "収穫量"]}
                           />
                           <Bar dataKey="total" radius={[6,6,0,0]} maxBarSize={44}>
@@ -2484,15 +2478,17 @@ export default function App() {
 
               <div style={S.sec}>作業報告</div>
               {cropReports.length === 0 ? (
-                <div style={{ padding:"18px 16px", background:C.card, borderRadius:8, border:`1px solid ${C.border}`, marginBottom:8 }}>
+                <div style={{ padding:"18px 16px", background:C.card, borderRadius:16, boxShadow:SHADOW.card, marginBottom:8 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ報告がありません</div>
                   <div style={{ fontSize:12, color:C.textMuted }}>報告タブから登録できます</div>
                 </div>
-              ) : cropReports.map(r => (
+              ) : cropReports.map(r => {
+                const wc = workTypeColor(r.work_type);
+                return (
                 <div key={r.id} style={S.card}>
                   <div style={S.row}>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <span style={{ fontWeight:700, fontSize:13, color:C.primary }}>{r.work_type}</span>
+                      <span style={{ fontWeight:700, fontSize:11, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{r.work_type}</span>
                       {r.field && <span style={{ fontSize:12, color:C.textMuted }}>· {r.field}</span>}
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
@@ -2520,12 +2516,13 @@ export default function App() {
                   )}
                   <button
                     onClick={() => { setSelectedCropId(null); handleCopyReport(r); }}
-                    style={{ marginTop:10, display:"flex", alignItems:"center", gap:5, padding:"6px 0", border:"none", background:"none", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer" }}
+                    style={{ ...btn("soft", "sm"), marginTop:10 }}
                   >
                     <Copy size={12} strokeWidth={2} />コピーして作成
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
@@ -2683,8 +2680,8 @@ export default function App() {
                     <input type="time" style={{ ...S.input, marginBottom:0, flex:1 }} value={rForm.work_end} onChange={e => setRForm(f => ({ ...f, work_end:e.target.value }))} />
                   </div>
                   {periodWeather && (
-                    <div style={{ background:C.primary3, borderRadius:9, padding:"8px 12px", marginBottom:12, border:`1px solid ${C.primary4}`, fontSize:12, color:C.textSub, display:"flex", alignItems:"center", gap:8 }}>
-                      <span style={{ fontWeight:700, color:C.primary }}>{periodWeather.weather}</span>
+                    <div style={{ background:C.well, borderRadius:14, padding:"8px 12px", marginBottom:12, fontSize:12, color:C.textSub, display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontWeight:700, color:C.text }}>{periodWeather.weather}</span>
                       {periodWeather.temp && <span>{periodWeather.temp}°C</span>}
                       {periodWeather.humidity && <span>湿度{periodWeather.humidity}%</span>}
                       {parseFloat(periodWeather.rain) > 0 && <span>雨量{periodWeather.rain}mm</span>}
@@ -2816,16 +2813,8 @@ export default function App() {
       )}
 
       {/* ユーザー切り替えモーダル */}
-      {showUserPicker && (
-        <div
-          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:200, display:"flex", alignItems:"flex-end" }}
-          onClick={() => setShowUserPicker(false)}
-        >
-          <div
-            style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", padding:"20px 16px 36px", boxShadow:"0 -4px 24px rgba(0,0,0,0.15)" }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"0 auto 18px" }} />
+      <BottomSheet open={showUserPicker} onClose={() => setShowUserPicker(false)}>
+            <div style={{ padding:"0 16px" }}>
             <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>
               <Users size={14} strokeWidth={2} />ユーザーを切り替え
             </div>
@@ -2833,19 +2822,19 @@ export default function App() {
               <button
                 key={u.id}
                 onClick={() => { setCurrentUser(u); setRForm(f => ({ ...f, user_id:u.id })); setShowUserPicker(false); }}
-                style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"11px 12px", borderRadius:8, border:`1px solid ${currentUser?.id === u.id ? C.primary : "transparent"}`, cursor:"pointer", marginBottom:6, background: currentUser?.id === u.id ? C.primary3 : "transparent" }}
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"11px 14px", borderRadius:14, border:"none", cursor:"pointer", marginBottom:6, background: currentUser?.id === u.id ? C.inkSoft : "transparent" }}
               >
                 <div style={{ textAlign:"left", flex:1 }}>
                   <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{u.name}</div>
                   <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{roleLabel[u.role]}</div>
                 </div>
-                {currentUser?.id === u.id && <span style={{ fontSize:12, color:C.primary, fontWeight:700 }}>✓</span>}
+                {currentUser?.id === u.id && <span style={{ fontSize:12, color:C.ink, fontWeight:700 }}>✓</span>}
               </button>
             ))}
             {isAdmin && (
               <button
                 onClick={() => { setShowUserPicker(false); setTab("users"); }}
-                style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", marginTop:8, borderRadius:8, border:`1px solid ${C.border}`, background:"transparent", color:C.text, fontSize:14, fontWeight:700, cursor:"pointer" }}
+                style={{ ...btn("secondary", "md"), width:"100%", marginTop:8 }}
               >
                 <Users size={15} strokeWidth={2} />
                 管理画面
@@ -2853,24 +2842,20 @@ export default function App() {
             )}
             <button
               onClick={() => { setShowUserPicker(false); handleLogout(); }}
-              style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", marginTop:8, borderRadius:8, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:14, fontWeight:700, cursor:"pointer" }}
+              style={{ ...btn("secondary", "md"), width:"100%", marginTop:8, color:C.textSub }}
             >
               <LogOut size={15} strokeWidth={2} />
               ログアウト
             </button>
-          </div>
-        </div>
-      )}
+            </div>
+      </BottomSheet>
 
       {/* 削除確認ボトムシート */}
-      {deleteModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:400, display:"flex", alignItems:"flex-end" }}
-          onClick={() => setDeleteModal(null)}>
-          <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", padding:"24px 16px 40px", boxShadow:"0 -4px 24px rgba(0,0,0,0.15)" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"0 auto 20px" }} />
+      <BottomSheet open={!!deleteModal} onClose={() => setDeleteModal(null)}>
+        {deleteModal && (
+            <div style={{ padding:"6px 16px 0" }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-              <div style={{ background:C.dangerBg, borderRadius:8, padding:8, flexShrink:0 }}>
+              <div style={{ background:C.dangerBg, borderRadius:12, padding:8, flexShrink:0 }}>
                 <Trash2 size={18} color={C.danger} strokeWidth={2} />
               </div>
               <div>
@@ -2880,18 +2865,15 @@ export default function App() {
             </div>
             <div style={{ fontSize:12, color:C.textMuted, marginBottom:20, paddingLeft:2 }}>この操作は取り消せません。</div>
             <div style={{ display:"flex", gap:10 }}>
-              <button
-                onClick={() => setDeleteModal(null)}
-                style={{ flex:1, padding:"13px 0", borderRadius:8, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textSub, fontSize:15, fontWeight:700, cursor:"pointer" }}
-              >キャンセル</button>
+              <button onClick={() => setDeleteModal(null)} style={{ ...btn("secondary", "lg"), flex:1 }}>キャンセル</button>
               <button
                 onClick={() => { deleteModal.onConfirm(); setDeleteModal(null); }}
-                style={{ flex:1, padding:"13px 0", borderRadius:8, border:"none", background:C.danger, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                style={{ ...btn("danger", "lg"), flex:1 }}
               ><Trash2 size={15} strokeWidth={2} />削除する</button>
             </div>
-          </div>
-        </div>
-      )}
+            </div>
+        )}
+      </BottomSheet>
 
       {/* 日付ピッカー */}
       {datePickerTarget && (
