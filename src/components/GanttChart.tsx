@@ -412,7 +412,7 @@ export default function GanttChart({
           onClick={closeModal}
         >
           <div
-            style={{ background:C.card, borderRadius:"24px 24px 0 0", width:"100%", maxHeight:"88vh", overflowY:"auto", paddingBottom:32, boxShadow:SHADOW.float }}
+            style={{ background:C.card, borderRadius:"24px 24px 0 0", width:"100%", maxHeight:"88vh", overflowY:"auto", paddingBottom:"calc(32px + env(safe-area-inset-bottom))", boxShadow:SHADOW.float }}
             onClick={e => e.stopPropagation()}
           >
             <div style={{ width:38, height:4, background:C.well, borderRadius:4, margin:"12px auto 0" }} />

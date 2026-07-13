@@ -48,7 +48,7 @@ export default function DatePicker({ label, value, onSelect, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        style={css({ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "12px 16px 44px", boxShadow: SHADOW.float })}
+        style={css({ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "12px 16px calc(44px + env(safe-area-inset-bottom))", boxShadow: SHADOW.float })}
         onClick={e => e.stopPropagation()}
       >
         {/* Handle */}

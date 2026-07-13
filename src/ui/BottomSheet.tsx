@@ -26,7 +26,7 @@ export default function BottomSheet({
   const sheet: CSSProperties = {
     background: C.card, borderRadius: "24px 24px 0 0", width: "100%",
     ...(height ? { height } : { maxHeight }),
-    overflowY: "auto", paddingBottom: padBottom,
+    overflowY: "auto", paddingBottom: `calc(${padBottom}px + env(safe-area-inset-bottom))`,
     animation: "slideUp 0.25s ease",
     display: "flex", flexDirection: "column",
     boxShadow: SHADOW.float,

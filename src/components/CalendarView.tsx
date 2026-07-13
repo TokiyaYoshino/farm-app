@@ -488,7 +488,7 @@ export default function CalendarView({
           onClick={detail ? undefined : closePopup}
         >
           <div
-            style={css({ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "88vh", overflowY: "auto", padding: "16px 16px 48px", boxShadow: SHADOW.float })}
+            style={css({ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "88vh", overflowY: "auto", padding: "16px 16px calc(48px + env(safe-area-inset-bottom))", boxShadow: SHADOW.float })}
             onClick={e => e.stopPropagation()}
           >
             <div style={css({ width: 36, height: 4, background: C.border, borderRadius: 4, margin: "0 auto 14px" })} />

@@ -1161,7 +1161,7 @@ export default function App() {
 
   // ─── スタイル ─────────────────────────────────────────
   const S = {
-    wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:88 }),
+    wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:"calc(88px + env(safe-area-inset-bottom))" }),
     header:  css({ background:"#fff", color:C.text, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${C.border}`, position:"sticky" as const, top:0, zIndex:90 }),
     headerTitle: css({ fontSize:16, fontWeight:700, color:C.text, letterSpacing:-0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
     headerSub: css({ background:"#fff", borderBottom:`1px solid ${C.border}`, display:"flex", paddingLeft:4, paddingRight:4, gap:0 }),
@@ -1179,7 +1179,7 @@ export default function App() {
     wxGrid:  css({ display:"flex", flexWrap:"nowrap" as const, gap:6, marginTop:8, overflowX:"auto" as const }),
     wxBadge: css({ background:C.bg, borderRadius:6, padding:"4px 7px", display:"inline-flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.text, border:`1px solid ${C.border}`, whiteSpace:"nowrap" as const, flexShrink:0 }),
 
-    nav:     css({ position:"fixed" as const, bottom:0, left:0, right:0, background:C.navBg, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:100 }),
+    nav:     css({ position:"fixed" as const, bottom:0, left:0, right:0, background:C.navBg, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }),
     center:  css({ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", flexDirection:"column" as const, gap:12, fontSize:15, color:C.textMuted }),
     divider: css({ height:1, background:C.border, margin:"8px 0 12px" }),
     // Soft Widget: グループ入力（灰の受け皿 well に白い行 row を積む）
@@ -2278,7 +2278,7 @@ export default function App() {
           : chartData;
         const stat = cropStats.find(c => c.id === selectedCropId);
         return (
-          <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:95, overflowY:"auto", paddingBottom:88 }} className="anim-slideUp">
+          <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:95, overflowY:"auto", paddingBottom:"calc(88px + env(safe-area-inset-bottom))" }} className="anim-slideUp">
             <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, position:"sticky", top:0, zIndex:10 }}>
               <button onClick={() => setSelectedCropId(null)} style={{ background:"none", border:"none", padding:"6px 6px", color:C.textSub, cursor:"pointer", display:"flex", flexShrink:0 }}>
                 <ChevronLeft size={18} strokeWidth={2.5} />
@@ -2494,7 +2494,7 @@ export default function App() {
       <button
         onClick={() => setShowQuickReport(true)}
         aria-label="作業を記録"
-        style={{ position:"fixed", right:16, bottom:86, zIndex:90, display:"flex", alignItems:"center", gap:7, background:C.ink, color:"#fff", border:"none", borderRadius:999, padding:"14px 22px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 6px 18px rgba(46,125,50,0.32)" }}
+        style={{ position:"fixed", right:16, bottom:"calc(86px + env(safe-area-inset-bottom))", zIndex:90, display:"flex", alignItems:"center", gap:7, background:C.ink, color:"#fff", border:"none", borderRadius:999, padding:"14px 22px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 6px 18px rgba(46,125,50,0.32)" }}
       >
         <Plus size={20} strokeWidth={2.5} />記録
       </button>
