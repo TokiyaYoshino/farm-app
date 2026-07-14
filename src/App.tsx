@@ -6,7 +6,7 @@ import {
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
   Snowflake, CloudLightning, MapPin, RefreshCw, AlertCircle,
   PackageCheck, CalendarDays,
-  UserCircle, Trash2, PlusCircle, ClipboardList, Check, MessageSquare,
+  UserCircle, Trash2, PlusCircle, ClipboardList, Check, MessageSquare, Bell,
   Wind, Camera, X, Navigation, Search, Save,
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
@@ -239,6 +239,8 @@ export default function App() {
   const masterTimerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [currentUser, setCurrentUser]     = useState<User | null>(null);
   const [showUserPicker, setShowUserPicker] = useState(false);
+  const [showNotifs, setShowNotifs]       = useState(false);
+  const [notifSeenAt, setNotifSeenAt]     = useState<string>("");  // ISO文字列。ユーザー切替時にlocalStorageから読む
   const [toast, setToast]                 = useState<{ msg: string; type: "ok"|"err" } | null>(null);
   const [loading, setLoading]             = useState(true);
   const [wxLoading, setWxLoading]         = useState(true);
@@ -1063,6 +1065,31 @@ export default function App() {
   })();
   const commentCountOf = (type: "report" | "schedule", id: number | string) => commentCounts[`${type}:${id}`] ?? 0;
 
+  // ─── 通知（自分宛コメント・メンション）────────────────────
+  // 既読時刻はユーザーごとに localStorage に保持（DB変更なし）
+  useEffect(() => {
+    if (currentUser) setNotifSeenAt(localStorage.getItem(`notifSeen_${currentUser.id}`) ?? "");
+  }, [currentUser]);
+
+  // 自分宛 = @自分名のメンション / 自分の記録・予定へのコメント（自分の投稿は除外）
+  const myNotifs = allComments.filter(cm => {
+    if (!currentUser || cm.user_id === currentUser.id) return false;
+    if (cm.message.includes(`@${currentUser.name}`)) return true;
+    if (cm.target_type === "report") {
+      const r = reports.find(x => String(x.id) === cm.target_id);
+      return r?.user_id === currentUser.id;
+    }
+    const sc = schedules.find(x => x.id === cm.target_id);
+    return sc ? (sc.assigned_user_id ?? sc.user_id) === currentUser.id : false;
+  });
+  const unreadNotifCount = notifSeenAt ? myNotifs.filter(cm => cm.created_at > notifSeenAt).length : myNotifs.length;
+  const openNotifs = () => {
+    setShowNotifs(true);
+    const now = new Date().toISOString();
+    setNotifSeenAt(now);
+    if (currentUser) localStorage.setItem(`notifSeen_${currentUser.id}`, now);
+  };
+
 
   const autoMatchTicket = async (report: Report) => {
     const matched = tickets.find(t =>
@@ -1339,6 +1366,16 @@ export default function App() {
            tab === "manage" ? "管理" : "農作業レポート"}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8, flex:"0 0 auto", flexShrink:0 }}>
+          {currentUser && (
+            <button onClick={openNotifs} style={{ position:"relative", display:"flex", alignItems:"center", justifyContent:"center", width:36, height:36, background:C.well, borderRadius:999, border:"none", cursor:"pointer", color:C.textSub, flexShrink:0 }}>
+              <Bell size={17} strokeWidth={1.8} />
+              {unreadNotifCount > 0 && (
+                <span style={{ position:"absolute", top:2, right:2, minWidth:16, height:16, borderRadius:999, background:C.danger, color:"#fff", fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", lineHeight:1 }}>
+                  {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                </span>
+              )}
+            </button>
+          )}
           {currentUser && (
             <button onClick={() => setShowUserPicker(true)} style={{ display:"flex", alignItems:"center", justifyContent:"center", width:36, height:36, background:C.well, borderRadius:999, border:"none", cursor:"pointer", color:C.textSub, flexShrink:0 }}>
               <UserCircle size={18} strokeWidth={1.8} />
@@ -2256,7 +2293,7 @@ export default function App() {
                 {/* コメント */}
                 <CommentThread
                   targetType="report" targetId={String(r.id)}
-                  currentUserId={currentUser?.id ?? 0} userName={userName}
+                  currentUserId={currentUser?.id ?? 0} userName={userName} users={users.filter(u => u.role !== "viewer")}
                   onLoad={loadComments} onAdd={addComment} onEdit={editComment}
                 />
               </div>
@@ -2334,7 +2371,7 @@ export default function App() {
                 <div style={{ marginTop:16 }}>
                   <CommentThread
                     targetType="schedule" targetId={s.id}
-                    currentUserId={currentUser?.id ?? 0} userName={userName}
+                    currentUserId={currentUser?.id ?? 0} userName={userName} users={users.filter(u => u.role !== "viewer")}
                     onLoad={loadComments} onAdd={addComment} onEdit={editComment}
                   />
                 </div>
@@ -2840,6 +2877,40 @@ export default function App() {
       )}
 
       {/* ユーザー切り替えモーダル */}
+      {/* 通知一覧 */}
+      <BottomSheet open={showNotifs} onClose={() => setShowNotifs(false)}>
+        <div style={{ padding:"0 16px" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>
+            <Bell size={14} strokeWidth={2} />通知
+          </div>
+          {myNotifs.length === 0 ? (
+            <div style={{ padding:"24px 0 12px", textAlign:"center" as const, color:C.textMuted, fontSize:13 }}>
+              自分宛のコメント・メンションはまだありません
+            </div>
+          ) : myNotifs.slice(0, 20).map(cm => {
+            const isMention = currentUser && cm.message.includes(`@${currentUser.name}`);
+            const target = cm.target_type === "report"
+              ? (() => { const r = reports.find(x => String(x.id) === cm.target_id); return r ? { label: `${cropName(r.crop_id)} · ${r.date}`, open: () => { setShowNotifs(false); setSelectedReport(r); } } : null; })()
+              : (() => { const sc = schedules.find(x => x.id === cm.target_id); return sc ? { label: `${sc.work_type || sc.title} · ${sc.date}`, open: () => { setShowNotifs(false); setSelectedSchedule(sc); } } : null; })();
+            if (!target) return null;
+            return (
+              <button key={cm.id} onClick={target.open}
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"11px 0", border:"none", borderBottom:`1px solid ${C.border}`, background:"none", cursor:"pointer", textAlign:"left" as const }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, color:C.text }}>
+                    <span style={{ fontWeight:700 }}>{userName(cm.user_id)}</span>
+                    {isMention && <span style={{ marginLeft:6, fontSize:10, fontWeight:700, color:C.ink, background:C.inkSoft, borderRadius:999, padding:"2px 7px" }}>@メンション</span>}
+                  </div>
+                  <div style={{ fontSize:13, color:C.textSub, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{cm.message}</div>
+                  <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{target.label}</div>
+                </div>
+                <ChevronRight size={14} color={C.textMuted} strokeWidth={2} style={{ flexShrink:0 }} />
+              </button>
+            );
+          })}
+        </div>
+      </BottomSheet>
+
       <BottomSheet open={showUserPicker} onClose={() => setShowUserPicker(false)}>
             <div style={{ padding:"0 16px" }}>
             <div style={{ fontSize:13, fontWeight:700, color:C.textSub, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>

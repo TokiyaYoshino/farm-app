@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { C, SHADOW, workTypeColor } from "../ui/tokens";
+import CommentThread from "../ui/CommentThread";
 import {
   ChevronLeft, ChevronRight, Plus, X,
   CalendarDays, ClipboardList, UserCircle,
   PackageCheck, Clock, Leaf, RefreshCw,
-  MessageSquare, Send, FlaskConical,
-  CloudRain, Droplets, Pencil, Check,
+  FlaskConical,
+  CloudRain, Droplets,
   ArrowUpDown,
 } from "lucide-react";
 
@@ -61,10 +62,6 @@ const css = (o: CSSProperties): CSSProperties => o;
 const DOW = ["日", "月", "火", "水", "木", "金", "土"];
 const WORK_TYPES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り", "剪定", "その他"];
 
-const fmtTime = (iso: string) => {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
 
 const shortName = (name: string) => name.slice(0, 2);
 
@@ -81,14 +78,8 @@ export default function CalendarView({
   const [adding, setAdding]       = useState(false);
   const [addError, setAddError]   = useState("");
 
-  // 詳細ビュー
+  // 詳細ビュー（コメントUIは CommentThread に集約）
   const [detail, setDetail]             = useState<DetailItem | null>(null);
-  const [comments, setComments]         = useState<Comment[]>([]);
-  const [commentText, setCommentText]   = useState("");
-  const [loadingCmts, setLoadingCmts]   = useState(false);
-  const [addingCmt, setAddingCmt]       = useState(false);
-  const [editingCmtId, setEditingCmtId] = useState<string | null>(null);
-  const [editingText, setEditingText]   = useState("");
 
   const [currentFilter, setCurrentFilter] = useState<"all"|"reports"|"schedules"|"user">("all");
   const [filterUserId, setFilterUserId]   = useState<number>(0);
@@ -166,49 +157,11 @@ export default function CalendarView({
     resetForm();
     setAddError("");
     setDetail(null);
-    setComments([]);
-    setCommentText("");
   };
 
-  const openDetail = async (item: DetailItem) => {
-    setDetail(item);
-    setComments([]);
-    setCommentText("");
-    setLoadingCmts(true);
-    const targetId = item.kind === "report" ? String(item.data.id) : item.data.id;
-    const loaded = await onLoadComments(item.kind, targetId);
-    setComments(loaded);
-    setLoadingCmts(false);
-  };
+  const openDetail = (item: DetailItem) => setDetail(item);
 
-  const backToList = () => {
-    setDetail(null);
-    setComments([]);
-    setCommentText("");
-  };
-
-  const submitComment = async () => {
-    if (!commentText.trim() || !detail) return;
-    setAddingCmt(true);
-    const targetId = detail.kind === "report" ? String(detail.data.id) : detail.data.id;
-    const ok = await onAddComment(detail.kind, targetId, commentText.trim());
-    if (ok) {
-      const loaded = await onLoadComments(detail.kind, targetId);
-      setComments(loaded);
-      setCommentText("");
-    }
-    setAddingCmt(false);
-  };
-
-  const saveEdit = async () => {
-    if (!editingCmtId || !editingText.trim()) return;
-    const ok = await onEditComment(editingCmtId, editingText.trim());
-    if (ok) {
-      setComments(prev => prev.map(c => c.id === editingCmtId ? { ...c, message: editingText.trim() } : c));
-      setEditingCmtId(null);
-      setEditingText("");
-    }
-  };
+  const backToList = () => setDetail(null);
 
   const handleAdd = async () => {
     if (!selectedDate || !form.workType) return;
@@ -582,103 +535,17 @@ export default function CalendarView({
                   );
                 })()}
 
-                {/* コメント一覧 */}
-                <div style={css({ marginBottom: 12 })}>
-                  <div style={css({ fontSize: 12, fontWeight: 700, color: C.textSub, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 })}>
-                    <MessageSquare size={13} strokeWidth={2} />
-                    コメント {comments.length > 0 ? `(${comments.length})` : ""}
-                  </div>
-                  {loadingCmts ? (
-                    <div style={css({ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.textMuted, padding: "8px 0" })}>
-                      <RefreshCw size={13} strokeWidth={2} />読み込み中...
-                    </div>
-                  ) : comments.length === 0 ? (
-                    <div style={css({ fontSize: 12, color: C.textMuted, padding: "8px 0" })}>まだコメントはありません</div>
-                  ) : (
-                    comments.map(c => {
-                      const isMe = c.user_id === currentUserId;
-                      const isEditing = editingCmtId === c.id;
-                      return (
-                        <div key={c.id} style={css({ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 8, marginBottom: 10, alignItems: "flex-end" })}>
-                          <div style={css({ background: C.bg, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 })}>
-                            <UserCircle size={16} color={C.textMuted} strokeWidth={1.8} />
-                          </div>
-                          <div style={css({ maxWidth: "72%" })}>
-                            <div style={css({ fontSize: 10, color: C.textMuted, marginBottom: 3, textAlign: isMe ? "right" : "left" as const, display: "flex", alignItems: "center", justifyContent: isMe ? "flex-end" : "flex-start", gap: 5 })}>
-                              {userName(c.user_id)} · {fmtTime(c.created_at)}
-                              {isMe && !isEditing && (
-                                <button
-                                  onClick={() => { setEditingCmtId(c.id); setEditingText(c.message); }}
-                                  style={css({ background: "none", border: "none", cursor: "pointer", padding: "1px 3px", borderRadius: 4, color: C.textMuted, display: "flex", alignItems: "center" })}
-                                >
-                                  <Pencil size={10} strokeWidth={2} />
-                                </button>
-                              )}
-                            </div>
-                            {isEditing ? (
-                              <div style={css({ display: "flex", flexDirection: "column", gap: 5 })}>
-                                <textarea
-                                  autoFocus
-                                  value={editingText}
-                                  onChange={e => setEditingText(e.target.value)}
-                                  style={css({ width: "100%", padding: "8px 10px", borderRadius: 10, border: `1px solid ${C.hairline}`, fontSize: 13, lineHeight: 1.5, resize: "none" as const, background: C.card, color: C.text, minHeight: 60, boxSizing: "border-box" })}
-                                />
-                                <div style={css({ display: "flex", gap: 5, justifyContent: "flex-end" })}>
-                                  <button
-                                    onClick={() => { setEditingCmtId(null); setEditingText(""); }}
-                                    style={css({ padding: "5px 12px", borderRadius: 999, border: "none", background: C.well, color: C.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 })}
-                                  >
-                                    <X size={11} strokeWidth={2} />キャンセル
-                                  </button>
-                                  <button
-                                    onClick={saveEdit}
-                                    disabled={!editingText.trim()}
-                                    style={css({ padding: "5px 12px", borderRadius: 999, border: "none", background: editingText.trim() ? C.ink : C.well, color: editingText.trim() ? "#fff" : C.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 })}
-                                  >
-                                    <Check size={11} strokeWidth={2.5} />保存
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div style={css({
-                                fontSize: 13, padding: "8px 11px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
-                                background: isMe ? C.ink : C.well,
-                                color: isMe ? "#fff" : C.text,
-                                border: "none",
-                                lineHeight: 1.5,
-                              })}>
-                                {c.message}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* コメント入力 */}
-                <div style={css({ display: "flex", gap: 8, alignItems: "flex-end" })}>
-                  <input
-                    style={css({ flex: 1, padding: "11px 16px", borderRadius: 999, border: "none", fontSize: 14, background: C.well, color: C.text, boxSizing: "border-box", outline: "none" })}
-                    placeholder="コメントを入力..."
-                    value={commentText}
-                    onChange={e => setCommentText(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && submitComment()}
-                  />
-                  <button
-                    onClick={submitComment}
-                    disabled={!commentText.trim() || addingCmt}
-                    style={css({
-                      width: 42, height: 42, borderRadius: 999, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                      background: commentText.trim() ? C.ink : C.well,
-                      color: commentText.trim() ? "#fff" : C.textMuted,
-                      flexShrink: 0,
-                    })}
-                  >
-                    {addingCmt ? <RefreshCw size={14} strokeWidth={2} /> : <Send size={14} strokeWidth={2} />}
-                  </button>
-                </div>
+                {/* コメント（共通コンポーネント。@メンション対応） */}
+                <CommentThread
+                  targetType={detail.kind}
+                  targetId={detail.kind === "report" ? String(detail.data.id) : detail.data.id}
+                  currentUserId={currentUserId}
+                  userName={userName}
+                  users={users.filter(u => u.role !== "viewer")}
+                  onLoad={onLoadComments}
+                  onAdd={onAddComment}
+                  onEdit={onEditComment}
+                />
               </>
             ) : (
               /* ── 日付一覧ビュー ── */

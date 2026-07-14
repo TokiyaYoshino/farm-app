@@ -18,6 +18,7 @@ interface Props {
   targetId: string;
   currentUserId: number;
   userName: (id: number) => string;
+  users?: { id: number; name: string }[];  // @メンション候補（省略時はメンション補完なし）
   onLoad: (targetType: string, targetId: string) => Promise<ThreadComment[]>;
   onAdd: (targetType: string, targetId: string, message: string) => Promise<boolean>;
   onEdit: (id: string, message: string) => Promise<boolean>;
@@ -28,7 +29,7 @@ const fmtTime = (iso: string) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-export default function CommentThread({ targetType, targetId, currentUserId, userName, onLoad, onAdd, onEdit }: Props) {
+export default function CommentThread({ targetType, targetId, currentUserId, userName, users = [], onLoad, onAdd, onEdit }: Props) {
   const [comments, setComments] = useState<ThreadComment[]>([]);
   const [loading, setLoading]   = useState(true);
   const [text, setText]         = useState("");
@@ -62,6 +63,23 @@ export default function CommentThread({ targetType, targetId, currentUserId, use
       setComments(prev => prev.map(cm => cm.id === editingId ? { ...cm, message: editingText.trim() } : cm));
       setEditingId(null); setEditingText("");
     }
+  };
+
+  // ── @メンション（入力補完＋吹き出し内ハイライト）──
+  const userNameSet = new Set(users.map(u => u.name));
+  const mentionMatch = text.match(/@([^\s@]*)$/);
+  const mentionCandidates = mentionMatch
+    ? users.filter(u => u.id !== currentUserId && (mentionMatch[1] === "" || u.name.includes(mentionMatch[1]))).slice(0, 4)
+    : [];
+  const insertMention = (name: string) => setText(t => t.replace(/@[^\s@]*$/, `@${name} `));
+
+  const renderMessage = (msg: string, mine: boolean) => {
+    const parts = msg.split(/(@[^\s@]+)/g);
+    return parts.map((p, i) =>
+      p.startsWith("@") && userNameSet.has(p.slice(1))
+        ? <span key={i} style={{ fontWeight: 700, textDecoration: "underline", textUnderlineOffset: 2, color: mine ? "#fff" : C.ink }}>{p}</span>
+        : p
+    );
   };
 
   return (
@@ -110,7 +128,7 @@ export default function CommentThread({ targetType, targetId, currentUserId, use
                         color: isMe ? "#fff" : C.text,
                         lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
                       }}>
-                        {cm.message}
+                        {renderMessage(cm.message, isMe)}
                       </div>
                       {isMe && (
                         <button onClick={() => { setEditingId(cm.id); setEditingText(cm.message); }}
@@ -124,6 +142,18 @@ export default function CommentThread({ targetType, targetId, currentUserId, use
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* メンション候補 */}
+      {mentionCandidates.length > 0 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+          {mentionCandidates.map(u => (
+            <button key={u.id} onClick={() => insertMention(u.name)}
+              style={{ border: "none", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, background: C.inkSoft, color: C.ink, cursor: "pointer" }}>
+              @{u.name}
+            </button>
+          ))}
         </div>
       )}
 
