@@ -11,6 +11,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
+  Sparkles,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -25,6 +26,7 @@ import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
 import RowMenu from "./ui/RowMenu";
 import CommentThread from "./ui/CommentThread";
+import { canUseAiFeature } from "./ui/aiFeatures";
 
 const makePin = (color: string) => L.divIcon({
   className: "",
@@ -275,6 +277,7 @@ export default function App() {
   const recognitionRef                    = useRef<any>(null);
   const [noteListening, setNoteListening] = useState(false);
   const noteRecRef                        = useRef<any>(null);
+  const [aiStructuring, setAiStructuring] = useState(false);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
@@ -794,6 +797,55 @@ export default function App() {
       console.error("rec.start() failed:", e);
       showToast("音声入力を開始できませんでした", "err");
       noteRecRef.current = null;
+    }
+  };
+
+  // 音声メモをAIで作業報告フォームに振り分け
+  const structureVoiceNote = async () => {
+    if (!rForm.note.trim()) return showToast("メモが空です", "err");
+    setAiStructuring(true);
+    try {
+      const res = await fetch("/api/structure-voice", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript:     rForm.note,
+          fields:         fields.map(f => f.name),
+          workCategories: workCategories.length > 0 ? workCategories.map(c => c.name) : WORK_TEMPLATES,
+          pesticides:     pesticides.map(p => p.name),
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const s = await res.json();
+
+      setRForm(f => {
+        const next = { ...f, note: s.note || f.note };
+        if (s.field && fields.some(fd => fd.name === s.field)) next.field = s.field;
+        if (s.work_category) {
+          const cat = workCategories.find(c => c.name === s.work_category);
+          if (cat) {
+            next.work_category_id = cat.id;
+            next.work_type = cat.name;
+            next.quantity_unit = cat.unit ?? next.quantity_unit;
+          } else if (WORK_TEMPLATES.includes(s.work_category)) {
+            next.work_type = s.work_category;
+          }
+        }
+        if (s.quantity_value != null) { next.quantity_value = String(s.quantity_value); next.quantity = String(s.quantity_value); }
+        if (s.quantity_unit) next.quantity_unit = s.quantity_unit;
+        return next;
+      });
+      if (Array.isArray(s.pesticide_names) && s.pesticide_names.length > 0) {
+        const matchedIds = pesticides.filter(p => s.pesticide_names.includes(p.name)).map(p => p.id);
+        if (matchedIds.length > 0) setSelectedPesticides(prev => Array.from(new Set([...prev, ...matchedIds])));
+      }
+      if (s.soil_ph != null) setSoilPh(String(s.soil_ph));
+      showToast("AIでフォームに反映しました");
+    } catch (e: unknown) {
+      console.error("structure-voice error:", e);
+      showToast("AI整理に失敗しました", "err");
+    } finally {
+      setAiStructuring(false);
     }
   };
 
@@ -2836,6 +2888,16 @@ export default function App() {
                     >
                       {noteListening ? <MicOff size={16} strokeWidth={2} /> : <Mic size={16} strokeWidth={2} />}
                       {noteListening ? "音声入力中…タップで停止" : "音声でメモを入力"}
+                    </button>
+                  )}
+                  {canUseAiFeature("voiceStructuring") && rForm.note.trim() && (
+                    <button
+                      onClick={structureVoiceNote}
+                      disabled={aiStructuring}
+                      style={{ ...btn("soft", "md"), width:"100%", marginBottom:12, opacity: aiStructuring ? 0.6 : 1, cursor: aiStructuring ? "default" : "pointer" }}
+                    >
+                      <Sparkles size={16} strokeWidth={2} />
+                      {aiStructuring ? "AIで整理中…" : "AIでフォームに自動入力"}
                     </button>
                   )}
                 </>
