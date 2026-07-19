@@ -30,6 +30,27 @@
 5. **ユーザー作成のドメイン・デフォルトorgを組織パラメータ化**（api/set-user-auth.ts）
 6. **LINE通知先を`organizations`テーブルから取得**（api/notify-line.tsを組織ID受け取りに変更）
 
+### 改修箇所の実測（コード調査、2026-07-19）
+
+`src/App.tsx`・`api/`を実際に調査した結果、org非スコープのクエリ／ハードコードは以下の箇所に存在する。
+
+| ファイル:行 | 内容 | 対応 |
+|---|---|---|
+| `src/App.tsx:348` | `users`全件取得（管理画面） | `organization_id`でフィルタ |
+| `src/App.tsx:507` | `login_id`でのユーザー検索（ログイン時） | ⚠️ ログイン時点では`organization_id`が未確定。下記「新たに見つかった論点」参照 |
+| `src/App.tsx:531` | `users`再取得 | 同上 |
+| `src/App.tsx:842` | `users`削除 | 削除時のorg越境防止も必要 |
+| `src/App.tsx:369` | `comments`一覧取得 | `organization_id`列追加後にフィルタ |
+| `src/App.tsx:1056` `1063` `1072` | `comments`取得・追加・更新 | 同上 |
+| `src/App.tsx:363` | `schedules`取得（`orgUserIds`経由の間接絞り込み） | 直接`organization_id`列を持たせて直接フィルタに変更（現状は`user_id`経由のため抜け穴になりやすい） |
+| `src/App.tsx:1036` | `schedules`追加 | 同上 |
+| `api/set-user-auth.ts:10,36` | `@kishu-farm.system`ドメイン・`org ?? "kishu"`のハードコード | `organization`パラメータ化 |
+| `api/notify-line.ts` | `LINE_CHANNEL_ACCESS_TOKEN`/`LINE_GROUP_ID`が環境変数1組固定 | `organizations`テーブルから取得するよう変更 |
+
+**規模感**: `App.tsx`単体で最低9箇所のクエリ修正、APIエンドポイント2本の書き換え。「数週間規模」という見積りは妥当だが、内訳としてはクエリ修正自体は数日、残りは下記の設計課題の解決とRLSポリシーの段階適用・越境検証に費やす時間が大きい。
+
+**新たに見つかった論点**: ログインは`login_id`のみで行われており（org選択UIがない）、`login_id`を全org横断でユニークにするか、ログイン画面にorg選択／サブドメインを追加するかの設計判断がまだない。マルチテナント化着手前にこれを先に決める必要がある。
+
 ### 移行順序（安全にやる）
 1. `organizations`テーブル作成＋既存データに「霧珠ファーム」1組織を割り当て（`org="kishu"`→organization_id紐付け）
 2. 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化
