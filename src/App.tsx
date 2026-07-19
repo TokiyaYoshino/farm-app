@@ -11,7 +11,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
-  Download, FileText, FileSpreadsheet,
+  Download, FileText, FileSpreadsheet, Sparkles,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -312,6 +312,13 @@ export default function App() {
   const [exportTo, setExportTo]             = useState(() => new Date().toISOString().slice(0,10));
   const [exportCropId, setExportCropId]     = useState(0);        // 0 = すべて
   const [exportFieldName, setExportFieldName] = useState("");     // "" = すべて
+
+  // AI日報生成（PoC）
+  const [showReportGenSheet, setShowReportGenSheet] = useState(false);
+  const [genDate, setGenDate]               = useState(() => new Date().toISOString().slice(0,10));
+  const [genLoading, setGenLoading]         = useState(false);
+  const [genResult, setGenResult]           = useState("");
+  const [genError, setGenError]             = useState("");
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
@@ -1163,6 +1170,56 @@ export default function App() {
     fontSize: 12, fontWeight: 600, cursor: "pointer",
   });
 
+  // ─── AI日報生成（PoC）─────────────────────────────────────
+  // その日の作業記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）
+  const formatDayRecords = (date: string): string => {
+    const dayReports = reports.filter(r => r.date === date);
+    if (dayReports.length === 0) return "";
+    return dayReports.map(r => {
+      const parts = [`【${cropName(r.crop_id)}${r.field ? "・" + r.field : ""}】`];
+      if (r.work_type) parts.push(`作業:${r.work_type}`);
+      if (r.quantity) parts.push(`数量:${r.quantity}`);
+      if (r.work_time) parts.push(`作業時間:${r.work_time}`);
+      const pests = (r.pesticides_used && r.pesticides_used.length > 0)
+        ? r.pesticides_used
+        : (r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : []);
+      if (pests.length > 0) {
+        const names = pests.map(u => {
+          const ps = pesticides.find(p => p.id === u.id);
+          return ps ? `${ps.name}${u.amount ? `(${u.amount})` : ""}` : "";
+        }).filter(Boolean).join("、");
+        if (names) parts.push(`農薬:${names}`);
+      }
+      if (r.soil_ph != null) parts.push(`土壌pH:${r.soil_ph}`);
+      if (r.note) parts.push(`メモ:${r.note}`);
+      parts.push(`担当:${userName(r.user_id)}`);
+      return parts.join(" / ");
+    }).join("\n");
+  };
+
+  const generateDailyReport = async () => {
+    setGenLoading(true); setGenError(""); setGenResult("");
+    const records = formatDayRecords(genDate);
+    if (!records) { setGenError("その日の作業記録がありません。"); setGenLoading(false); return; }
+    try {
+      const res = await fetch("/api/generate-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records, date: genDate }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.report) {
+        setGenResult(d.report);
+      } else {
+        setGenError(d.error || "生成に失敗しました。");
+      }
+    } catch {
+      setGenError("通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setGenLoading(false);
+    }
+  };
+
   // ─── 農薬使用履歴 帳票出力（GAP監査向けCSV/PDF）─────────────
   interface PesticideUseRow {
     date: string; field: string; crop: string; pesticide: string;
@@ -1813,6 +1870,9 @@ export default function App() {
                   {reportFilterActive && (
                     <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={btn("tertiary", "sm")}>条件をクリア</button>
                   )}
+                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={btn("secondary", "sm")}>
+                    <Sparkles size={13} strokeWidth={2} />AI日報
+                  </button>
                   <button onClick={() => setShowExportSheet(true)} style={btn("secondary", "sm")}>
                     <Download size={13} strokeWidth={2} />帳票出力
                   </button>
@@ -3115,6 +3175,47 @@ export default function App() {
               <FileText size={15} strokeWidth={2} />PDFで印刷/保存
             </button>
           </div>
+        </div>
+      </BottomSheet>
+
+      {/* AI日報生成（PoC）*/}
+      <BottomSheet open={showReportGenSheet} onClose={() => setShowReportGenSheet(false)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+            <Sparkles size={17} strokeWidth={2} color={C.ink} />AI日報を生成
+          </div>
+
+          <div style={S.wellBox}>
+            <div style={S.wrow}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={S.lbl2}>対象日</div>
+                <input type="date" style={S.fieldInput} value={genDate} max={new Date().toISOString().slice(0,10)} onChange={e => { setGenDate(e.target.value); setGenResult(""); setGenError(""); }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize:12, color:C.textMuted, marginBottom:16 }}>
+            {reports.filter(r => r.date === genDate).length}件の作業記録から日報を作成します
+          </div>
+
+          {genError && (
+            <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+              {genError}
+            </div>
+          )}
+
+          {genResult && (
+            <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
+              <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{genResult}</div>
+              <button onClick={() => { navigator.clipboard?.writeText(genResult); }} style={{ ...btn("tertiary", "sm"), marginTop:12 }}>
+                <Copy size={13} strokeWidth={2} />コピー
+              </button>
+            </div>
+          )}
+
+          <button onClick={generateDailyReport} disabled={genLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:genLoading ? 0.6 : 1 }}>
+            <Sparkles size={15} strokeWidth={2} />{genLoading ? "生成中…" : genResult ? "もう一度生成" : "日報を生成"}
+          </button>
         </div>
       </BottomSheet>
 
