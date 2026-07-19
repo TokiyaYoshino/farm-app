@@ -18,6 +18,7 @@ React + TypeScript + Supabase の農場作業記録アプリ。本番: https://k
 - Supabase テーブル変更時は RLS ポリシーも確認
 - 新機能追加時に既存機能を削除しない（ナビから外しても tab コンテンツは残す）
 - 新機能・仕様変更・リリース検討時は `pm` スキル（`.claude/skills/pm/`）のプロセスに従い、`docs/decisions/` に意思決定ログを残す
+- 農薬・防除・GAP など農業の実務・法規知識が必要な場合は `agriculture` スキル（`.claude/skills/agriculture/`）も併用する（`pm` はプロダクト・システム設計、`agriculture` は農業ドメイン知識で役割が分かれている）
 
 ## デザイントークン（要点）
 **Soft Widget スタイル**（Notion Calendar / Family 系。2026-07 決定）。
