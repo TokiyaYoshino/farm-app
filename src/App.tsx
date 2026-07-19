@@ -11,6 +11,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
+  Download, FileText, FileSpreadsheet,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -134,6 +135,9 @@ interface Pesticide {
   id: string; org: string; name: string; type: string;
   dilution_rate: string; notes: string; created_at: string;
   master_id?: string;
+  active_ingredient?: string;      // 有効成分（GAP監査 必須項目）
+  pre_harvest_interval?: string;   // 収穫前日数・使用時期（GAP監査 必須項目）
+  usage_method?: string;           // 使用方法（散布機等、GAP監査 必須項目）
 }
 interface WorkCategory { id: number; name: string; unit: string | null; }
 interface Report {
@@ -230,7 +234,7 @@ export default function App() {
   const [projects, setProjects]           = useState<Project[]>([]);
   const [tickets, setTickets]             = useState<Ticket[]>([]);
   const [allComments, setAllComments]     = useState<Comment[]>([]);
-  const [pForm, setPForm]                 = useState({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
+  const [pForm, setPForm]                 = useState({ name:"", type:"殺虫剤", dilution_rate:"", notes:"", active_ingredient:"", pre_harvest_interval:"", usage_method:"" });
   const [pManualMode, setPManualMode]     = useState(false);
   const [masterSearch, setMasterSearch]   = useState("");
   const [masterResults, setMasterResults] = useState<PesticideMaster[]>([]);
@@ -302,6 +306,12 @@ export default function App() {
   const [filterField, setFilterField]       = useState("");       // "" = すべて
   const [filterWorkType, setFilterWorkType] = useState("");       // "" = すべて
   const [filterUser, setFilterUser]         = useState(0);        // 0 = すべて
+  // 農薬使用履歴 帳票出力
+  const [showExportSheet, setShowExportSheet] = useState(false);
+  const [exportFrom, setExportFrom]         = useState(() => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); });
+  const [exportTo, setExportTo]             = useState(() => new Date().toISOString().slice(0,10));
+  const [exportCropId, setExportCropId]     = useState(0);        // 0 = すべて
+  const [exportFieldName, setExportFieldName] = useState("");     // "" = すべて
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
@@ -985,7 +995,7 @@ export default function App() {
   };
 
   const resetPesticideForm = () => {
-    setPForm({ name:"", type:"殺虫剤", dilution_rate:"", notes:"" });
+    setPForm({ name:"", type:"殺虫剤", dilution_rate:"", notes:"", active_ingredient:"", pre_harvest_interval:"", usage_method:"" });
     setMasterSearch("");
     setMasterResults([]);
     setSelectedMaster(null);
@@ -1152,6 +1162,76 @@ export default function App() {
     background: active ? C.inkSoft : C.well, color: active ? C.ink : C.textSub,
     fontSize: 12, fontWeight: 600, cursor: "pointer",
   });
+
+  // ─── 農薬使用履歴 帳票出力（GAP監査向けCSV/PDF）─────────────
+  interface PesticideUseRow {
+    date: string; field: string; crop: string; pesticide: string;
+    dilutionRate: string; amount: string; worker: string;
+  }
+  const pesticideExportRows = (): PesticideUseRow[] => {
+    const rows: PesticideUseRow[] = [];
+    reports
+      .filter(r => r.date >= exportFrom && r.date <= exportTo)
+      .filter(r => !exportCropId || r.crop_id === exportCropId)
+      .filter(r => !exportFieldName || r.field === exportFieldName)
+      .forEach(r => {
+        const uses = r.pesticides_used && r.pesticides_used.length > 0
+          ? r.pesticides_used
+          : r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : [];
+        uses.forEach(u => {
+          const ps = pesticides.find(p => p.id === u.id);
+          if (!ps) return;
+          rows.push({
+            date: r.date, field: r.field, crop: cropName(r.crop_id),
+            pesticide: ps.name, dilutionRate: ps.dilution_rate || "",
+            amount: u.amount || "", worker: userName(r.user_id),
+          });
+        });
+      });
+    return rows.sort((a, b) => a.date.localeCompare(b.date));
+  };
+  const EXPORT_HEADERS = ["日付", "圃場", "作物", "農薬名", "希釈倍率", "使用量", "作業者"];
+  const csvEscape = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  const downloadPesticideCsv = () => {
+    const rows = pesticideExportRows();
+    const lines = [EXPORT_HEADERS, ...rows.map(r => [r.date, r.field, r.crop, r.pesticide, r.dilutionRate, r.amount, r.worker])]
+      .map(cols => cols.map(csvEscape).join(","));
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `農薬使用履歴_${exportFrom}_${exportTo}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+  const printPesticideReport = () => {
+    const rows = pesticideExportRows();
+    const tableRows = rows.map(r =>
+      `<tr><td>${r.date}</td><td>${r.field}</td><td>${r.crop}</td><td>${r.pesticide}</td><td>${r.dilutionRate}</td><td>${r.amount}</td><td>${r.worker}</td></tr>`
+    ).join("");
+    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>農薬使用履歴</title><style>
+      body { font-family: -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif; padding: 24px; color: #1A1C1E; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      .meta { font-size: 12px; color: #5B6169; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+      th { background: #F5F5F6; }
+      @media print { body { padding: 0; } }
+    </style></head><body>
+      <h1>農薬使用履歴</h1>
+      <div class="meta">対象期間: ${exportFrom} 〜 ${exportTo}　${rows.length}件</div>
+      <table><thead><tr>${EXPORT_HEADERS.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${tableRows}</tbody></table>
+    </body></html>`;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed"; iframe.style.right = "0"; iframe.style.bottom = "0";
+    iframe.style.width = "0"; iframe.style.height = "0"; iframe.style.border = "0";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); return; }
+    doc.open(); doc.write(html); doc.close();
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  };
 
   // ─── ダッシュボード統計 ───────────────────────────────
   const sevenAgo      = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
@@ -1726,12 +1806,17 @@ export default function App() {
                 </select>
               </div>
 
-              {/* 件数＋クリア */}
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, minHeight:28 }}>
+              {/* 件数＋クリア＋帳票出力 */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, minHeight:28, gap:8 }}>
                 <span style={{ fontSize:12, color:C.textMuted }}>{filteredReports.length}件の記録</span>
-                {reportFilterActive && (
-                  <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={btn("tertiary", "sm")}>条件をクリア</button>
-                )}
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  {reportFilterActive && (
+                    <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={btn("tertiary", "sm")}>条件をクリア</button>
+                  )}
+                  <button onClick={() => setShowExportSheet(true)} style={btn("secondary", "sm")}>
+                    <Download size={13} strokeWidth={2} />帳票出力
+                  </button>
+                </div>
               </div>
 
               {/* 結果 */}
@@ -2971,6 +3056,66 @@ export default function App() {
             </div>
             </div>
         )}
+      </BottomSheet>
+
+      {/* 農薬使用履歴 帳票出力 */}
+      <BottomSheet open={showExportSheet} onClose={() => setShowExportSheet(false)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+            <FileText size={17} strokeWidth={2} color={C.ink} />農薬使用履歴 帳票出力
+          </div>
+
+          <div style={S.wellBox}>
+            <div style={{ ...S.wrow, marginBottom:2 }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={S.lbl2}>開始日</div>
+                <input type="date" style={S.fieldInput} value={exportFrom} max={exportTo} onChange={e => setExportFrom(e.target.value)} />
+              </div>
+            </div>
+            <div style={{ height:1, background:C.hairline }} />
+            <div style={S.wrow}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={S.lbl2}>終了日</div>
+                <input type="date" style={S.fieldInput} value={exportTo} min={exportFrom} onChange={e => setExportTo(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          <div style={S.wellBox}>
+            <div style={{ ...S.wrow, marginBottom:2 }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={S.lbl2}>作物</div>
+                <select style={S.fieldSelect} value={exportCropId} onChange={e => setExportCropId(Number(e.target.value))}>
+                  <option value={0}>すべて</option>
+                  {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ height:1, background:C.hairline }} />
+            <div style={S.wrow}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={S.lbl2}>圃場</div>
+                <select style={S.fieldSelect} value={exportFieldName} onChange={e => setExportFieldName(e.target.value)}>
+                  <option value="">すべて</option>
+                  {fields.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize:12, color:C.textMuted, marginBottom:16 }}>
+            {pesticideExportRows().length}件の農薬使用記録が該当します
+          </div>
+
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={downloadPesticideCsv} style={{ ...btn("secondary", "lg"), flex:1 }}>
+              <FileSpreadsheet size={15} strokeWidth={2} />CSVをダウンロード
+            </button>
+            <button onClick={printPesticideReport} style={{ ...btn("primary", "lg"), flex:1 }}>
+              <FileText size={15} strokeWidth={2} />PDFで印刷/保存
+            </button>
+          </div>
+        </div>
       </BottomSheet>
 
       {/* 日付ピッカー */}
