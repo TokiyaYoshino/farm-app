@@ -322,6 +322,13 @@ export default function App() {
   const [genResult, setGenResult]           = useState("");
   const [genError, setGenError]             = useState("");
 
+  // 記録検索チャット
+  const [showSearchChatSheet, setShowSearchChatSheet] = useState(false);
+  const [searchChatMessages, setSearchChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [searchChatInput, setSearchChatInput]     = useState("");
+  const [searchChatLoading, setSearchChatLoading] = useState(false);
+  const [searchChatError, setSearchChatError]     = useState("");
+
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1271,6 +1278,71 @@ export default function App() {
     }
   };
 
+  // ─── 記録検索チャット ─────────────────────────────────────
+  // 検索対象の記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）。
+  // 一覧フィルタが有効ならその絞り込み結果を優先し、無効なら直近180日・最新200件にフォールバックする。
+  const formatRecordsForChat = (): { text: string; count: number } => {
+    const base = reportFilterActive ? filteredReports : reports;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 180);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const target = (reportFilterActive ? base : base.filter(r => r.date >= cutoffStr))
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 200);
+    const text = target.map(r => {
+      const parts = [`${r.date} 【${cropName(r.crop_id)}${r.field ? "・" + r.field : ""}】`];
+      if (r.work_type) parts.push(`作業:${r.work_type}`);
+      if (r.quantity) parts.push(`数量:${r.quantity}`);
+      const pests = (r.pesticides_used && r.pesticides_used.length > 0)
+        ? r.pesticides_used
+        : (r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : []);
+      if (pests.length > 0) {
+        const names = pests.map(u => {
+          const ps = pesticides.find(p => p.id === u.id);
+          return ps ? `${ps.name}${u.amount ? `(${u.amount})` : ""}` : "";
+        }).filter(Boolean).join("、");
+        if (names) parts.push(`農薬:${names}`);
+      }
+      if (r.soil_ph != null) parts.push(`土壌pH:${r.soil_ph}`);
+      if (r.note) parts.push(`メモ:${r.note}`);
+      parts.push(`担当:${userName(r.user_id)}`);
+      return parts.join(" / ");
+    }).join("\n");
+    return { text, count: target.length };
+  };
+
+  const sendSearchChatMessage = async () => {
+    const question = searchChatInput.trim();
+    if (!question || searchChatLoading) return;
+    const { text: records, count } = formatRecordsForChat();
+    if (!records) {
+      setSearchChatError("対象の作業記録がありません。");
+      return;
+    }
+    setSearchChatMessages(m => [...m, { role: "user", content: question }]);
+    setSearchChatInput("");
+    setSearchChatLoading(true);
+    setSearchChatError("");
+    try {
+      const res = await fetch("/api/search-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, records, recordCount: count }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.answer) {
+        setSearchChatMessages(m => [...m, { role: "assistant", content: d.answer }]);
+      } else {
+        setSearchChatError(d.error || "検索に失敗しました。");
+      }
+    } catch {
+      setSearchChatError("通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setSearchChatLoading(false);
+    }
+  };
+
   // ─── 農薬使用履歴 帳票出力（GAP監査向けCSV/PDF）─────────────
   interface PesticideUseRow {
     date: string; field: string; crop: string; pesticide: string;
@@ -1924,6 +1996,11 @@ export default function App() {
                   <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={btn("secondary", "sm")}>
                     <Sparkles size={13} strokeWidth={2} />AI日報
                   </button>
+                  {canUseAiFeature("recordSearchChat") && (
+                    <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={btn("secondary", "sm")}>
+                      <MessageSquare size={13} strokeWidth={2} />AI検索
+                    </button>
+                  )}
                   <button onClick={() => setShowExportSheet(true)} style={btn("secondary", "sm")}>
                     <Download size={13} strokeWidth={2} />帳票出力
                   </button>
@@ -3277,6 +3354,61 @@ export default function App() {
           <button onClick={generateDailyReport} disabled={genLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:genLoading ? 0.6 : 1 }}>
             <Sparkles size={15} strokeWidth={2} />{genLoading ? "生成中…" : genResult ? "もう一度生成" : "日報を生成"}
           </button>
+        </div>
+      </BottomSheet>
+
+      {/* 記録検索チャット */}
+      <BottomSheet open={showSearchChatSheet} onClose={() => setShowSearchChatSheet(false)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+            <MessageSquare size={17} strokeWidth={2} color={C.ink} />AI検索
+          </div>
+
+          <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
+            {reportFilterActive ? "現在の絞り込み条件に一致する記録" : "直近180日の記録"}について、自然な言葉で質問できます
+          </div>
+
+          {searchChatMessages.length > 0 && (
+            <div style={{ display:"flex", flexDirection:"column" as const, gap:10, marginBottom:14 }}>
+              {searchChatMessages.map((m, i) => (
+                <div key={i} style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth: "85%",
+                  background: m.role === "user" ? C.inkSoft : C.well,
+                  color: C.text,
+                  borderRadius: 12,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                  whiteSpace: "pre-wrap" as const,
+                }}>
+                  {m.content}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {searchChatError && (
+            <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+              {searchChatError}
+            </div>
+          )}
+
+          <div style={{ display:"flex", gap:8 }}>
+            <input
+              style={{ ...S.input, marginBottom:0, flex:1 }}
+              placeholder="例: 先月のトマトの防除は何回した？"
+              value={searchChatInput}
+              onChange={e => setSearchChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !searchChatLoading) sendSearchChatMessage(); }}
+              maxLength={400}
+              disabled={searchChatLoading}
+              autoComplete="off"
+            />
+            <button onClick={sendSearchChatMessage} disabled={searchChatLoading || !searchChatInput.trim()} style={{ ...btn("primary", "md"), opacity:(searchChatLoading || !searchChatInput.trim()) ? 0.6 : 1, flexShrink:0 }}>
+              {searchChatLoading ? <RefreshCw size={15} strokeWidth={2} /> : "送信"}
+            </button>
+          </div>
         </div>
       </BottomSheet>
 
