@@ -47,6 +47,9 @@ const supabase = createClient(
 // ─── 定数 ───────────────────────────────────────────────
 const WORK_TEMPLATES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り", "剪定", "その他"];
 
+// 農薬散布系の作業区分か判定（カスタムカテゴリ名「農薬散布」とレガシーテンプレート「防除」の両方に対応）
+const isPesticideWorkType = (workType: string) => workType === "農薬散布" || workType === "防除";
+
 const VOICE_WORK_MAP: Record<string, string> = {
   収穫:"収穫", とれた:"収穫", 採った:"収穫", 刈り取り:"収穫",
   施肥:"施肥", 肥料:"施肥", 追肥:"施肥",
@@ -3085,13 +3088,34 @@ export default function App() {
                       <select style={S.fieldSelect} value={rForm.work_category_id}
                         onChange={e => {
                           const cat = workCategories.find(c => c.id === Number(e.target.value));
-                          setRForm(f => ({ ...f, work_category_id: Number(e.target.value), work_type: cat?.name ?? f.work_type, quantity_unit: cat?.unit ?? f.quantity_unit }));
+                          setRForm(f => ({
+                            ...f,
+                            work_category_id: Number(e.target.value),
+                            work_type: cat?.name ?? f.work_type,
+                            quantity_unit: cat ? (cat.unit ?? "") : f.quantity_unit,
+                            quantity_value: cat ? "" : f.quantity_value,
+                            quantity: cat ? "" : f.quantity,
+                          }));
+                          if (cat && !isPesticideWorkType(cat.name)) {
+                            setSelectedPesticides([]);
+                            setPesticideAmounts({});
+                          }
+                          if (cat && cat.name !== "施肥") setSoilPh("");
                         }}>
                         <option value={0}>選択してください</option>
                         {workCategories.map(c => <option key={c.id} value={c.id}>{c.name}{c.unit ? `（${c.unit}）` : ""}</option>)}
                       </select>
                     ) : (
-                      <select style={S.fieldSelect} value={rForm.work_type} onChange={e => setRForm(f => ({ ...f, work_type:e.target.value }))}>
+                      <select style={S.fieldSelect} value={rForm.work_type}
+                        onChange={e => {
+                          const workType = e.target.value;
+                          setRForm(f => ({ ...f, work_type: workType }));
+                          if (!isPesticideWorkType(workType)) {
+                            setSelectedPesticides([]);
+                            setPesticideAmounts({});
+                          }
+                          if (workType !== "施肥") setSoilPh("");
+                        }}>
                         {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     )}
@@ -3120,12 +3144,16 @@ export default function App() {
                     {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
 
-                  {/* 実績数量 */}
-                  <div style={S.lbl}>実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
-                  <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
-                    <input type="number" style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: 20" value={rForm.quantity_value} onChange={e => setRForm(f => ({ ...f, quantity_value:e.target.value, quantity:e.target.value }))} />
-                    <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:13, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
-                  </div>
+                  {/* 実績数量（数量単位が定義されている作業区分のみ表示。カテゴリ未設定時は常に表示） */}
+                  {(workCategories.length === 0 || !!rForm.quantity_unit) && (
+                    <>
+                      <div style={S.lbl}>実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
+                      <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
+                        <input type="number" style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: 20" value={rForm.quantity_value} onChange={e => setRForm(f => ({ ...f, quantity_value:e.target.value, quantity:e.target.value }))} />
+                        <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:13, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
+                      </div>
+                    </>
+                  )}
 
                   {/* 作業時刻 */}
                   <div style={S.lbl}>作業時刻</div>
@@ -3170,51 +3198,59 @@ export default function App() {
                     </label>
                   )}
 
-                  {/* 農薬複数選択 */}
-                  <div style={S.lbl}>使用農薬（任意）</div>
-                  {pesticides.length === 0 ? (
-                    <div style={{ fontSize:12, color:C.textMuted, padding:"8px 12px", background:C.bg, borderRadius:8, marginBottom:12 }}>登録済みの農薬がありません</div>
-                  ) : (
-                    <div style={{ border:`1.5px solid ${C.border}`, borderRadius:8, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
-                      {pesticides.map(p => (
-                        <div key={p.id} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:6, marginBottom:6 }}>
-                          <label style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", cursor:"pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedPesticides.includes(p.id)}
-                              onChange={e => {
-                                if (e.target.checked) {
-                                  setSelectedPesticides(prev => [...prev, p.id]);
-                                } else {
-                                  setSelectedPesticides(prev => prev.filter(id => id !== p.id));
-                                  setPesticideAmounts(prev => { const next = { ...prev }; delete next[p.id]; return next; });
-                                }
-                              }}
-                              style={{ accentColor:C.primary, width:16, height:16, cursor:"pointer", flexShrink:0 }}
-                            />
-                            <span style={{ fontSize:13, color:C.text, fontWeight:500 }}>{p.name}</span>
-                            <span style={{ fontSize:11, color:C.textMuted, background:C.bg, borderRadius:4, padding:"1px 6px", flexShrink:0 }}>{p.type}</span>
-                          </label>
-                          {selectedPesticides.includes(p.id) && (
-                            <input
-                              placeholder="散布量（例: 100ml、1L）"
-                              value={pesticideAmounts[p.id] || ""}
-                              onChange={e => setPesticideAmounts(prev => ({ ...prev, [p.id]: e.target.value }))}
-                              style={{ ...S.input, marginLeft:24, marginBottom:0, width:"calc(100% - 24px)", boxSizing:"border-box" as const, fontSize:13, padding:"8px 12px" }}
-                            />
-                          )}
+                  {/* 農薬複数選択（農薬散布系の作業区分のときのみ表示） */}
+                  {isPesticideWorkType(rForm.work_type) && (
+                    <>
+                      <div style={S.lbl}>使用農薬（任意）</div>
+                      {pesticides.length === 0 ? (
+                        <div style={{ fontSize:12, color:C.textMuted, padding:"8px 12px", background:C.bg, borderRadius:8, marginBottom:12 }}>登録済みの農薬がありません</div>
+                      ) : (
+                        <div style={{ border:`1.5px solid ${C.border}`, borderRadius:8, padding:"4px 10px", marginBottom:12, background:"#fff" }}>
+                          {pesticides.map(p => (
+                            <div key={p.id} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:6, marginBottom:6 }}>
+                              <label style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", cursor:"pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPesticides.includes(p.id)}
+                                  onChange={e => {
+                                    if (e.target.checked) {
+                                      setSelectedPesticides(prev => [...prev, p.id]);
+                                    } else {
+                                      setSelectedPesticides(prev => prev.filter(id => id !== p.id));
+                                      setPesticideAmounts(prev => { const next = { ...prev }; delete next[p.id]; return next; });
+                                    }
+                                  }}
+                                  style={{ accentColor:C.primary, width:16, height:16, cursor:"pointer", flexShrink:0 }}
+                                />
+                                <span style={{ fontSize:13, color:C.text, fontWeight:500 }}>{p.name}</span>
+                                <span style={{ fontSize:11, color:C.textMuted, background:C.bg, borderRadius:4, padding:"1px 6px", flexShrink:0 }}>{p.type}</span>
+                              </label>
+                              {selectedPesticides.includes(p.id) && (
+                                <input
+                                  placeholder="散布量（例: 100ml、1L）"
+                                  value={pesticideAmounts[p.id] || ""}
+                                  onChange={e => setPesticideAmounts(prev => ({ ...prev, [p.id]: e.target.value }))}
+                                  style={{ ...S.input, marginLeft:24, marginBottom:0, width:"calc(100% - 24px)", boxSizing:"border-box" as const, fontSize:13, padding:"8px 12px" }}
+                                />
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                    </>
                   )}
 
-                  {/* 土壌pH */}
-                  <div style={S.lbl}>土壌pH（任意）</div>
-                  <input
-                    type="number" placeholder="例: 6.5" min="0" max="14" step="0.1"
-                    value={soilPh} onChange={e => setSoilPh(e.target.value)}
-                    style={S.input}
-                  />
+                  {/* 土壌pH（施肥のときのみ表示。pH管理は施肥判断に直結するため） */}
+                  {rForm.work_type === "施肥" && (
+                    <>
+                      <div style={S.lbl}>土壌pH（任意）</div>
+                      <input
+                        type="number" placeholder="例: 6.5" min="0" max="14" step="0.1"
+                        value={soilPh} onChange={e => setSoilPh(e.target.value)}
+                        style={S.input}
+                      />
+                    </>
+                  )}
 
                   {/* メモ */}
                   <div style={S.lbl}>メモ</div>
