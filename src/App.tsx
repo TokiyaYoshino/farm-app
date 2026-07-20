@@ -117,7 +117,29 @@ async function fetchWeatherForPeriod(
   return { temp: avg(temps), humidity: avg(hums), rain: totalRain, weather: wmoToLabel(dominant) };
 }
 
+const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
+// 防除タイミング助言用: 今日から3日分の日次予報を人間可読テキストに整形する（無料API・キー不要）。
+async function fetchPestControlForecast(lat: number, lng: number): Promise<string> {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max` +
+    `&timezone=Asia%2FTokyo&forecast_days=3`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const days: string[] = data.daily?.time ?? [];
+  const codes: number[] = data.daily?.weather_code ?? [];
+  const tMax: number[] = data.daily?.temperature_2m_max ?? [];
+  const tMin: number[] = data.daily?.temperature_2m_min ?? [];
+  const rainSum: number[] = data.daily?.precipitation_sum ?? [];
+  const rainProb: number[] = data.daily?.precipitation_probability_max ?? [];
+  const windMax: number[] = data.daily?.wind_speed_10m_max ?? [];
+  return days.map((d, i) => {
+    const dt = new Date(d + "T00:00:00+09:00");
+    const label = `${d.slice(5).replace("-", "/")}(${WEEKDAY_JA[dt.getDay()]})`;
+    return `${label}: 天気${wmoToLabel(codes[i])} / 最高${Math.round(tMax[i])}℃・最低${Math.round(tMin[i])}℃ / ` +
+      `降水確率${Math.round(rainProb[i] ?? 0)}% / 降水量${(rainSum[i] ?? 0).toFixed(1)}mm / 最大風速${Math.round(windMax[i] ?? 0)}m/s`;
+  }).join("\n");
+}
 
 
 // ─── 型 ─────────────────────────────────────────────────
@@ -328,6 +350,13 @@ export default function App() {
   const [searchChatInput, setSearchChatInput]     = useState("");
   const [searchChatLoading, setSearchChatLoading] = useState(false);
   const [searchChatError, setSearchChatError]     = useState("");
+
+  // 天気×防除タイミング助言
+  const [showPestAdviceSheet, setShowPestAdviceSheet] = useState(false);
+  const [pestAdviceForecast, setPestAdviceForecast] = useState("");
+  const [pestAdviceResult, setPestAdviceResult]     = useState("");
+  const [pestAdviceLoading, setPestAdviceLoading]   = useState(false);
+  const [pestAdviceError, setPestAdviceError]       = useState("");
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
@@ -1278,6 +1307,35 @@ export default function App() {
     }
   };
 
+  // ─── 天気×防除タイミング助言 ─────────────────────────────
+  // Open-Meteo（無料API）で3日分の予報を取得し、助言文生成のみOpenAIに任せる。
+  const generatePestControlAdvice = async () => {
+    const lat = weatherCoords?.lat;
+    const lng = weatherCoords?.lng;
+    if (lat == null || lng == null) { setPestAdviceError("位置情報が取得できません。"); return; }
+    setPestAdviceLoading(true); setPestAdviceError(""); setPestAdviceResult("");
+    try {
+      const forecast = await fetchPestControlForecast(lat, lng);
+      if (!forecast) { setPestAdviceError("天気予報を取得できませんでした。"); setPestAdviceLoading(false); return; }
+      setPestAdviceForecast(forecast);
+      const res = await fetch("/api/pest-control-advice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forecast }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.advice) {
+        setPestAdviceResult(d.advice);
+      } else {
+        setPestAdviceError(d.error || "助言の生成に失敗しました。");
+      }
+    } catch {
+      setPestAdviceError("通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setPestAdviceLoading(false);
+    }
+  };
+
   // ─── 記録検索チャット ─────────────────────────────────────
   // 検索対象の記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）。
   // 一覧フィルタが有効ならその絞り込み結果を優先し、無効なら直近180日・最新200件にフォールバックする。
@@ -1712,6 +1770,14 @@ export default function App() {
                   </div>
                 )}
               </div>
+              {canUseAiFeature("pestControlAdvice") && (
+                <button
+                  onClick={() => { setShowPestAdviceSheet(true); if (!pestAdviceResult && !pestAdviceLoading) generatePestControlAdvice(); }}
+                  style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:10 }}
+                >
+                  <Wind size={13} strokeWidth={2} />防除タイミング助言
+                </button>
+              )}
             </div>
           ) : null}
           {/* 統計カードグリッド */}
@@ -3353,6 +3419,43 @@ export default function App() {
 
           <button onClick={generateDailyReport} disabled={genLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:genLoading ? 0.6 : 1 }}>
             <Sparkles size={15} strokeWidth={2} />{genLoading ? "生成中…" : genResult ? "もう一度生成" : "日報を生成"}
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* 天気×防除タイミング助言 */}
+      <BottomSheet open={showPestAdviceSheet} onClose={() => setShowPestAdviceSheet(false)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+            <Wind size={17} strokeWidth={2} color={C.ink} />防除タイミング助言
+          </div>
+
+          {pestAdviceForecast && (
+            <div style={{ fontSize:12, color:C.textMuted, whiteSpace:"pre-wrap" as const, marginBottom:16, lineHeight:1.7 }}>
+              {pestAdviceForecast}
+            </div>
+          )}
+
+          {pestAdviceError && (
+            <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+              {pestAdviceError}
+            </div>
+          )}
+
+          {pestAdviceResult && (
+            <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
+              <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{pestAdviceResult}</div>
+            </div>
+          )}
+
+          {pestAdviceLoading && !pestAdviceResult && (
+            <div style={{ fontSize:13, color:C.textMuted, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+              <RefreshCw size={13} strokeWidth={2} />予報を確認して助言を作成中…
+            </div>
+          )}
+
+          <button onClick={generatePestControlAdvice} disabled={pestAdviceLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:pestAdviceLoading ? 0.6 : 1 }}>
+            <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : pestAdviceResult ? "もう一度確認" : "助言を確認"}
           </button>
         </div>
       </BottomSheet>
