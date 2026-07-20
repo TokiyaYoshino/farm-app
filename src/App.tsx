@@ -358,6 +358,12 @@ export default function App() {
   const [pestAdviceLoading, setPestAdviceLoading]   = useState(false);
   const [pestAdviceError, setPestAdviceError]       = useState("");
 
+  // 病害虫画像診断
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult]   = useState("");
+  const [diagError, setDiagError]     = useState("");
+  useEffect(() => { setDiagResult(""); setDiagError(""); setDiagLoading(false); }, [selectedReport?.id]);
+
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1333,6 +1339,29 @@ export default function App() {
       setPestAdviceError("通信に失敗しました。ネットワークをご確認ください。");
     } finally {
       setPestAdviceLoading(false);
+    }
+  };
+
+  // ─── 病害虫画像診断 ───────────────────────────────────────
+  // 記録に添付済みの写真（Supabase公開URL）をそのままOpenAIのvisionに渡す。
+  const diagnoseImage = async (imageUrl: string, cropName?: string) => {
+    setDiagLoading(true); setDiagError(""); setDiagResult("");
+    try {
+      const res = await fetch("/api/diagnose-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl, cropName }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.diagnosis) {
+        setDiagResult(d.diagnosis);
+      } else {
+        setDiagError(d.error || "診断に失敗しました。");
+      }
+    } catch {
+      setDiagError("通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setDiagLoading(false);
     }
   };
 
@@ -2609,6 +2638,29 @@ export default function App() {
                 {/* 写真 */}
                 {r.image_url && (
                   <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:8, marginBottom:12, maxHeight:240, objectFit:"cover", display:"block" }} />
+                )}
+
+                {/* 病害虫画像診断 */}
+                {r.image_url && canUseAiFeature("pestDiagnosis") && (
+                  <div style={{ marginBottom:16 }}>
+                    {diagError && (
+                      <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:10 }}>
+                        {diagError}
+                      </div>
+                    )}
+                    {diagResult && (
+                      <div style={{ ...S.wellBox, padding:16, marginBottom:10 }}>
+                        <div style={{ fontSize:13, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{diagResult}</div>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => diagnoseImage(r.image_url, cropName(r.crop_id))}
+                      disabled={diagLoading}
+                      style={{ ...btn("tertiary", "sm"), width:"100%", opacity:diagLoading ? 0.6 : 1 }}
+                    >
+                      <FlaskConical size={13} strokeWidth={2} />{diagLoading ? "診断中…" : diagResult ? "もう一度診断" : "AI画像診断"}
+                    </button>
+                  </div>
                 )}
 
                 {/* アクション */}

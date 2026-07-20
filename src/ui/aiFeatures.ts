@@ -4,6 +4,7 @@ export const AI_FEATURES = {
   voiceStructuring: true,
   recordSearchChat: true,
   pestControlAdvice: true,
+  pestDiagnosis: true,
 } as const;
 
 export function canUseAiFeature(feature: keyof typeof AI_FEATURES): boolean {
