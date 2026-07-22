@@ -7,7 +7,7 @@
 | fields | id, name, org, lat, lng |
 | reports | id, user_id, crop_id, field, date, work_type, quantity, work_time, note, image_url, weather, temp, humidity, rain, pesticide_id, pesticide_amount, pesticides_used(jsonb), soil_ph, org |
 | schedules | id, user_id, assigned_user_id, work_type, title, date, note, crop |
-| pesticides | id, name, type, dilution_rate, notes, org, created_at |
+| pesticides | id, name, type, dilution_rate, notes, org, created_at, master_id, active_ingredient, pre_harvest_interval, usage_method |
 | comments | id, target_type('report'/'schedule'), target_id, user_id, message, created_at |
 | sessions | id, user_id, field_id, started_at, ended_at, duration_minutes, voice_memo |
 | settings | id, org, location_name, lat, lng |
