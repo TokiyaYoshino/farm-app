@@ -14,5 +14,5 @@ create table if not exists organizations (
 );
 
 insert into organizations (org_key, name)
-values ('kishu', '紀州ファーム')
+values ('kishu', '霧珠ファーム')
 on conflict (org_key) do nothing;
