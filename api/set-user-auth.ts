@@ -1,7 +1,11 @@
-export default async function handler(req: any, res: any) {
+import type { ApiRequest, ApiResponse } from "./types";
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { user_id, name, role, login_id, password, org } = req.body ?? {};
+  const { user_id, name, role, login_id, password, org } = (req.body ?? {}) as {
+    user_id?: number; name?: string; role?: string; login_id?: string; password?: string; org?: string;
+  };
   if (!login_id || !password) return res.status(400).json({ error: "login_id と password は必須です" });
   if (password.length < 6) return res.status(400).json({ error: "パスワードは6文字以上にしてください" });
 

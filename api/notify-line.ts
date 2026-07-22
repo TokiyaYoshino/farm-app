@@ -1,4 +1,6 @@
-export default async function handler(req: any, res: any) {
+import type { ApiRequest, ApiResponse } from "./types";
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
   const { message } = req.body ?? {};
