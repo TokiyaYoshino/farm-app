@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import { createClient } from "@supabase/supabase-js";
+import type { Session as AuthSession } from "@supabase/supabase-js";
+import type { SpeechRecognitionLike } from "./types/speechRecognition";
 import {
   Home, PenLine, Users, Thermometer,
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
@@ -217,7 +219,7 @@ const css = (o: CSSProperties): CSSProperties => o;
 
 export default function App() {
   // ─── Auth state ──────────────────────────────────────────
-  const [authSession, setAuthSession]     = useState<any>(null);
+  const [authSession, setAuthSession]     = useState<AuthSession | null>(null);
   const [authLoading, setAuthLoading]     = useState(true);
   const [loginId, setLoginId]             = useState("");
   const [loginPass, setLoginPass]         = useState("");
@@ -279,9 +281,9 @@ export default function App() {
   // 音声入力
   const [isListening, setIsListening]     = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
-  const recognitionRef                    = useRef<any>(null);
+  const recognitionRef                    = useRef<SpeechRecognitionLike | null>(null);
   const [noteListening, setNoteListening] = useState(false);
-  const noteRecRef                        = useRef<any>(null);
+  const noteRecRef                        = useRef<SpeechRecognitionLike | null>(null);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
@@ -357,7 +359,7 @@ export default function App() {
         supabase.from("settings").select("*").eq("org", org).maybeSingle(),
         orgUserIds.length > 0
           ? supabase.from("schedules").select("*").in("user_id", orgUserIds).order("date")
-          : Promise.resolve({ data: null as any, error: null }),
+          : Promise.resolve({ data: null as Schedule[] | null, error: null }),
         supabase.from("pesticides").select("*").eq("org", org).order("name"),
         supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
         supabase.from("tickets").select("*").eq("org", org),
@@ -684,7 +686,7 @@ export default function App() {
   };
 
   const toggleVoice = () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!SR) return showToast("このブラウザは音声入力非対応です（Chrome推奨）", "err");
 
     // 停止
@@ -705,7 +707,7 @@ export default function App() {
 
     rec.onstart = () => { setIsListening(true); };
 
-    rec.onresult = (e: any) => {
+    rec.onresult = (e) => {
       let finalText = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
@@ -717,7 +719,7 @@ export default function App() {
       }
     };
 
-    rec.onerror = (e: any) => {
+    rec.onerror = (e) => {
       // no-speech（無音）と aborted（手動停止）は正常動作なので無視
       if (e.error === "no-speech" || e.error === "aborted") return;
       console.error("SpeechRecognition error:", e.error);
@@ -750,7 +752,7 @@ export default function App() {
   };
 
   const toggleNoteVoice = () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!SR) return showToast("このブラウザは音声入力非対応です（Chrome推奨）", "err");
 
     // 停止
@@ -771,7 +773,7 @@ export default function App() {
 
     rec.onstart  = () => setNoteListening(true);
 
-    rec.onresult = (e: any) => {
+    rec.onresult = (e) => {
       let finalText = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
@@ -780,7 +782,7 @@ export default function App() {
       setRForm(f => ({ ...f, note: f.note ? f.note + "　" + finalText : finalText }));
     };
 
-    rec.onerror  = (e: any) => {
+    rec.onerror  = (e) => {
       if (e.error === "no-speech" || e.error === "aborted") return;
       console.error("SpeechRecognition error:", e.error);
       const msg = e.error === "not-allowed"   ? "マイクの使用が許可されていません"
@@ -811,7 +813,7 @@ export default function App() {
   };
 
   const hasSpeech = typeof window !== "undefined" &&
-    !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+    !!(window.SpeechRecognition ?? window.webkitSpeechRecognition);
 
   const setFieldLocation = async (fieldId: number) => {
     if (!userPos) return showToast("GPS位置を取得中です", "err");
@@ -1934,7 +1936,7 @@ export default function App() {
                     </button>
                     <div style={{ display:"flex", alignItems:"center", gap:2, flexShrink:0 }}>
                       <button
-                        onClick={e => { e.stopPropagation(); setExpandedCrops(prev => { const s = new Set(prev); s.has(c.id) ? s.delete(c.id) : s.add(c.id); return s; }); }}
+                        onClick={e => { e.stopPropagation(); setExpandedCrops(prev => { const s = new Set(prev); if (s.has(c.id)) { s.delete(c.id); } else { s.add(c.id); } return s; }); }}
                         style={{ ...S.circleBtn }}
                       >
                         <ChevronRight size={16} strokeWidth={2} style={{ transform: expanded ? "rotate(90deg)" : "none", transition:"transform .15s" }} />

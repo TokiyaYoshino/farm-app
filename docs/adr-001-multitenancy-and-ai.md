@@ -49,10 +49,10 @@
 
 **規模感**: `App.tsx`単体で最低9箇所のクエリ修正、APIエンドポイント2本の書き換え。「数週間規模」という見積りは妥当だが、内訳としてはクエリ修正自体は数日、残りは下記の設計課題の解決とRLSポリシーの段階適用・越境検証に費やす時間が大きい。
 
-**新たに見つかった論点**: ログインは`login_id`のみで行われており（org選択UIがない）、`login_id`を全org横断でユニークにするか、ログイン画面にorg選択／サブドメインを追加するかの設計判断がまだない。マルチテナント化着手前にこれを先に決める必要がある。
+**新たに見つかった論点 → 2026-07-22 決定**: ログインは`login_id`のみで行われており（org選択UIがない）、`login_id`を全org横断でユニークにするか、ログイン画面にorg選択／サブドメインを追加するかの設計判断がまだなかった。→ **`login_id`を全org横断で一意にする方針に決定。ログイン画面へのorg選択UI追加は行わない**（`scripts/migrations/2026-07-22-login-id-unique.sql`でDB制約化）。詳細は`docs/decision-log.md`参照。
 
 ### 移行順序（安全にやる）
-1. `organizations`テーブル作成＋既存データに「霧珠ファーム」1組織を割り当て（`org="kishu"`→organization_id紐付け）
+1. ✅ 着手中（2026-07-22）: `organizations`テーブル作成＋既存データに「霧珠ファーム」1組織を割り当て（`org="kishu"`→organization_id紐付け）。SQL: `scripts/migrations/2026-07-22-organizations-step1.sql`（未実行・Supabase側での実行待ち）
 2. 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化
 3. JWTクレーム設定→RLS実ポリシーを1テーブルずつ適用しながらクライアントクエリを更新
 4. 全テーブル移行後に`allow_all`ポリシーを撤廃

@@ -2,7 +2,8 @@
 
 | テーブル | 主なカラム |
 |---------|-----------|
-| users | id, name, role, org, login_id, auth_id, email |
+| organizations | id(uuid), org_key(unique, 既存`org`文字列と対応), name, plan, status, line_channel_token, line_group_id, created_at |
+| users | id, name, role, org, login_id(org横断で一意), auth_id, email |
 | crops | id, name, org, start_date, last_work_date, target_yield |
 | fields | id, name, org, lat, lng |
 | reports | id, user_id, crop_id, field, date, work_type, quantity, work_time, note, image_url, weather, temp, humidity, rain, pesticide_id, pesticide_amount, pesticides_used(jsonb), soil_ph, org |
@@ -15,3 +16,4 @@
 | tickets | id(uuid), project_id(→projects), org, title, work_type, assigned_user_id, due_date, status('open'/'done'), report_id, note, created_at |
 
 - RLS は全テーブルで有効（allow_all ポリシー）。テーブル変更時は RLS ポリシーも確認すること
+- マルチテナント化ステップ1（`organizations`テーブル作成・`users.login_id`一意制約）のSQLは`scripts/migrations/`参照。既存テーブルへの`organization_id`列追加・RLS実ポリシー化は未実施（`docs/adr-001-multitenancy-and-ai.md`参照）
