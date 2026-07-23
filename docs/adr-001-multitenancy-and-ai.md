@@ -32,29 +32,28 @@
 
 ### 改修箇所の実測（コード調査、2026-07-19）
 
-`src/App.tsx`・`api/`を実際に調査した結果、org非スコープのクエリ／ハードコードは以下の箇所に存在する。
+`src/App.tsx`・`api/`を実際に調査した結果、org非スコープのクエリ／ハードコードは以下の箇所に存在した。2026-07-22時点ですべて対応済み（✅）。
 
 | ファイル:行 | 内容 | 対応 |
 |---|---|---|
-| `src/App.tsx:348` | `users`全件取得（管理画面） | `organization_id`でフィルタ |
-| `src/App.tsx:507` | `login_id`でのユーザー検索（ログイン時） | ⚠️ ログイン時点では`organization_id`が未確定。下記「新たに見つかった論点」参照 |
-| `src/App.tsx:531` | `users`再取得 | 同上 |
-| `src/App.tsx:842` | `users`削除 | 削除時のorg越境防止も必要 |
-| `src/App.tsx:369` | `comments`一覧取得 | `organization_id`列追加後にフィルタ |
-| `src/App.tsx:1056` `1063` `1072` | `comments`取得・追加・更新 | 同上 |
-| `src/App.tsx:363` | `schedules`取得（`orgUserIds`経由の間接絞り込み） | 直接`organization_id`列を持たせて直接フィルタに変更（現状は`user_id`経由のため抜け穴になりやすい） |
-| `src/App.tsx:1036` | `schedules`追加 | 同上 |
-| `api/set-user-auth.ts:10,36` | `@kishu-farm.system`ドメイン・`org ?? "kishu"`のハードコード | `organization`パラメータ化 |
-| `api/notify-line.ts` | `LINE_CHANNEL_ACCESS_TOKEN`/`LINE_GROUP_ID`が環境変数1組固定 | `organizations`テーブルから取得するよう変更 |
+| `src/App.tsx` | `users`全件取得（管理画面） | ✅ 自分の行をauth_idで特定→`organization_id`で組織内のみ取得に変更 |
+| `src/App.tsx` | `login_id`でのユーザー検索（ログイン時） | 対応不要と判断（下記「新たに見つかった論点」参照。`login_id`をorg横断一意にしたためこのままでよい） |
+| `src/App.tsx` | ユーザー招待後の`users`再取得 | ✅ `organization_id`でフィルタ |
+| `src/App.tsx` | `users`削除 | ✅ `organization_id`一致を削除条件に追加 |
+| `src/App.tsx` | `comments`取得・追加・更新 | ✅ `organization_id`列追加の上でフィルタ・書き込み時に付与 |
+| `src/App.tsx` | `schedules`取得（`orgUserIds`経由の間接絞り込み） | ✅ `organization_id`列を追加し直接フィルタに変更 |
+| `src/App.tsx` / `src/components/GanttChart.tsx` | `crops`/`fields`/`reports`/`pesticides`/`settings`/`projects`への書き込み | ✅ `organization_id`をあわせて設定（列がNOT NULLのため必須） |
+| `api/set-user-auth.ts` | `org ?? "kishu"`のハードコード（新規作成時） | ✅ クライアントから`organization_id`を受け取り必須化。`@kishu-farm.system`ドメインは影響小のため未対応のまま |
+| `api/notify-line.ts` | `LINE_CHANNEL_ACCESS_TOKEN`/`LINE_GROUP_ID`が環境変数1組固定 | 未対応（`organizations`テーブルにトークン列はあるが未使用。組織が増えるまで優先度低）|
 
-**規模感**: `App.tsx`単体で最低9箇所のクエリ修正、APIエンドポイント2本の書き換え。「数週間規模」という見積りは妥当だが、内訳としてはクエリ修正自体は数日、残りは下記の設計課題の解決とRLSポリシーの段階適用・越境検証に費やす時間が大きい。
+**規模感**: `App.tsx`単体で最低9箇所のクエリ修正、APIエンドポイント2本の書き換え。「数週間規模」という見積りは妥当だが、内訳としてはクエリ修正自体は数日、残りは下記の設計課題の解決とRLSポリシーの段階適用・越境検証に費やす時間が大きい。**クエリ修正自体（移行順序2.）は2026-07-22に完了**。RLS実ポリシー化（移行順序3.〜5.）が残作業。
 
 **新たに見つかった論点 → 2026-07-22 決定**: ログインは`login_id`のみで行われており（org選択UIがない）、`login_id`を全org横断でユニークにするか、ログイン画面にorg選択／サブドメインを追加するかの設計判断がまだなかった。→ **`login_id`を全org横断で一意にする方針に決定。ログイン画面へのorg選択UI追加は行わない**（`scripts/migrations/2026-07-22-login-id-unique.sql`でDB制約化）。詳細は`docs/decision-log.md`参照。
 
 ### 移行順序（安全にやる）
 1. ✅ 完了（2026-07-22）: `organizations`テーブル作成＋既存データに「霧珠ファーム」1組織を割り当て（`org="kishu"`→organization_id紐付け）。SQL: `scripts/migrations/2026-07-22-organizations-step1.sql`（Supabase側で実行済み）。あわせて`users.login_id`のunique制約も実行済み（重複0件を確認の上、`2026-07-22-login-id-unique.sql`適用）
-2. 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化
-3. JWTクレーム設定→RLS実ポリシーを1テーブルずつ適用しながらクライアントクエリを更新
+2. ✅ 完了（2026-07-22）: 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化。SQL: `scripts/migrations/2026-07-22-organization-id-columns.sql`（Supabase側で実行待ち・実行後に3へ）。クライアントクエリ側も対応済み（上記表参照）
+3. ⏳ 未着手（要ユーザー確認・cross-org検証が必要なため保留中）: JWTクレーム設定→RLS実ポリシーを1テーブルずつ適用しながらクライアントクエリを更新
 4. 全テーブル移行後に`allow_all`ポリシーを撤廃
 5. 2組織目を受け入れる前に、別Supabaseユーザーで越境アクセス不可を検証
 
