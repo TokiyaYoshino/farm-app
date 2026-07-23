@@ -126,7 +126,7 @@ async function fetchWeatherForPeriod(
 
 // ─── 型 ─────────────────────────────────────────────────
 type Role = "admin" | "worker" | "viewer";
-interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; }
+interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; organization_id?: string; }
 interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; }
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
@@ -230,6 +230,7 @@ export default function App() {
   // ─── App state ───────────────────────────────────────────
   const [tab, setTab]                     = useState("home");
   const [currentOrg, setCurrentOrg]       = useState("kishu");
+  const [currentOrganizationId, setCurrentOrganizationId] = useState<string | null>(null);
   const [users, setUsers]                 = useState<User[]>([]);
   const [crops, setCrops]                 = useState<Crop[]>([]);
   const [fields, setFields]               = useState<Field[]>([]);
@@ -342,29 +343,28 @@ export default function App() {
     (async () => {
       try {
       setLoading(true);
-      // 全ユーザー取得してauth_idで現在ユーザーを特定
-      const { data: allUsers } = await supabase.from("users").select("*").order("id");
-      const userList = (allUsers ?? []) as User[];
-      const me = userList.find(x => x.auth_id === authSession.user.id) ?? null;
+      // 自分の行だけをauth_idで特定（他組織のユーザー一覧を取得しない）
+      const { data: meRow } = await supabase.from("users").select("*").eq("auth_id", authSession.user.id).maybeSingle();
+      const me = (meRow ?? null) as User | null;
       const org = me?.org ?? "kishu";
+      const organizationId = me?.organization_id ?? null;
       setCurrentOrg(org);
+      setCurrentOrganizationId(organizationId);
       if (me) { setCurrentUser(me); setRForm(f => ({ ...f, user_id: me.id })); }
 
-      // org でフィルタしてデータ取得
-      const orgUserIds = userList.filter(x => x.org === org).map(u => u.id);
-      const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: tkt }, { data: wc }, { data: cmts }] = await Promise.all([
+      // organization_id でフィルタしてデータ取得
+      const [{ data: allUsers }, { data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: tkt }, { data: wc }, { data: cmts }] = await Promise.all([
+        supabase.from("users").select("*").eq("organization_id", organizationId).order("id"),
         supabase.from("crops").select("*").eq("org", org).order("id"),
         supabase.from("fields").select("*").eq("org", org).order("id"),
         supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
         supabase.from("settings").select("*").eq("org", org).maybeSingle(),
-        orgUserIds.length > 0
-          ? supabase.from("schedules").select("*").in("user_id", orgUserIds).order("date")
-          : Promise.resolve({ data: null as Schedule[] | null, error: null }),
+        supabase.from("schedules").select("*").eq("organization_id", organizationId).order("date"),
         supabase.from("pesticides").select("*").eq("org", org).order("name"),
         supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
         supabase.from("tickets").select("*").eq("org", org),
         supabase.from("work_categories").select("*").order("id"),
-        supabase.from("comments").select("*").order("created_at", { ascending: false }),
+        supabase.from("comments").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
       ]);
       if (cErr)  console.error("crops fetch error:",   cErr);
       if (fdErr) console.error("fields fetch error:",  fdErr);
@@ -374,7 +374,7 @@ export default function App() {
         : { lat:35.0167, lng:135.5833, name:"京都府亀岡市" };
       setWeatherCoords(loc);
       setLocInput(loc.name);
-      setUsers(userList.filter(x => x.org === org));
+      setUsers((allUsers ?? []) as User[]);
       if (c)  { setCrops(c as Crop[]); setRForm(f => ({ ...f, crop_id: (c[0] as Crop)?.id || 0 })); }
       if (fd) { setFields(fd as Field[]); setRForm(f => ({ ...f, field: (fd[0] as Field)?.name || "" })); }
       if (r)  setReports(r as Report[]);
@@ -383,14 +383,7 @@ export default function App() {
       if (prj) setProjects(prj as Project[]);
       if (tkt) setTickets(tkt as Ticket[]);
       if (wc) setWorkCategories(wc as WorkCategory[]);
-      if (cmts) {
-        // comments に org 列がないため、org 内の報告/予定に紐づくものだけ残す
-        const reportIds   = new Set((r ?? []).map((x: Report) => String(x.id)));
-        const scheduleIds = new Set(((sch ?? []) as Schedule[]).map(x => x.id));
-        setAllComments((cmts as Comment[]).filter(cm =>
-          cm.target_type === "report" ? reportIds.has(cm.target_id) : scheduleIds.has(cm.target_id)
-        ));
-      }
+      if (cmts) setAllComments(cmts as Comment[]);
       setLoading(false);
       } catch (e) {
         console.error("Startup error:", e);
@@ -522,11 +515,11 @@ export default function App() {
       const r = await fetch("/api/set-user-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, role, login_id, password, org: currentOrg }),
+        body: JSON.stringify({ name, role, login_id, password, org: currentOrg, organization_id: currentOrganizationId }),
       });
       const d = await r.json();
       if (!r.ok) { showToast(d.error ?? "作成に失敗しました", "err"); return; }
-      const { data: fresh } = await supabase.from("users").select("*").order("id");
+      const { data: fresh } = await supabase.from("users").select("*").eq("organization_id", currentOrganizationId).order("id");
       if (fresh) setUsers(fresh as User[]);
       setInvForm({ name:"", role:"worker", password:"", login_id:"" });
       showToast(`${name} のアカウントを作成しました`);
@@ -587,7 +580,7 @@ export default function App() {
       const pw = periodWeather;
       const w = pw ? null : (wxAuto || (wxManual.temp ? wxManual : null));
       const { data, error } = await supabase.from("reports").insert([{
-        ...rForm, image_url: imageUrl, org: currentOrg,
+        ...rForm, image_url: imageUrl, org: currentOrg, organization_id: currentOrganizationId,
         weather:      pw?.weather  ?? w?.label    ?? "",
         weather_icon: "",
         temp:         pw?.temp     ?? (w?.temp     ? String(w.temp)     : ""),
@@ -837,7 +830,7 @@ export default function App() {
 
   const deleteUser = (id: number) =>
     confirmDelete("このユーザーを削除しますか？", async () => {
-      const { error } = await supabase.from("users").delete().eq("id", id);
+      const { error } = await supabase.from("users").delete().eq("id", id).eq("organization_id", currentOrganizationId);
       if (error) { console.error("deleteUser error:", error); return showToast(error.message, "err"); }
       setUsers(p => p.filter(u => u.id !== id));
       showToast("ユーザーを削除しました");
@@ -866,7 +859,7 @@ export default function App() {
   const saveLocation = async () => {
     if (!locPreview) return;
     setLocSaving(true);
-    const { error } = await supabase.from("settings").upsert({ org: currentOrg, location_name:locPreview.name, lat:locPreview.lat, lng:locPreview.lng }, { onConflict: "org" });
+    const { error } = await supabase.from("settings").upsert({ org: currentOrg, organization_id: currentOrganizationId, location_name:locPreview.name, lat:locPreview.lat, lng:locPreview.lng }, { onConflict: "org" });
     setLocSaving(false);
     if (error) return showToast(error.message, "err");
     setWeatherCoords(locPreview);
@@ -882,7 +875,7 @@ export default function App() {
       name: cForm.name.trim(),
       start_date: cForm.start_date,
       target_yield: cForm.target_yield ? Number(cForm.target_yield) : null,
-      org: currentOrg,
+      org: currentOrg, organization_id: currentOrganizationId,
     }]).select();
     setSubmitting(false);
     if (error) { console.error("addCrop error:", error); return showToast(error.message, "err"); }
@@ -960,7 +953,7 @@ export default function App() {
   const addField = async () => {
     if (!fForm.name.trim()) return;
     setSubmitting(true);
-    const { data, error } = await supabase.from("fields").insert([{ ...fForm, org: currentOrg }]).select();
+    const { data, error } = await supabase.from("fields").insert([{ ...fForm, org: currentOrg, organization_id: currentOrganizationId }]).select();
     setSubmitting(false);
     if (error) { console.error("addField error:", error); return showToast(error.message, "err"); }
     if (data) setFields(p => [...p, data[0] as Field]);
@@ -1010,7 +1003,7 @@ export default function App() {
     if (!pForm.name.trim()) return;
     setSubmitting(true);
     const { data, error } = await supabase.from("pesticides").insert([{
-      ...pForm, org: currentOrg,
+      ...pForm, org: currentOrg, organization_id: currentOrganizationId,
       master_id: selectedMaster?.id || null,
     }]).select();
     setSubmitting(false);
@@ -1033,6 +1026,7 @@ export default function App() {
     try {
       const { data, error } = await supabase.from("schedules").insert([{
         user_id: currentUser.id,
+        organization_id: currentOrganizationId,
         title,
         date,
         note: note || null,
@@ -1052,7 +1046,7 @@ export default function App() {
 
   const loadComments = async (targetType: string, targetId: string): Promise<Comment[]> => {
     const { data } = await supabase.from("comments")
-      .select("*").eq("target_type", targetType).eq("target_id", targetId).order("created_at");
+      .select("*").eq("target_type", targetType).eq("target_id", targetId).eq("organization_id", currentOrganizationId).order("created_at");
     return (data ?? []) as Comment[];
   };
 
@@ -1060,14 +1054,14 @@ export default function App() {
     if (!currentUser) return false;
     const { data, error } = await supabase.from("comments").insert([{
       target_type: targetType, target_id: targetId,
-      user_id: currentUser.id, message,
+      user_id: currentUser.id, message, organization_id: currentOrganizationId,
     }]).select().single();
     if (!error && data) setAllComments(prev => [data as Comment, ...prev]);
     return !error;
   };
 
   const editComment = async (id: string, message: string): Promise<boolean> => {
-    const { error } = await supabase.from("comments").update({ message }).eq("id", id);
+    const { error } = await supabase.from("comments").update({ message }).eq("id", id).eq("organization_id", currentOrganizationId);
     if (!error) setAllComments(prev => prev.map(cm => cm.id === id ? { ...cm, message } : cm));
     return !error;
   };
@@ -2692,6 +2686,7 @@ export default function App() {
             crops={crops}
             fields={fields}
             currentOrg={currentOrg}
+            currentOrganizationId={currentOrganizationId}
             currentUserId={currentUser?.id}
             isAdmin={isAdmin}
             onAdd={p => setProjects(prev => [p as Project, ...prev])}
