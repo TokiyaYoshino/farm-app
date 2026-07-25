@@ -52,7 +52,7 @@
 
 ### 移行順序（安全にやる）
 1. ✅ 完了（2026-07-22）: `organizations`テーブル作成＋既存データに「霧珠ファーム」1組織を割り当て（`org="kishu"`→organization_id紐付け）。SQL: `scripts/migrations/2026-07-22-organizations-step1.sql`（Supabase側で実行済み）。あわせて`users.login_id`のunique制約も実行済み（重複0件を確認の上、`2026-07-22-login-id-unique.sql`適用）
-2. ✅ 完了（2026-07-22）: 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化。SQL: `scripts/migrations/2026-07-22-organization-id-columns.sql`（Supabase側で実行待ち・実行後に3へ）。クライアントクエリ側も対応済み（上記表参照）
+2. ✅ 完了（2026-07-22）: 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化。SQL: `scripts/migrations/2026-07-22-organization-id-columns.sql`（Supabase側で実行済み）。クライアントクエリ側も対応済み（上記表参照）
 3. ⏳ 未着手（要ユーザー確認・cross-org検証が必要なため保留中）: JWTクレーム設定→RLS実ポリシーを1テーブルずつ適用しながらクライアントクエリを更新
 4. 全テーブル移行後に`allow_all`ポリシーを撤廃
 5. 2組織目を受け入れる前に、別Supabaseユーザーで越境アクセス不可を検証
