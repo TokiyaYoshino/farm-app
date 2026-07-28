@@ -5,10 +5,12 @@
 // クライアント側で整形済みのテキストを受け取る疎結合設計にしているため、
 // reportsテーブルのスキーマ変更の影響を受けない。
 
-export default async function handler(req: any, res: any) {
+import type { ApiRequest, ApiResponse } from "./types";
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { records, date, farmName } = req.body ?? {};
+  const { records, date, farmName } = (req.body ?? {}) as { records?: string; date?: string; farmName?: string };
   if (!records || typeof records !== "string" || !records.trim()) {
     return res.status(400).json({ error: "records required" });
   }

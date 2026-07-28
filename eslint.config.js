@@ -19,5 +19,10 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // 全角スペース（　）を日本語UIテキストの区切りとして意図的に使っている箇所があるため、
+      // テンプレートリテラル・JSXテキスト内は対象外にする
+      'no-irregular-whitespace': ['error', { skipTemplates: true, skipJSXText: true }],
+    },
   },
 ])

@@ -6,10 +6,12 @@
 // クライアント側で整形済みのテキストを受け取る疎結合設計にしているため、
 // reportsテーブルのスキーマ変更の影響を受けない（generate-report.tsと同じ設計）。
 
-export default async function handler(req: any, res: any) {
+import type { ApiRequest, ApiResponse } from "./types";
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { question, records, recordCount } = req.body ?? {};
+  const { question, records, recordCount } = (req.body ?? {}) as { question?: string; records?: string; recordCount?: number };
   if (!question || typeof question !== "string" || !question.trim()) {
     return res.status(400).json({ error: "question required" });
   }

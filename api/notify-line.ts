@@ -1,11 +1,13 @@
+import type { ApiRequest, ApiResponse } from "./types";
+
 // マルチテナント化: LINE通知先を organizations テーブルの組織別設定から取得できるようにする。
 // organization_id が渡され、かつ organizations テーブル/該当行が存在する場合はそちらを優先し、
-// 取得できない場合（未マイグレーション・未設定・取得失敗）は既存の環境変数にフォールバックする。
+// 取得できない場合（未設定・取得失敗）は既存の環境変数にフォールバックする。
 // 詳細: docs/adr-001-multitenancy-and-ai.md
-export default async function handler(req: any, res: any) {
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { message, organization_id } = req.body ?? {};
+  const { message, organization_id } = (req.body ?? {}) as { message?: string; organization_id?: string };
   if (!message) return res.status(400).json({ error: "message required" });
 
   let token   = process.env.LINE_CHANNEL_ACCESS_TOKEN;

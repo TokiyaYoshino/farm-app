@@ -29,7 +29,7 @@ interface Props {
   crops:          Crop[];
   fields:         Field[];
   currentOrg:     string;
-  currentOrganizationId?: string | null;
+  currentOrganizationId: string | null;
   currentUserId?: number;
   isAdmin:        boolean;
   onAdd:    (p: Project) => void;
@@ -163,13 +163,7 @@ export default function GanttChart({
     if (!form.name.trim()) { setErrMsg("計画名を入力してください"); return; }
     setSubmitting(true); setErrMsg("");
     const { data, error } = await supabase.from("projects")
-      .insert([{
-        name:form.name.trim(), crop_id:form.crop_id||null, field:form.field||null,
-        start_date:form.start_date||null, end_date:form.end_date||null, status:"active",
-        org:currentOrg, created_by:currentUserId, color:form.color,
-        // organization_id 列がまだ無い間はキー自体を含めない（insertがエラーになるため）
-        ...(currentOrganizationId ? { organization_id: currentOrganizationId } : {}),
-      }])
+      .insert([{ name:form.name.trim(), crop_id:form.crop_id||null, field:form.field||null, start_date:form.start_date||null, end_date:form.end_date||null, status:"active", org:currentOrg, organization_id:currentOrganizationId, created_by:currentUserId, color:form.color }])
       .select().single();
     setSubmitting(false);
     if (error) { setErrMsg(error.message); return; }

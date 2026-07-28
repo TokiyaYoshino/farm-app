@@ -6,10 +6,12 @@
 // 天気取得自体はクライアント側の無料APIで完結し、このAPIは助言文生成のみを担う
 // （generate-report.ts / search-chat.tsと同じ疎結合設計）。
 
-export default async function handler(req: any, res: any) {
+import type { ApiRequest, ApiResponse } from "./types";
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { forecast } = req.body ?? {};
+  const { forecast } = (req.body ?? {}) as { forecast?: string };
   if (!forecast || typeof forecast !== "string" || !forecast.trim()) {
     return res.status(400).json({ error: "forecast required" });
   }

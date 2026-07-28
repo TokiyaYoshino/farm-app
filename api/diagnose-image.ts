@@ -6,10 +6,12 @@
 // 画像本体はサーバーを経由させず公開URLをそのままOpenAIに渡す疎結合設計
 // （generate-report.ts / search-chat.ts / pest-control-advice.tsと同じ方針）。
 
-export default async function handler(req: any, res: any) {
+import type { ApiRequest, ApiResponse } from "./types";
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { imageUrl, cropName } = req.body ?? {};
+  const { imageUrl, cropName } = (req.body ?? {}) as { imageUrl?: string; cropName?: string };
   if (!imageUrl || typeof imageUrl !== "string" || !/^https?:\/\//.test(imageUrl)) {
     return res.status(400).json({ error: "imageUrl required" });
   }

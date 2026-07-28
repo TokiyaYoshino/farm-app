@@ -32,44 +32,32 @@
 
 ### 改修箇所の実測（コード調査、2026-07-19）
 
-`src/App.tsx`・`api/`を実際に調査した結果、org非スコープのクエリ／ハードコードは以下の箇所に存在する。
+`src/App.tsx`・`api/`を実際に調査した結果、org非スコープのクエリ／ハードコードは以下の箇所に存在した。2026-07-22時点でほぼ対応済み（✅）、`api/notify-line.ts`のみ2026-07-28に対応。
 
 | ファイル:行 | 内容 | 対応 |
 |---|---|---|
-| `src/App.tsx:395` | `users`全件取得（起動時） | ✅ 自分の行をauth_idで先に特定→`organization_id`（無ければ`org`）でフィルタして取得に変更 |
-| `src/App.tsx:554` | `login_id`でのユーザー検索（ログイン時） | 対応不要と判断（`login_id`をorg横断一意にしたため現状のままでよい。下記「新たに見つかった論点」参照） |
-| `src/App.tsx:578` | ユーザー招待後の`users`再取得 | ✅ 同上のフォールバック付きフィルタ |
-| `src/App.tsx:938` | `users`削除 | ✅ `org`（＋`organization_id`があれば併用）一致を削除条件に追加。列がすでにあるorgでの即時対応 |
-| `src/App.tsx:416` | `comments`一覧取得 | ✅ `organization_id`列があればサーバー側フィルタ、無ければ既存の報告/予定ID突合フィルタを維持 |
-| `src/App.tsx:1152` `1159` `1168` | `comments`取得・追加・更新 | ✅ 同上のフォールバック実装 |
-| `src/App.tsx:410` | `schedules`取得（`orgUserIds`経由の間接絞り込み） | ✅ `organization_id`列があれば直接フィルタ、無ければ既存の`orgUserIds`絞り込みを維持 |
-| `src/App.tsx:1132` | `schedules`追加 | ✅ `organization_id`があれば付与 |
-| `api/set-user-auth.ts` | `@kishu-farm.system`ドメイン・`org ?? "kishu"`のハードコード | ✅ `organization`/`organization_id`パラメータ化（未指定時は従来通り`kishu`にフォールバック） |
-| `api/notify-line.ts` | `LINE_CHANNEL_ACCESS_TOKEN`/`LINE_GROUP_ID`が環境変数1組固定 | ✅ `organization_id`が渡された場合`organizations`テーブルの値を優先し、無ければ環境変数にフォールバック |
+| `src/App.tsx` | `users`全件取得（管理画面） | ✅ 自分の行をauth_idで特定→`organization_id`で組織内のみ取得に変更 |
+| `src/App.tsx` | `login_id`でのユーザー検索（ログイン時） | 対応不要と判断（下記「新たに見つかった論点」参照。`login_id`をorg横断一意にしたためこのままでよい） |
+| `src/App.tsx` | ユーザー招待後の`users`再取得 | ✅ `organization_id`でフィルタ |
+| `src/App.tsx` | `users`削除 | ✅ `organization_id`一致を削除条件に追加 |
+| `src/App.tsx` | `comments`取得・追加・更新 | ✅ `organization_id`列追加の上でフィルタ・書き込み時に付与 |
+| `src/App.tsx` | `schedules`取得（`orgUserIds`経由の間接絞り込み） | ✅ `organization_id`列を追加し直接フィルタに変更 |
+| `src/App.tsx` / `src/components/GanttChart.tsx` | `crops`/`fields`/`reports`/`pesticides`/`settings`/`projects`への書き込み | ✅ `organization_id`をあわせて設定（列がNOT NULLのため必須） |
+| `api/set-user-auth.ts` | `org ?? "kishu"`のハードコード（新規作成時） | ✅ クライアントから`organization_id`を受け取り必須化。`@kishu-farm.system`ドメインは影響小のため未対応のまま |
+| `api/notify-line.ts` | `LINE_CHANNEL_ACCESS_TOKEN`/`LINE_GROUP_ID`が環境変数1組固定 | ✅ 2026-07-28対応。`organization_id`が渡された場合`organizations`テーブルの値を優先し、取得できなければ既存の環境変数にフォールバック |
 
-**規模感**: `App.tsx`単体で最低9箇所のクエリ修正、APIエンドポイント2本の書き換え。「数週間規模」という見積りは妥当だが、内訳としてはクエリ修正自体は数日、残りは下記の設計課題の解決とRLSポリシーの段階適用・越境検証に費やす時間が大きい。
+**規模感**: `App.tsx`単体で最低9箇所のクエリ修正、APIエンドポイント2本の書き換え。「数週間規模」という見積りは妥当だが、内訳としてはクエリ修正自体は数日、残りは下記の設計課題の解決とRLSポリシーの段階適用・越境検証に費やす時間が大きい。**クエリ修正自体（移行順序2.）は2026-07-22に完了**。RLS実ポリシー化（移行順序3.〜5.）が残作業。
 
-**2026-07-28更新**: 上記のクエリ修正・APIパラメータ化に着手（`claude/multitenancy-rls`ブランチ）。詳細と実装方針は`docs/multitenancy-progress.md`参照。
-
-**新たに見つかった論点 → 2026-07-28 決定**: ログインは`login_id`のみで行われており（org選択UIがない）、`login_id`を全org横断でユニークにするか、ログイン画面にorg選択／サブドメインを追加するかの設計判断がまだなかった。
-
-→ **`login_id`を全org横断で一意にする方針に決定。ログイン画面へのorg選択UIは追加しない**（`docs/db/2026-07-28-01-organizations-and-login-id.sql`でDB制約化）。
-
-理由:
-1. 現行ログインフロー（`login_id`だけで`email`を検索→認証）を変えずに済み、UI追加コストがかからない
-2. 過去に同じ論点を検討した形跡（`origin/claude/multitenancy-step1`ブランチ、2026-07-22、mainには未マージ）があり、同じ結論（org横断一意・org選択UIなし）に達していた。今回はその判断を踏襲する
-3. 現状1組織のみで、複数組織を跨いで同じ`login_id`を使いたいという要求も無い
-
-詳細は`docs/decision-log.md`参照。
+**新たに見つかった論点 → 2026-07-22 決定**: ログインは`login_id`のみで行われており（org選択UIがない）、`login_id`を全org横断でユニークにするか、ログイン画面にorg選択／サブドメインを追加するかの設計判断がまだなかった。→ **`login_id`を全org横断で一意にする方針に決定。ログイン画面へのorg選択UI追加は行わない**（`scripts/migrations/2026-07-22-login-id-unique.sql`でDB制約化）。詳細は`docs/decision-log.md`参照。
 
 ### 移行順序（安全にやる）
-1. `organizations`テーブル作成＋既存データに「霧珠ファーム」1組織を割り当て（`org="kishu"`→organization_id紐付け）＋`login_id`一意制約。SQL: `docs/db/2026-07-28-01-organizations-and-login-id.sql`（**未実行・レビュー用に起草のみ**。適用はユーザーが手動で行う）
-2. 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化。SQL: `docs/db/2026-07-28-02-organization-id-columns.sql`（**未実行**。ステップ1適用後に実行すること）。クライアントコード（`src/App.tsx`等）は列が無い状態でも今まで通り動作し、列が追加されると自動的にそちらを使うようフォールバック実装済み（`docs/multitenancy-progress.md`参照）
-3. JWTクレーム設定→RLS実ポリシーを1テーブルずつ適用しながらクライアントクエリを更新
+1. ✅ 完了（2026-07-22）: `organizations`テーブル作成＋既存データに「霧珠ファーム」1組織を割り当て（`org="kishu"`→organization_id紐付け）。SQL: `scripts/migrations/2026-07-22-organizations-step1.sql`（Supabase側で実行済み）。あわせて`users.login_id`のunique制約も実行済み（重複0件を確認の上、`2026-07-22-login-id-unique.sql`適用）
+2. ✅ 完了（2026-07-22）: 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化。SQL: `scripts/migrations/2026-07-22-organization-id-columns.sql`（Supabase側で実行済み）。クライアントクエリ側も対応済み（上記表参照）
+3. ⏳ 未着手（要ユーザー確認・cross-org検証が必要なため保留中）: JWTクレーム設定→RLS実ポリシーを1テーブルずつ適用しながらクライアントクエリを更新
 4. 全テーブル移行後に`allow_all`ポリシーを撤廃
 5. 2組織目を受け入れる前に、別Supabaseユーザーで越境アクセス不可を検証（チェックリスト: `docs/multitenancy-progress.md`）
 
-> ⚠️ **注意（2026-07-28調査で判明）**: `origin/claude/multitenancy-step1-done` / `step2-done`という未マージのリモートブランチに「上記1・2を本番Supabaseで実行完了」と記録するコミットが存在する。しかしこの作業はmainにマージされておらず、現在のmain（このADRの実装元）のコードにもドキュメントにも反映されていない。**本番DBの実際のスキーマ状態（`organizations`テーブルやorganization_id列が既に存在するか）は今回未確認**。上記SQLは未実行を前提に`IF NOT EXISTS`等で冪等に書いているため、実行済み環境に流しても壊れないが、適用前に必ずSupabaseダッシュボードで現況を確認すること。
+> ⚠️ **2026-07-28追記（重要・ブランチ管理上の発見）**: このADRのステップ1・2は`origin/claude/multitenancy-step1`/`step2`系ブランチのPR #1〜#4として**既にmainにマージ・本番適用済み**（上記の表・移行順序に反映済み）。しかし作業時のローカル`main`ブランチが`origin/main`から9コミット遅れて分岐しており、`claude/multitenancy-rls`ブランチ着手時点ではこの事実に気づかず、一時「未実行」前提のフォールバック実装をやり直してしまった。最終的に`origin/main`を正としてマージ・統合済みだが、**ローカルmainとorigin/mainの分岐（ローカルmain側にのみ存在するAI機能7コミット分の未push作業を含む）は本タスクのスコープ外のため未解決のまま**残っている。詳細は`docs/multitenancy-progress.md`の「重要な発見」節を参照し、必ず対応すること。
 
 ---
 
