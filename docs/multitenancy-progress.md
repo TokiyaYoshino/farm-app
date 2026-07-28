@@ -70,7 +70,13 @@
 1. **最優先: ローカルmain/origin/mainの分岐解消**（前述）
 2. **SupabaseのJWTカスタムクレーム／Auth Hook設定**: RLS実ポリシー化に必要。Supabaseダッシュボード側の設定作業
 3. **Vercel ProductionへのOPENAI_API_KEY登録**: 既知の課題として、現状Development環境にしか登録されていない（AI機能関連、本タスクとは別件だが申し送り事項として記載）
-4. **最終レビュー・マージ・デプロイの判断**: このブランチ（`claude/multitenancy-rls`）はpushのみでmainにはマージしていない。`origin/main`が既にマルチテナント化step1/2を含んでいるため、このブランチをマージする際は差分が小さいはず（notify-line.ts・手動テストチェックリスト・ADR/decision-logの追記のみ）だが、必ず`git diff origin/main claude/multitenancy-rls`で確認すること
+4. **最終レビュー・マージ・デプロイの判断**: このブランチ（`claude/multitenancy-rls`）はpushのみでmainにはマージしていない。
+   `git diff origin/main claude/multitenancy-rls`で確認すると、想定より差分が大きい（api/diagnose-image.ts等5ファイルが
+   「新規追加」として出る）。これは**マルチテナント化の差分ではなく**、ローカルmain分岐解消のために`origin/main`を
+   マージした結果、ローカルmain固有だったAI機能7コミット分（origin未pushだった音声メモ・検索チャット・天気助言・
+   画像診断・AI日報等）も一緒にこのブランチに載っているため。**このブランチをmainにマージすると、
+   マルチテナント化の残作業だけでなく、これまでorigin/mainに存在しなかったAI機能一式も同時に本番へ出ることになる**。
+   意図しない同時デプロイにならないよう、マージ前に必ず内容を確認すること
 5. **`~/Projects/kishufarm/strategy/03-agritech.md`の更新**: ADR-001が言及する外部公開方針との整合性確認（本リポジトリ外）
 
 ---
