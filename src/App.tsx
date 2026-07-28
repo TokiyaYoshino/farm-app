@@ -147,7 +147,7 @@ async function fetchPestControlForecast(lat: number, lng: number): Promise<strin
 
 // ─── 型 ─────────────────────────────────────────────────
 type Role = "admin" | "worker" | "viewer";
-interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; }
+interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; organization_id?: string; }
 interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; }
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
@@ -238,6 +238,12 @@ const globalStyle = `
 // ─── ユーティリティ ──────────────────────────────────────
 const css = (o: CSSProperties): CSSProperties => o;
 
+// ─── マルチテナント化 移行用フォールバック ───────────────────
+// organization_id 列（docs/db/2026-07-28-02-*.sql）がまだ存在しない/バックフィル前の間は
+// 単一組織「霧珠ファーム」として現状と同じ挙動にするための既定値。
+// 詳細: docs/adr-001-multitenancy-and-ai.md, docs/multitenancy-progress.md
+const FALLBACK_ORG = "kishu";
+
 export default function App() {
   // ─── Auth state ──────────────────────────────────────────
   const [authSession, setAuthSession]     = useState<any>(null);
@@ -250,7 +256,8 @@ export default function App() {
 
   // ─── App state ───────────────────────────────────────────
   const [tab, setTab]                     = useState("home");
-  const [currentOrg, setCurrentOrg]       = useState("kishu");
+  const [currentOrg, setCurrentOrg]       = useState(FALLBACK_ORG);
+  const [currentOrganizationId, setCurrentOrganizationId] = useState<string | null>(null);
   const [users, setUsers]                 = useState<User[]>([]);
   const [crops, setCrops]                 = useState<Crop[]>([]);
   const [fields, setFields]               = useState<Field[]>([]);
@@ -367,6 +374,11 @@ export default function App() {
   const [diagError, setDiagError]     = useState("");
   useEffect(() => { setDiagResult(""); setDiagError(""); setDiagLoading(false); }, [selectedReport?.id]);
 
+  // organization_id 列がまだ無い/未バックフィルの間（currentOrganizationId === null）は
+  // 書き込みに organization_id を含めない（列が存在せず insert がエラーになるため）。
+  // マイグレーション適用後、currentOrganizationId が入り次第そのまま書き込まれるようになる。
+  const orgIdField = currentOrganizationId ? { organization_id: currentOrganizationId } : {};
+
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -391,29 +403,47 @@ export default function App() {
     (async () => {
       try {
       setLoading(true);
-      // 全ユーザー取得してauth_idで現在ユーザーを特定
-      const { data: allUsers } = await supabase.from("users").select("*").order("id");
-      const userList = (allUsers ?? []) as User[];
-      const me = userList.find(x => x.auth_id === authSession.user.id) ?? null;
-      const org = me?.org ?? "kishu";
+      // 自分の行だけをauth_idで先に特定する（旧実装は全ユーザーを取得してからクライアント側で絞っていた＝他組織のユーザー情報が露出していた）
+      const { data: meRow } = await supabase.from("users").select("*").eq("auth_id", authSession.user.id).maybeSingle();
+      const me = (meRow ?? null) as User | null;
+      const org = me?.org ?? FALLBACK_ORG;
+      // organization_id 列（マイグレーション未適用の間は undefined/null）。適用後は自動的にこちらが使われる
+      const organizationId = me?.organization_id ?? null;
       setCurrentOrg(org);
+      setCurrentOrganizationId(organizationId);
       if (me) { setCurrentUser(me); setRForm(f => ({ ...f, user_id: me.id })); }
 
-      // org でフィルタしてデータ取得
-      const orgUserIds = userList.filter(x => x.org === org).map(u => u.id);
+      // 組織スコープでユーザー一覧を取得（organization_id 列があればそちらを優先、無ければ既存の org 文字列でフィルタ）
+      const usersQuery = organizationId
+        ? supabase.from("users").select("*").eq("organization_id", organizationId).order("id")
+        : supabase.from("users").select("*").eq("org", org).order("id");
+      const { data: allUsers } = await usersQuery;
+      const userList = (allUsers ?? []) as User[];
+      const orgUserIds = userList.map(u => u.id);
+
+      // schedules: organization_id 列があれば直接フィルタ、無ければ従来通り user_id 経由（間接絞り込み）
+      const schedulesPromise = organizationId
+        ? supabase.from("schedules").select("*").eq("organization_id", organizationId).order("date")
+        : (orgUserIds.length > 0
+            ? supabase.from("schedules").select("*").in("user_id", orgUserIds).order("date")
+            : Promise.resolve({ data: null as Schedule[] | null, error: null }));
+
+      // comments: organization_id 列があれば直接フィルタ、無ければ全件取得して後段でreport/schedule突合フィルタ（従来の暫定対策を維持）
+      const commentsQuery = organizationId
+        ? supabase.from("comments").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false })
+        : supabase.from("comments").select("*").order("created_at", { ascending: false });
+
       const [{ data: c, error: cErr }, { data: fd, error: fdErr }, { data: r, error: rErr }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: tkt }, { data: wc }, { data: cmts }] = await Promise.all([
         supabase.from("crops").select("*").eq("org", org).order("id"),
         supabase.from("fields").select("*").eq("org", org).order("id"),
         supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
         supabase.from("settings").select("*").eq("org", org).maybeSingle(),
-        orgUserIds.length > 0
-          ? supabase.from("schedules").select("*").in("user_id", orgUserIds).order("date")
-          : Promise.resolve({ data: null as any, error: null }),
+        schedulesPromise,
         supabase.from("pesticides").select("*").eq("org", org).order("name"),
         supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
         supabase.from("tickets").select("*").eq("org", org),
         supabase.from("work_categories").select("*").order("id"),
-        supabase.from("comments").select("*").order("created_at", { ascending: false }),
+        commentsQuery,
       ]);
       if (cErr)  console.error("crops fetch error:",   cErr);
       if (fdErr) console.error("fields fetch error:",  fdErr);
@@ -423,7 +453,7 @@ export default function App() {
         : { lat:35.0167, lng:135.5833, name:"京都府亀岡市" };
       setWeatherCoords(loc);
       setLocInput(loc.name);
-      setUsers(userList.filter(x => x.org === org));
+      setUsers(userList);
       if (c)  { setCrops(c as Crop[]); setRForm(f => ({ ...f, crop_id: (c[0] as Crop)?.id || 0 })); }
       if (fd) { setFields(fd as Field[]); setRForm(f => ({ ...f, field: (fd[0] as Field)?.name || "" })); }
       if (r)  setReports(r as Report[]);
@@ -433,12 +463,17 @@ export default function App() {
       if (tkt) setTickets(tkt as Ticket[]);
       if (wc) setWorkCategories(wc as WorkCategory[]);
       if (cmts) {
-        // comments に org 列がないため、org 内の報告/予定に紐づくものだけ残す
-        const reportIds   = new Set((r ?? []).map((x: Report) => String(x.id)));
-        const scheduleIds = new Set(((sch ?? []) as Schedule[]).map(x => x.id));
-        setAllComments((cmts as Comment[]).filter(cm =>
-          cm.target_type === "report" ? reportIds.has(cm.target_id) : scheduleIds.has(cm.target_id)
-        ));
+        if (organizationId) {
+          // organization_id 列でサーバー側フィルタ済み
+          setAllComments(cmts as Comment[]);
+        } else {
+          // 列がまだ無い間は、org 内の報告/予定に紐づくものだけ残す（既存の暫定フィルタ）
+          const reportIds   = new Set((r ?? []).map((x: Report) => String(x.id)));
+          const scheduleIds = new Set(((sch ?? []) as Schedule[]).map(x => x.id));
+          setAllComments((cmts as Comment[]).filter(cm =>
+            cm.target_type === "report" ? reportIds.has(cm.target_id) : scheduleIds.has(cm.target_id)
+          ));
+        }
       }
       setLoading(false);
       } catch (e) {
@@ -550,6 +585,9 @@ export default function App() {
     setLoginBusy(true);
     setLoginError("");
     try {
+      // login_id は org 横断で一意にする設計（docs/decision-log.md 2026-07-28）のため、
+      // ログイン時点で組織が未確定でも login_id だけの検索で安全に一意特定できる。
+      // マイグレーション（docs/db/2026-07-28-01-*.sql の unique 制約）適用後はDB側でも保証される。
       const { data: ud, error: ue } = await supabase
         .from("users").select("email").eq("login_id", loginId.trim()).maybeSingle();
       if (ue || !ud?.email) { setLoginError("ユーザーIDが見つかりません"); return; }
@@ -571,11 +609,14 @@ export default function App() {
       const r = await fetch("/api/set-user-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, role, login_id, password, org: currentOrg }),
+        body: JSON.stringify({ name, role, login_id, password, org: currentOrg, organization_id: currentOrganizationId }),
       });
       const d = await r.json();
       if (!r.ok) { showToast(d.error ?? "作成に失敗しました", "err"); return; }
-      const { data: fresh } = await supabase.from("users").select("*").order("id");
+      const freshQuery = currentOrganizationId
+        ? supabase.from("users").select("*").eq("organization_id", currentOrganizationId).order("id")
+        : supabase.from("users").select("*").eq("org", currentOrg).order("id");
+      const { data: fresh } = await freshQuery;
       if (fresh) setUsers(fresh as User[]);
       setInvForm({ name:"", role:"worker", password:"", login_id:"" });
       showToast(`${name} のアカウントを作成しました`);
@@ -636,7 +677,7 @@ export default function App() {
       const pw = periodWeather;
       const w = pw ? null : (wxAuto || (wxManual.temp ? wxManual : null));
       const { data, error } = await supabase.from("reports").insert([{
-        ...rForm, image_url: imageUrl, org: currentOrg,
+        ...rForm, image_url: imageUrl, org: currentOrg, ...orgIdField,
         weather:      pw?.weather  ?? w?.label    ?? "",
         weather_icon: "",
         temp:         pw?.temp     ?? (w?.temp     ? String(w.temp)     : ""),
@@ -703,7 +744,7 @@ export default function App() {
         fetch("/api/notify-line", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: lines.join("\n") }),
+          body: JSON.stringify({ message: lines.join("\n"), organization_id: currentOrganizationId }),
         }).catch(e => console.error("LINE notify error:", e));
       }
     } catch (e: unknown) {
@@ -935,7 +976,10 @@ export default function App() {
 
   const deleteUser = (id: number) =>
     confirmDelete("このユーザーを削除しますか？", async () => {
-      const { error } = await supabase.from("users").delete().eq("id", id);
+      // 他組織のユーザーを誤って（またはID推測で）削除できないよう org（＋organization_id があれば併用）で絞る
+      let delQuery = supabase.from("users").delete().eq("id", id).eq("org", currentOrg);
+      if (currentOrganizationId) delQuery = delQuery.eq("organization_id", currentOrganizationId);
+      const { error } = await delQuery;
       if (error) { console.error("deleteUser error:", error); return showToast(error.message, "err"); }
       setUsers(p => p.filter(u => u.id !== id));
       showToast("ユーザーを削除しました");
@@ -964,7 +1008,7 @@ export default function App() {
   const saveLocation = async () => {
     if (!locPreview) return;
     setLocSaving(true);
-    const { error } = await supabase.from("settings").upsert({ org: currentOrg, location_name:locPreview.name, lat:locPreview.lat, lng:locPreview.lng }, { onConflict: "org" });
+    const { error } = await supabase.from("settings").upsert({ org: currentOrg, ...orgIdField, location_name:locPreview.name, lat:locPreview.lat, lng:locPreview.lng }, { onConflict: "org" });
     setLocSaving(false);
     if (error) return showToast(error.message, "err");
     setWeatherCoords(locPreview);
@@ -980,7 +1024,7 @@ export default function App() {
       name: cForm.name.trim(),
       start_date: cForm.start_date,
       target_yield: cForm.target_yield ? Number(cForm.target_yield) : null,
-      org: currentOrg,
+      org: currentOrg, ...orgIdField,
     }]).select();
     setSubmitting(false);
     if (error) { console.error("addCrop error:", error); return showToast(error.message, "err"); }
@@ -1058,7 +1102,7 @@ export default function App() {
   const addField = async () => {
     if (!fForm.name.trim()) return;
     setSubmitting(true);
-    const { data, error } = await supabase.from("fields").insert([{ ...fForm, org: currentOrg }]).select();
+    const { data, error } = await supabase.from("fields").insert([{ ...fForm, org: currentOrg, ...orgIdField }]).select();
     setSubmitting(false);
     if (error) { console.error("addField error:", error); return showToast(error.message, "err"); }
     if (data) setFields(p => [...p, data[0] as Field]);
@@ -1108,7 +1152,7 @@ export default function App() {
     if (!pForm.name.trim()) return;
     setSubmitting(true);
     const { data, error } = await supabase.from("pesticides").insert([{
-      ...pForm, org: currentOrg,
+      ...pForm, org: currentOrg, ...orgIdField,
       master_id: selectedMaster?.id || null,
     }]).select();
     setSubmitting(false);
@@ -1138,6 +1182,7 @@ export default function App() {
         field: field || null,
         assigned_user_id: assignedUserId || null,
         work_type: workType || null,
+        ...orgIdField,
       }]).select().single();
       if (error) throw error;
       setSchedules(p => [...p, data as Schedule]);
@@ -1149,8 +1194,11 @@ export default function App() {
   };
 
   const loadComments = async (targetType: string, targetId: string): Promise<Comment[]> => {
-    const { data } = await supabase.from("comments")
+    // organization_id 列があれば併用フィルタ（列が無い間は target_type/target_id のみで従来通り絞り込み）
+    let q = supabase.from("comments")
       .select("*").eq("target_type", targetType).eq("target_id", targetId).order("created_at");
+    if (currentOrganizationId) q = q.eq("organization_id", currentOrganizationId);
+    const { data } = await q;
     return (data ?? []) as Comment[];
   };
 
@@ -1159,13 +1207,17 @@ export default function App() {
     const { data, error } = await supabase.from("comments").insert([{
       target_type: targetType, target_id: targetId,
       user_id: currentUser.id, message,
+      ...orgIdField,
     }]).select().single();
     if (!error && data) setAllComments(prev => [data as Comment, ...prev]);
     return !error;
   };
 
   const editComment = async (id: string, message: string): Promise<boolean> => {
-    const { error } = await supabase.from("comments").update({ message }).eq("id", id);
+    // organization_id 列があれば他組織のコメントを誤って編集できないよう併用フィルタ
+    let q = supabase.from("comments").update({ message }).eq("id", id);
+    if (currentOrganizationId) q = q.eq("organization_id", currentOrganizationId);
+    const { error } = await q;
     if (!error) setAllComments(prev => prev.map(cm => cm.id === id ? { ...cm, message } : cm));
     return !error;
   };
@@ -2996,6 +3048,7 @@ export default function App() {
             crops={crops}
             fields={fields}
             currentOrg={currentOrg}
+            currentOrganizationId={currentOrganizationId}
             currentUserId={currentUser?.id}
             isAdmin={isAdmin}
             onAdd={p => setProjects(prev => [p as Project, ...prev])}
