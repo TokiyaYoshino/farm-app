@@ -3592,7 +3592,7 @@ export default function App() {
               placeholder="例: 先月のトマトの防除は何回した？"
               value={searchChatInput}
               onChange={e => setSearchChatInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !searchChatLoading) sendSearchChatMessage(); }}
+              onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing && !searchChatLoading) sendSearchChatMessage(); }}
               maxLength={400}
               disabled={searchChatLoading}
               autoComplete="off"
