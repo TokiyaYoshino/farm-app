@@ -13,7 +13,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
-  Download, FileText, FileSpreadsheet,
+  Download, FileText, FileSpreadsheet, Sparkles,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -28,6 +28,7 @@ import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
 import RowMenu from "./ui/RowMenu";
 import CommentThread from "./ui/CommentThread";
+import { canUseAiFeature } from "./ui/aiFeatures";
 
 const makePin = (color: string) => L.divIcon({
   className: "",
@@ -119,6 +120,30 @@ async function fetchWeatherForPeriod(
   idx.forEach(i => { codeCount[codes[i]] = (codeCount[codes[i]] ?? 0) + 1; });
   const dominant = parseInt(Object.entries(codeCount).sort((a, b) => b[1] - a[1])[0][0]);
   return { temp: avg(temps), humidity: avg(hums), rain: totalRain, weather: wmoToLabel(dominant) };
+}
+
+const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
+
+// 防除タイミング助言用: 今日から3日分の日次予報を人間可読テキストに整形する（無料API・キー不要）。
+async function fetchPestControlForecast(lat: number, lng: number): Promise<string> {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max` +
+    `&timezone=Asia%2FTokyo&forecast_days=3`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const days: string[] = data.daily?.time ?? [];
+  const codes: number[] = data.daily?.weather_code ?? [];
+  const tMax: number[] = data.daily?.temperature_2m_max ?? [];
+  const tMin: number[] = data.daily?.temperature_2m_min ?? [];
+  const rainSum: number[] = data.daily?.precipitation_sum ?? [];
+  const rainProb: number[] = data.daily?.precipitation_probability_max ?? [];
+  const windMax: number[] = data.daily?.wind_speed_10m_max ?? [];
+  return days.map((d, i) => {
+    const dt = new Date(d + "T00:00:00+09:00");
+    const label = `${d.slice(5).replace("-", "/")}(${WEEKDAY_JA[dt.getDay()]})`;
+    return `${label}: 天気${wmoToLabel(codes[i])} / 最高${Math.round(tMax[i])}℃・最低${Math.round(tMin[i])}℃ / ` +
+      `降水確率${Math.round(rainProb[i] ?? 0)}% / 降水量${(rainSum[i] ?? 0).toFixed(1)}mm / 最大風速${Math.round(windMax[i] ?? 0)}m/s`;
+  }).join("\n");
 }
 
 
@@ -318,6 +343,36 @@ export default function App() {
   const [exportTo, setExportTo]             = useState(() => new Date().toISOString().slice(0,10));
   const [exportCropId, setExportCropId]     = useState(0);        // 0 = すべて
   const [exportFieldName, setExportFieldName] = useState("");     // "" = すべて
+
+  // AI日報生成（PoC）
+  const [showReportGenSheet, setShowReportGenSheet] = useState(false);
+  const [genDate, setGenDate]               = useState(() => new Date().toISOString().slice(0,10));
+  const [genLoading, setGenLoading]         = useState(false);
+  const [genResult, setGenResult]           = useState("");
+  const [genError, setGenError]             = useState("");
+
+  // 音声メモをAIで振り分け
+  const [aiStructuring, setAiStructuring]   = useState(false);
+
+  // 記録検索チャット
+  const [showSearchChatSheet, setShowSearchChatSheet] = useState(false);
+  const [searchChatMessages, setSearchChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [searchChatInput, setSearchChatInput]     = useState("");
+  const [searchChatLoading, setSearchChatLoading] = useState(false);
+  const [searchChatError, setSearchChatError]     = useState("");
+
+  // 天気×防除タイミング助言
+  const [showPestAdviceSheet, setShowPestAdviceSheet] = useState(false);
+  const [pestAdviceForecast, setPestAdviceForecast] = useState("");
+  const [pestAdviceResult, setPestAdviceResult]     = useState("");
+  const [pestAdviceLoading, setPestAdviceLoading]   = useState(false);
+  const [pestAdviceError, setPestAdviceError]       = useState("");
+
+  // 病害虫画像診断
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult]   = useState("");
+  const [diagError, setDiagError]     = useState("");
+  useEffect(() => { setDiagResult(""); setDiagError(""); setDiagLoading(false); }, [selectedReport?.id]);
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
@@ -805,6 +860,55 @@ export default function App() {
     }
   };
 
+  // 音声メモをAIで作業報告フォームに振り分け
+  const structureVoiceNote = async () => {
+    if (!rForm.note.trim()) return showToast("メモが空です", "err");
+    setAiStructuring(true);
+    try {
+      const res = await fetch("/api/structure-voice", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript:     rForm.note,
+          fields:         fields.map(f => f.name),
+          workCategories: workCategories.length > 0 ? workCategories.map(c => c.name) : WORK_TEMPLATES,
+          pesticides:     pesticides.map(p => p.name),
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const s = await res.json();
+
+      setRForm(f => {
+        const next = { ...f, note: s.note || f.note };
+        if (s.field && fields.some(fd => fd.name === s.field)) next.field = s.field;
+        if (s.work_category) {
+          const cat = workCategories.find(c => c.name === s.work_category);
+          if (cat) {
+            next.work_category_id = cat.id;
+            next.work_type = cat.name;
+            next.quantity_unit = cat.unit ?? next.quantity_unit;
+          } else if (WORK_TEMPLATES.includes(s.work_category)) {
+            next.work_type = s.work_category;
+          }
+        }
+        if (s.quantity_value != null) { next.quantity_value = String(s.quantity_value); next.quantity = String(s.quantity_value); }
+        if (s.quantity_unit) next.quantity_unit = s.quantity_unit;
+        return next;
+      });
+      if (Array.isArray(s.pesticide_names) && s.pesticide_names.length > 0) {
+        const matchedIds = pesticides.filter(p => s.pesticide_names.includes(p.name)).map(p => p.id);
+        if (matchedIds.length > 0) setSelectedPesticides(prev => Array.from(new Set([...prev, ...matchedIds])));
+      }
+      if (s.soil_ph != null) setSoilPh(String(s.soil_ph));
+      showToast("AIでフォームに反映しました");
+    } catch (e: unknown) {
+      console.error("structure-voice error:", e);
+      showToast("AI整理に失敗しました", "err");
+    } finally {
+      setAiStructuring(false);
+    }
+  };
+
   const hasSpeech = typeof window !== "undefined" &&
     !!(window.SpeechRecognition ?? window.webkitSpeechRecognition);
 
@@ -1161,6 +1265,173 @@ export default function App() {
     background: active ? C.inkSoft : C.well, color: active ? C.ink : C.textSub,
     fontSize: 12, fontWeight: 600, cursor: "pointer",
   });
+
+  // ─── AI日報生成（PoC）─────────────────────────────────────
+  // その日の作業記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）
+  const formatDayRecords = (date: string): string => {
+    const dayReports = reports.filter(r => r.date === date);
+    if (dayReports.length === 0) return "";
+    return dayReports.map(r => {
+      const parts = [`【${cropName(r.crop_id)}${r.field ? "・" + r.field : ""}】`];
+      if (r.work_type) parts.push(`作業:${r.work_type}`);
+      if (r.quantity) parts.push(`数量:${r.quantity}`);
+      if (r.work_time) parts.push(`作業時間:${r.work_time}`);
+      const pests = (r.pesticides_used && r.pesticides_used.length > 0)
+        ? r.pesticides_used
+        : (r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : []);
+      if (pests.length > 0) {
+        const names = pests.map(u => {
+          const ps = pesticides.find(p => p.id === u.id);
+          return ps ? `${ps.name}${u.amount ? `(${u.amount})` : ""}` : "";
+        }).filter(Boolean).join("、");
+        if (names) parts.push(`農薬:${names}`);
+      }
+      if (r.soil_ph != null) parts.push(`土壌pH:${r.soil_ph}`);
+      if (r.note) parts.push(`メモ:${r.note}`);
+      parts.push(`担当:${userName(r.user_id)}`);
+      return parts.join(" / ");
+    }).join("\n");
+  };
+
+  const generateDailyReport = async () => {
+    setGenLoading(true); setGenError(""); setGenResult("");
+    const records = formatDayRecords(genDate);
+    if (!records) { setGenError("その日の作業記録がありません。"); setGenLoading(false); return; }
+    try {
+      const res = await fetch("/api/generate-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records, date: genDate }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.report) {
+        setGenResult(d.report);
+      } else {
+        setGenError(d.error || "生成に失敗しました。");
+      }
+    } catch {
+      setGenError("通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setGenLoading(false);
+    }
+  };
+
+  // ─── 天気×防除タイミング助言 ─────────────────────────────
+  // Open-Meteo（無料API）で3日分の予報を取得し、助言文生成のみOpenAIに任せる。
+  const generatePestControlAdvice = async () => {
+    const lat = weatherCoords?.lat;
+    const lng = weatherCoords?.lng;
+    if (lat == null || lng == null) { setPestAdviceError("位置情報が取得できません。"); return; }
+    setPestAdviceLoading(true); setPestAdviceError(""); setPestAdviceResult("");
+    try {
+      const forecast = await fetchPestControlForecast(lat, lng);
+      if (!forecast) { setPestAdviceError("天気予報を取得できませんでした。"); setPestAdviceLoading(false); return; }
+      setPestAdviceForecast(forecast);
+      const res = await fetch("/api/pest-control-advice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forecast }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.advice) {
+        setPestAdviceResult(d.advice);
+      } else {
+        setPestAdviceError(d.error || "助言の生成に失敗しました。");
+      }
+    } catch {
+      setPestAdviceError("通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setPestAdviceLoading(false);
+    }
+  };
+
+  // ─── 記録検索チャット ─────────────────────────────────────
+  // 検索対象の記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）。
+  // 一覧フィルタが有効ならその絞り込み結果を優先し、無効なら直近180日・最新200件にフォールバックする。
+  const formatRecordsForChat = (): { text: string; count: number } => {
+    const base = reportFilterActive ? filteredReports : reports;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 180);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const target = (reportFilterActive ? base : base.filter(r => r.date >= cutoffStr))
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 200);
+    const text = target.map(r => {
+      const parts = [`${r.date} 【${cropName(r.crop_id)}${r.field ? "・" + r.field : ""}】`];
+      if (r.work_type) parts.push(`作業:${r.work_type}`);
+      if (r.quantity) parts.push(`数量:${r.quantity}`);
+      const pests = (r.pesticides_used && r.pesticides_used.length > 0)
+        ? r.pesticides_used
+        : (r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : []);
+      if (pests.length > 0) {
+        const names = pests.map(u => {
+          const ps = pesticides.find(p => p.id === u.id);
+          return ps ? `${ps.name}${u.amount ? `(${u.amount})` : ""}` : "";
+        }).filter(Boolean).join("、");
+        if (names) parts.push(`農薬:${names}`);
+      }
+      if (r.soil_ph != null) parts.push(`土壌pH:${r.soil_ph}`);
+      if (r.note) parts.push(`メモ:${r.note}`);
+      parts.push(`担当:${userName(r.user_id)}`);
+      return parts.join(" / ");
+    }).join("\n");
+    return { text, count: target.length };
+  };
+
+  const sendSearchChatMessage = async () => {
+    const question = searchChatInput.trim();
+    if (!question || searchChatLoading) return;
+    const { text: records, count } = formatRecordsForChat();
+    if (!records) {
+      setSearchChatError("対象の作業記録がありません。");
+      return;
+    }
+    setSearchChatMessages(m => [...m, { role: "user", content: question }]);
+    setSearchChatInput("");
+    setSearchChatLoading(true);
+    setSearchChatError("");
+    try {
+      const res = await fetch("/api/search-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, records, recordCount: count }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.answer) {
+        setSearchChatMessages(m => [...m, { role: "assistant", content: d.answer }]);
+      } else {
+        setSearchChatError(d.error || "検索に失敗しました。");
+      }
+    } catch {
+      setSearchChatError("通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setSearchChatLoading(false);
+    }
+  };
+
+  // ─── 病害虫画像診断 ───────────────────────────────────────
+  // 記録に添付済みの写真（Supabase公開URL）をそのままOpenAIのvisionに渡す。
+  const diagnoseImage = async (imageUrl: string, cropName?: string) => {
+    setDiagLoading(true); setDiagError(""); setDiagResult("");
+    try {
+      const res = await fetch("/api/diagnose-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl, cropName }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.diagnosis) {
+        setDiagResult(d.diagnosis);
+      } else {
+        setDiagError(d.error || "診断に失敗しました。");
+      }
+    } catch {
+      setDiagError("通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setDiagLoading(false);
+    }
+  };
 
   // ─── 農薬使用履歴 帳票出力（GAP監査向けCSV/PDF）─────────────
   interface PesticideUseRow {
@@ -1531,6 +1802,14 @@ export default function App() {
                   </div>
                 )}
               </div>
+              {canUseAiFeature("pestControlAdvice") && (
+                <button
+                  onClick={() => { setShowPestAdviceSheet(true); if (!pestAdviceResult && !pestAdviceLoading) generatePestControlAdvice(); }}
+                  style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:10 }}
+                >
+                  <Wind size={13} strokeWidth={2} />防除タイミング助言
+                </button>
+              )}
             </div>
           ) : null}
           {/* 統計カードグリッド */}
@@ -1811,6 +2090,14 @@ export default function App() {
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                   {reportFilterActive && (
                     <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={btn("tertiary", "sm")}>条件をクリア</button>
+                  )}
+                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={btn("secondary", "sm")}>
+                    <Sparkles size={13} strokeWidth={2} />AI日報
+                  </button>
+                  {canUseAiFeature("recordSearchChat") && (
+                    <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={btn("secondary", "sm")}>
+                      <MessageSquare size={13} strokeWidth={2} />AI検索
+                    </button>
                   )}
                   <button onClick={() => setShowExportSheet(true)} style={btn("secondary", "sm")}>
                     <Download size={13} strokeWidth={2} />帳票出力
@@ -2354,6 +2641,29 @@ export default function App() {
                 {/* 写真 */}
                 {r.image_url && (
                   <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:8, marginBottom:12, maxHeight:240, objectFit:"cover", display:"block" }} />
+                )}
+
+                {/* 病害虫画像診断 */}
+                {r.image_url && canUseAiFeature("pestDiagnosis") && (
+                  <div style={{ marginBottom:16 }}>
+                    {diagError && (
+                      <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:10 }}>
+                        {diagError}
+                      </div>
+                    )}
+                    {diagResult && (
+                      <div style={{ ...S.wellBox, padding:16, marginBottom:10 }}>
+                        <div style={{ fontSize:13, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{diagResult}</div>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => diagnoseImage(r.image_url, cropName(r.crop_id))}
+                      disabled={diagLoading}
+                      style={{ ...btn("tertiary", "sm"), width:"100%", opacity:diagLoading ? 0.6 : 1 }}
+                    >
+                      <FlaskConical size={13} strokeWidth={2} />{diagLoading ? "診断中…" : diagResult ? "もう一度診断" : "AI画像診断"}
+                    </button>
+                  </div>
                 )}
 
                 {/* アクション */}
@@ -2956,6 +3266,16 @@ export default function App() {
                       {noteListening ? "音声入力中…タップで停止" : "音声でメモを入力"}
                     </button>
                   )}
+                  {canUseAiFeature("voiceStructuring") && rForm.note.trim() && (
+                    <button
+                      onClick={structureVoiceNote}
+                      disabled={aiStructuring}
+                      style={{ ...btn("soft", "md"), width:"100%", marginBottom:12, opacity: aiStructuring ? 0.6 : 1, cursor: aiStructuring ? "default" : "pointer" }}
+                    >
+                      <Sparkles size={16} strokeWidth={2} />
+                      {aiStructuring ? "AIで整理中…" : "AIでフォームに自動入力"}
+                    </button>
+                  )}
                 </>
               )}
 
@@ -3146,6 +3466,139 @@ export default function App() {
             </button>
             <button onClick={printPesticideReport} style={{ ...btn("primary", "lg"), flex:1 }}>
               <FileText size={15} strokeWidth={2} />PDFで印刷/保存
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* AI日報生成（PoC）*/}
+      <BottomSheet open={showReportGenSheet} onClose={() => setShowReportGenSheet(false)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+            <Sparkles size={17} strokeWidth={2} color={C.ink} />AI日報を生成
+          </div>
+
+          <div style={S.wellBox}>
+            <div style={S.wrow}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={S.lbl2}>対象日</div>
+                <input type="date" style={S.fieldInput} value={genDate} max={new Date().toISOString().slice(0,10)} onChange={e => { setGenDate(e.target.value); setGenResult(""); setGenError(""); }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize:12, color:C.textMuted, marginBottom:16 }}>
+            {reports.filter(r => r.date === genDate).length}件の作業記録から日報を作成します
+          </div>
+
+          {genError && (
+            <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+              {genError}
+            </div>
+          )}
+
+          {genResult && (
+            <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
+              <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{genResult}</div>
+              <button onClick={() => { navigator.clipboard?.writeText(genResult); }} style={{ ...btn("tertiary", "sm"), marginTop:12 }}>
+                <Copy size={13} strokeWidth={2} />コピー
+              </button>
+            </div>
+          )}
+
+          <button onClick={generateDailyReport} disabled={genLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:genLoading ? 0.6 : 1 }}>
+            <Sparkles size={15} strokeWidth={2} />{genLoading ? "生成中…" : genResult ? "もう一度生成" : "日報を生成"}
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* 天気×防除タイミング助言 */}
+      <BottomSheet open={showPestAdviceSheet} onClose={() => setShowPestAdviceSheet(false)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+            <Wind size={17} strokeWidth={2} color={C.ink} />防除タイミング助言
+          </div>
+
+          {pestAdviceForecast && (
+            <div style={{ fontSize:12, color:C.textMuted, whiteSpace:"pre-wrap" as const, marginBottom:16, lineHeight:1.7 }}>
+              {pestAdviceForecast}
+            </div>
+          )}
+
+          {pestAdviceError && (
+            <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+              {pestAdviceError}
+            </div>
+          )}
+
+          {pestAdviceResult && (
+            <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
+              <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{pestAdviceResult}</div>
+            </div>
+          )}
+
+          {pestAdviceLoading && !pestAdviceResult && (
+            <div style={{ fontSize:13, color:C.textMuted, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+              <RefreshCw size={13} strokeWidth={2} />予報を確認して助言を作成中…
+            </div>
+          )}
+
+          <button onClick={generatePestControlAdvice} disabled={pestAdviceLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:pestAdviceLoading ? 0.6 : 1 }}>
+            <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : pestAdviceResult ? "もう一度確認" : "助言を確認"}
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* 記録検索チャット */}
+      <BottomSheet open={showSearchChatSheet} onClose={() => setShowSearchChatSheet(false)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+            <MessageSquare size={17} strokeWidth={2} color={C.ink} />AI検索
+          </div>
+
+          <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
+            {reportFilterActive ? "現在の絞り込み条件に一致する記録" : "直近180日の記録"}について、自然な言葉で質問できます
+          </div>
+
+          {searchChatMessages.length > 0 && (
+            <div style={{ display:"flex", flexDirection:"column" as const, gap:10, marginBottom:14 }}>
+              {searchChatMessages.map((m, i) => (
+                <div key={i} style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth: "85%",
+                  background: m.role === "user" ? C.inkSoft : C.well,
+                  color: C.text,
+                  borderRadius: 12,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                  whiteSpace: "pre-wrap" as const,
+                }}>
+                  {m.content}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {searchChatError && (
+            <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+              {searchChatError}
+            </div>
+          )}
+
+          <div style={{ display:"flex", gap:8 }}>
+            <input
+              style={{ ...S.input, marginBottom:0, flex:1 }}
+              placeholder="例: 先月のトマトの防除は何回した？"
+              value={searchChatInput}
+              onChange={e => setSearchChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !searchChatLoading) sendSearchChatMessage(); }}
+              maxLength={400}
+              disabled={searchChatLoading}
+              autoComplete="off"
+            />
+            <button onClick={sendSearchChatMessage} disabled={searchChatLoading || !searchChatInput.trim()} style={{ ...btn("primary", "md"), opacity:(searchChatLoading || !searchChatInput.trim()) ? 0.6 : 1, flexShrink:0 }}>
+              {searchChatLoading ? <RefreshCw size={15} strokeWidth={2} /> : "送信"}
             </button>
           </div>
         </div>

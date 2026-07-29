@@ -32,7 +32,7 @@
 
 ### 改修箇所の実測（コード調査、2026-07-19）
 
-`src/App.tsx`・`api/`を実際に調査した結果、org非スコープのクエリ／ハードコードは以下の箇所に存在した。2026-07-22時点ですべて対応済み（✅）。
+`src/App.tsx`・`api/`を実際に調査した結果、org非スコープのクエリ／ハードコードは以下の箇所に存在した。2026-07-22時点でほぼ対応済み（✅）、`api/notify-line.ts`のみ2026-07-28に対応。
 
 | ファイル:行 | 内容 | 対応 |
 |---|---|---|
@@ -44,7 +44,7 @@
 | `src/App.tsx` | `schedules`取得（`orgUserIds`経由の間接絞り込み） | ✅ `organization_id`列を追加し直接フィルタに変更 |
 | `src/App.tsx` / `src/components/GanttChart.tsx` | `crops`/`fields`/`reports`/`pesticides`/`settings`/`projects`への書き込み | ✅ `organization_id`をあわせて設定（列がNOT NULLのため必須） |
 | `api/set-user-auth.ts` | `org ?? "kishu"`のハードコード（新規作成時） | ✅ クライアントから`organization_id`を受け取り必須化。`@kishu-farm.system`ドメインは影響小のため未対応のまま |
-| `api/notify-line.ts` | `LINE_CHANNEL_ACCESS_TOKEN`/`LINE_GROUP_ID`が環境変数1組固定 | 未対応（`organizations`テーブルにトークン列はあるが未使用。組織が増えるまで優先度低）|
+| `api/notify-line.ts` | `LINE_CHANNEL_ACCESS_TOKEN`/`LINE_GROUP_ID`が環境変数1組固定 | ✅ 2026-07-28対応。`organization_id`が渡された場合`organizations`テーブルの値を優先し、取得できなければ既存の環境変数にフォールバック |
 
 **規模感**: `App.tsx`単体で最低9箇所のクエリ修正、APIエンドポイント2本の書き換え。「数週間規模」という見積りは妥当だが、内訳としてはクエリ修正自体は数日、残りは下記の設計課題の解決とRLSポリシーの段階適用・越境検証に費やす時間が大きい。**クエリ修正自体（移行順序2.）は2026-07-22に完了**。RLS実ポリシー化（移行順序3.〜5.）が残作業。
 
@@ -55,7 +55,9 @@
 2. ✅ 完了（2026-07-22）: 各テーブルに`organization_id`列追加（nullable）→バックフィル→NOT NULL化。SQL: `scripts/migrations/2026-07-22-organization-id-columns.sql`（Supabase側で実行済み）。クライアントクエリ側も対応済み（上記表参照）
 3. ⏳ 未着手（要ユーザー確認・cross-org検証が必要なため保留中）: JWTクレーム設定→RLS実ポリシーを1テーブルずつ適用しながらクライアントクエリを更新
 4. 全テーブル移行後に`allow_all`ポリシーを撤廃
-5. 2組織目を受け入れる前に、別Supabaseユーザーで越境アクセス不可を検証
+5. 2組織目を受け入れる前に、別Supabaseユーザーで越境アクセス不可を検証（チェックリスト: `docs/multitenancy-progress.md`）
+
+> ⚠️ **2026-07-28追記（重要・ブランチ管理上の発見）**: このADRのステップ1・2は`origin/claude/multitenancy-step1`/`step2`系ブランチのPR #1〜#4として**既にmainにマージ・本番適用済み**（上記の表・移行順序に反映済み）。しかし作業時のローカル`main`ブランチが`origin/main`から9コミット遅れて分岐しており、`claude/multitenancy-rls`ブランチ着手時点ではこの事実に気づかず、一時「未実行」前提のフォールバック実装をやり直してしまった。最終的に`origin/main`を正としてマージ・統合済みだが、**ローカルmainとorigin/mainの分岐（ローカルmain側にのみ存在するAI機能7コミット分の未push作業を含む）は本タスクのスコープ外のため未解決のまま**残っている。詳細は`docs/multitenancy-progress.md`の「重要な発見」節を参照し、必ず対応すること。
 
 ---
 
