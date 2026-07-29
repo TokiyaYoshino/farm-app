@@ -192,6 +192,11 @@ interface WeatherInfo {
   humidity?: number;
   rain?: number;
 }
+interface DiagnosisResult {
+  inconclusive: boolean;
+  possibilities: { name: string; confidence: "高" | "中" | "低"; reason: string }[];
+  note: string;
+}
 interface Project {
   id: string;
   org?: string;
@@ -370,16 +375,16 @@ export default function App() {
 
   // 病害虫画像診断
   const [diagLoading, setDiagLoading] = useState(false);
-  const [diagResult, setDiagResult]   = useState("");
+  const [diagResult, setDiagResult]   = useState<DiagnosisResult | null>(null);
   const [diagError, setDiagError]     = useState("");
-  useEffect(() => { setDiagResult(""); setDiagError(""); setDiagLoading(false); }, [selectedReport?.id]);
+  useEffect(() => { setDiagResult(null); setDiagError(""); setDiagLoading(false); }, [selectedReport?.id]);
 
   // AI画像診断（単体・記録作成を介さず写真から直接診断）
   const [showDiagPhotoSheet, setShowDiagPhotoSheet] = useState(false);
   const [diagPhotoFile, setDiagPhotoFile]         = useState<File | null>(null);
   const [diagPhotoPreview, setDiagPhotoPreview]   = useState("");
   const [diagPhotoLoading, setDiagPhotoLoading]   = useState(false);
-  const [diagPhotoResult, setDiagPhotoResult]     = useState("");
+  const [diagPhotoResult, setDiagPhotoResult]     = useState<DiagnosisResult | null>(null);
   const [diagPhotoError, setDiagPhotoError]       = useState("");
 
   // ─── Auth セッション監視 ──────────────────────────────────
@@ -1421,7 +1426,7 @@ export default function App() {
   // ─── 病害虫画像診断 ───────────────────────────────────────
   // 記録に添付済みの写真（Supabase公開URL）をそのままOpenAIのvisionに渡す。
   const diagnoseImage = async (imageUrl: string, cropName?: string) => {
-    setDiagLoading(true); setDiagError(""); setDiagResult("");
+    setDiagLoading(true); setDiagError(""); setDiagResult(null);
     try {
       const res = await fetch("/api/diagnose-image", {
         method: "POST",
@@ -1430,7 +1435,7 @@ export default function App() {
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.diagnosis) {
-        setDiagResult(d.diagnosis);
+        setDiagResult(d.diagnosis as DiagnosisResult);
       } else {
         setDiagError(d.error || "診断に失敗しました。");
       }
@@ -1445,7 +1450,7 @@ export default function App() {
   // 記録の作成を介さず、選択/撮影した写真をStorageにアップロードしてそのまま診断する。
   const diagnoseStandalonePhoto = async () => {
     if (!diagPhotoFile) return;
-    setDiagPhotoLoading(true); setDiagPhotoError(""); setDiagPhotoResult("");
+    setDiagPhotoLoading(true); setDiagPhotoError(""); setDiagPhotoResult(null);
     try {
       const imageUrl = await uploadImage(diagPhotoFile);
       const res = await fetch("/api/diagnose-image", {
@@ -1455,7 +1460,7 @@ export default function App() {
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.diagnosis) {
-        setDiagPhotoResult(d.diagnosis);
+        setDiagPhotoResult(d.diagnosis as DiagnosisResult);
       } else {
         setDiagPhotoError(d.error || "診断に失敗しました。");
       }
@@ -1465,6 +1470,39 @@ export default function App() {
       setDiagPhotoLoading(false);
     }
   };
+
+  const confidenceColor = (c: "高" | "中" | "低") =>
+    c === "高" ? { fg: C.danger, bg: C.dangerBg } : c === "中" ? { fg: C.warning, bg: C.warningBg } : { fg: C.textMuted, bg: C.well };
+
+  const renderDiagnosis = (result: DiagnosisResult) => (
+    <>
+      {result.inconclusive && (
+        <div style={{ fontSize:13, color:C.textSub, marginBottom:10 }}>写真だけでは判断が難しいとのことです。</div>
+      )}
+      {result.possibilities.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column" as const, gap:8, marginBottom:10 }}>
+          {result.possibilities.map((p, i) => {
+            const cc = confidenceColor(p.confidence);
+            return (
+              <div key={i} style={{ borderBottom: i < result.possibilities.length - 1 ? `1px solid ${C.hairline}` : "none", paddingBottom:8 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                  <span style={{ fontSize:14, fontWeight:700, color:C.text }}>{p.name}</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:cc.fg, background:cc.bg, borderRadius:999, padding:"2px 8px" }}>可能性: {p.confidence}</span>
+                </div>
+                <div style={{ fontSize:13, color:C.textSub, lineHeight:1.6 }}>{p.reason}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {result.note && (
+        <div style={{ fontSize:12, color:C.textMuted, marginBottom:10 }}>{result.note}</div>
+      )}
+      <div style={{ fontSize:11, color:C.textMuted, lineHeight:1.6, borderTop:`1px solid ${C.hairline}`, paddingTop:8 }}>
+        最終判断はJAや専門家に相談し、農薬を使う場合は登録内容を確認してください。
+      </div>
+    </>
+  );
 
   // ─── 農薬使用履歴 帳票出力（GAP監査向けCSV/PDF）─────────────
   interface PesticideUseRow {
@@ -2133,7 +2171,7 @@ export default function App() {
                     </button>
                   )}
                   {canUseAiFeature("pestDiagnosis") && (
-                    <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(""); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={btn("secondary", "sm")}>
+                    <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={btn("secondary", "sm")}>
                       <FlaskConical size={13} strokeWidth={2} />AI画像診断
                     </button>
                   )}
@@ -2691,7 +2729,7 @@ export default function App() {
                     )}
                     {diagResult && (
                       <div style={{ ...S.wellBox, padding:16, marginBottom:10 }}>
-                        <div style={{ fontSize:13, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{diagResult}</div>
+                        {renderDiagnosis(diagResult)}
                       </div>
                     )}
                     <button
@@ -3659,14 +3697,14 @@ export default function App() {
               if (!file) return;
               setDiagPhotoFile(file);
               setDiagPhotoPreview(URL.createObjectURL(file));
-              setDiagPhotoResult(""); setDiagPhotoError("");
+              setDiagPhotoResult(null); setDiagPhotoError("");
               e.target.value = "";
             }}
           />
           {diagPhotoPreview ? (
             <div style={{ position:"relative", marginBottom:14 }}>
               <img src={diagPhotoPreview} alt="preview" style={{ width:"100%", borderRadius:8, maxHeight:240, objectFit:"cover", display:"block" }} />
-              <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(""); setDiagPhotoError(""); }}
+              <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); }}
                 style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.55)", border:"none", borderRadius:20, padding:"5px 10px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600 }}>
                 <X size={12} strokeWidth={2.5} />削除
               </button>
@@ -3685,7 +3723,7 @@ export default function App() {
           )}
           {diagPhotoResult && (
             <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
-              <div style={{ fontSize:13, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{diagPhotoResult}</div>
+              {renderDiagnosis(diagPhotoResult)}
             </div>
           )}
 
