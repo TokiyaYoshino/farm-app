@@ -374,6 +374,14 @@ export default function App() {
   const [diagError, setDiagError]     = useState("");
   useEffect(() => { setDiagResult(""); setDiagError(""); setDiagLoading(false); }, [selectedReport?.id]);
 
+  // AI画像診断（単体・記録作成を介さず写真から直接診断）
+  const [showDiagPhotoSheet, setShowDiagPhotoSheet] = useState(false);
+  const [diagPhotoFile, setDiagPhotoFile]         = useState<File | null>(null);
+  const [diagPhotoPreview, setDiagPhotoPreview]   = useState("");
+  const [diagPhotoLoading, setDiagPhotoLoading]   = useState(false);
+  const [diagPhotoResult, setDiagPhotoResult]     = useState("");
+  const [diagPhotoError, setDiagPhotoError]       = useState("");
+
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1433,6 +1441,31 @@ export default function App() {
     }
   };
 
+  // ─── AI画像診断（単体）─────────────────────────────────────
+  // 記録の作成を介さず、選択/撮影した写真をStorageにアップロードしてそのまま診断する。
+  const diagnoseStandalonePhoto = async () => {
+    if (!diagPhotoFile) return;
+    setDiagPhotoLoading(true); setDiagPhotoError(""); setDiagPhotoResult("");
+    try {
+      const imageUrl = await uploadImage(diagPhotoFile);
+      const res = await fetch("/api/diagnose-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.diagnosis) {
+        setDiagPhotoResult(d.diagnosis);
+      } else {
+        setDiagPhotoError(d.error || "診断に失敗しました。");
+      }
+    } catch (e: unknown) {
+      setDiagPhotoError((e as Error).message || "通信に失敗しました。ネットワークをご確認ください。");
+    } finally {
+      setDiagPhotoLoading(false);
+    }
+  };
+
   // ─── 農薬使用履歴 帳票出力（GAP監査向けCSV/PDF）─────────────
   interface PesticideUseRow {
     date: string; field: string; crop: string; pesticide: string;
@@ -2097,6 +2130,11 @@ export default function App() {
                   {canUseAiFeature("recordSearchChat") && (
                     <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={btn("secondary", "sm")}>
                       <MessageSquare size={13} strokeWidth={2} />AI検索
+                    </button>
+                  )}
+                  {canUseAiFeature("pestDiagnosis") && (
+                    <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(""); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={btn("secondary", "sm")}>
+                      <FlaskConical size={13} strokeWidth={2} />AI画像診断
                     </button>
                   )}
                   <button onClick={() => setShowExportSheet(true)} style={btn("secondary", "sm")}>
@@ -3137,6 +3175,32 @@ export default function App() {
                 {quickExpanded ? "詳細を閉じる" : "詳細を入力"}
               </button>
 
+              {/* 写真 */}
+              <div style={S.lbl}>写真</div>
+              <input type="file" id="img-input-quick" accept="image/*" style={{ display:"none" }}
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setImageFile(file);
+                  setImagePreview(URL.createObjectURL(file));
+                  e.target.value = "";
+                }}
+              />
+              {imagePreview ? (
+                <div style={{ position:"relative", marginBottom:12 }}>
+                  <img src={imagePreview} alt="preview" style={{ width:"100%", borderRadius:8, maxHeight:200, objectFit:"cover", display:"block" }} />
+                  <button onClick={() => { setImageFile(null); setImagePreview(""); }}
+                    style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.55)", border:"none", borderRadius:20, padding:"5px 10px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600 }}>
+                    <X size={12} strokeWidth={2.5} />削除
+                  </button>
+                </div>
+              ) : (
+                <label htmlFor="img-input-quick" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, border:`2px dashed ${C.border}`, borderRadius:8, padding:"20px 0", cursor:"pointer", marginBottom:12, color:C.textMuted, fontSize:13, background:C.bg }}>
+                  <Camera size={24} color={C.textMuted} strokeWidth={1.5} />
+                  <span>タップして写真を選択</span>
+                </label>
+              )}
+
               {quickExpanded && (
                 <>
                   {/* 作業者 */}
@@ -3171,32 +3235,6 @@ export default function App() {
                       {parseFloat(periodWeather.rain) > 0 && <span>雨量{periodWeather.rain}mm</span>}
                       <span style={{ marginLeft:"auto", fontSize:11, color:C.textMuted }}>自動取得</span>
                     </div>
-                  )}
-
-                  {/* 写真 */}
-                  <div style={S.lbl}>写真</div>
-                  <input type="file" id="img-input-quick" accept="image/*" style={{ display:"none" }}
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setImageFile(file);
-                      setImagePreview(URL.createObjectURL(file));
-                      e.target.value = "";
-                    }}
-                  />
-                  {imagePreview ? (
-                    <div style={{ position:"relative", marginBottom:12 }}>
-                      <img src={imagePreview} alt="preview" style={{ width:"100%", borderRadius:8, maxHeight:200, objectFit:"cover", display:"block" }} />
-                      <button onClick={() => { setImageFile(null); setImagePreview(""); }}
-                        style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.55)", border:"none", borderRadius:20, padding:"5px 10px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600 }}>
-                        <X size={12} strokeWidth={2.5} />削除
-                      </button>
-                    </div>
-                  ) : (
-                    <label htmlFor="img-input-quick" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, border:`2px dashed ${C.border}`, borderRadius:8, padding:"20px 0", cursor:"pointer", marginBottom:12, color:C.textMuted, fontSize:13, background:C.bg }}>
-                      <Camera size={24} color={C.textMuted} strokeWidth={1.5} />
-                      <span>タップして写真を選択</span>
-                    </label>
                   )}
 
                   {/* 農薬複数選択（農薬散布系の作業区分のときのみ表示） */}
@@ -3601,6 +3639,64 @@ export default function App() {
               {searchChatLoading ? <RefreshCw size={15} strokeWidth={2} /> : "送信"}
             </button>
           </div>
+        </div>
+      </BottomSheet>
+
+      {/* AI画像診断（単体） */}
+      <BottomSheet open={showDiagPhotoSheet} onClose={() => setShowDiagPhotoSheet(false)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+            <FlaskConical size={17} strokeWidth={2} color={C.ink} />AI画像診断
+          </div>
+
+          <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
+            写真を撮影・選択すると、病害虫の可能性をAIが診断します
+          </div>
+
+          <input type="file" id="img-input-diag" accept="image/*" style={{ display:"none" }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setDiagPhotoFile(file);
+              setDiagPhotoPreview(URL.createObjectURL(file));
+              setDiagPhotoResult(""); setDiagPhotoError("");
+              e.target.value = "";
+            }}
+          />
+          {diagPhotoPreview ? (
+            <div style={{ position:"relative", marginBottom:14 }}>
+              <img src={diagPhotoPreview} alt="preview" style={{ width:"100%", borderRadius:8, maxHeight:240, objectFit:"cover", display:"block" }} />
+              <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(""); setDiagPhotoError(""); }}
+                style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.55)", border:"none", borderRadius:20, padding:"5px 10px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600 }}>
+                <X size={12} strokeWidth={2.5} />削除
+              </button>
+            </div>
+          ) : (
+            <label htmlFor="img-input-diag" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, border:`2px dashed ${C.border}`, borderRadius:8, padding:"28px 0", cursor:"pointer", marginBottom:14, color:C.textMuted, fontSize:13, background:C.bg }}>
+              <Camera size={24} color={C.textMuted} strokeWidth={1.5} />
+              <span>タップして写真を撮影・選択</span>
+            </label>
+          )}
+
+          {diagPhotoError && (
+            <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+              {diagPhotoError}
+            </div>
+          )}
+          {diagPhotoResult && (
+            <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
+              <div style={{ fontSize:13, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{diagPhotoResult}</div>
+            </div>
+          )}
+
+          <button
+            onClick={diagnoseStandalonePhoto}
+            disabled={!diagPhotoFile || diagPhotoLoading}
+            style={{ ...btn("primary", "md"), width:"100%", opacity:(!diagPhotoFile || diagPhotoLoading) ? 0.6 : 1 }}
+          >
+            {diagPhotoLoading ? <RefreshCw size={15} strokeWidth={2} /> : <FlaskConical size={15} strokeWidth={2} />}
+            {diagPhotoLoading ? "診断中…" : diagPhotoResult ? "もう一度診断" : "診断する"}
+          </button>
         </div>
       </BottomSheet>
 
