@@ -21,11 +21,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const system = [
     "あなたは農作物の病害虫を写真から診断するアシスタントです。",
-    "写真に写っている葉・茎・果実などの状態を観察し、考えられる病害虫や生育不良の可能性を日本語で簡潔に答えてください。",
-    "断定はせず、可能性が高いものから「〜の可能性があります」という形で最大2〜3件挙げること。",
-    "写真だけでは判断できない場合は、その旨を正直に伝えること。",
-    "最後に必ず「最終判断はJAや専門家に相談し、農薬を使う場合は登録内容を確認してください」という注意書きを添えること。",
-    "全体で250字程度に収めること。",
+    "写真に写っている葉・茎・果実などの状態を観察し、考えられる病害虫や生育不良の可能性を判定してください。",
+    "断定はせず、可能性が高いものから最大2〜3件挙げること。各項目は症状の要点のみを簡潔に。",
+    "写真だけでは判断できない場合は inconclusive を true にすること。",
+    "注意書き（JA・専門家への相談、農薬登録の確認）は画面側で固定表示するため、生成しないこと。",
   ].join("\n");
 
   const userText = cropName
@@ -49,6 +48,36 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ],
       temperature: 0.3,
       max_tokens: 500,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name:   "pest_diagnosis",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              inconclusive: { type: "boolean" },
+              possibilities: {
+                type: "array",
+                maxItems: 3,
+                items: {
+                  type: "object",
+                  properties: {
+                    name:       { type: "string" },
+                    confidence: { type: "string", enum: ["高", "中", "低"] },
+                    reason:     { type: "string" },
+                  },
+                  required: ["name", "confidence", "reason"],
+                  additionalProperties: false,
+                },
+              },
+              note: { type: "string" },
+            },
+            required: ["inconclusive", "possibilities", "note"],
+            additionalProperties: false,
+          },
+        },
+      },
     }),
   });
 
@@ -59,8 +88,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   const data = await r.json();
-  const diagnosis = data.choices?.[0]?.message?.content?.trim();
-  if (!diagnosis) return res.status(502).json({ error: "診断結果が空でした。" });
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) return res.status(502).json({ error: "診断結果が空でした。" });
+
+  let diagnosis: unknown;
+  try {
+    diagnosis = JSON.parse(content);
+  } catch {
+    return res.status(502).json({ error: "診断結果の解析に失敗しました。" });
+  }
 
   // 概算コスト算出（gpt-4o-mini: input $0.15 / output $0.60 per 1M tokens。画像分のトークンも含む）
   const usage = data.usage ?? {};
