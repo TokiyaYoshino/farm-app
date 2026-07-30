@@ -20,11 +20,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!apiKey) return res.status(500).json({ error: "missing env: OPENAI_API_KEY" });
 
   const system = [
-    "あなたは農作物の病害虫を写真から診断するアシスタントです。",
-    "写真に写っている葉・茎・果実などの状態を観察し、考えられる病害虫や生育不良の可能性を判定してください。",
-    "断定はせず、可能性が高いものから最大2〜3件挙げること。各項目は症状の要点のみを簡潔に。",
-    "写真だけでは判断できない場合は inconclusive を true にすること。",
-    "注意書き（JA・専門家への相談、農薬登録の確認）は画面側で固定表示するため、生成しないこと。",
+    "あなたは農作物の病害虫・生理障害を写真から鑑別診断するアシスタントです。",
+    "",
+    "観察の手順:",
+    "1. 症状の部位を特定する（新葉/古葉のどちらから出ているか、株全体か部分的か、葉脈間か葉全体かの黄化・変色パターン）",
+    "2. 病斑の見た目を確認する（輪郭が明瞭な病斑・輪紋の有無、すす状の付着物や虫・卵・食痕の有無、モザイク状の濃淡や葉の変形・巻き・縮れの有無）",
+    "3. 上記の観察に基づき、次の4カテゴリで原因を鑑別する:",
+    "   - 病害（糸状菌・細菌等。輪郭の明瞭な病斑や急速な広がりが手がかり）",
+    "   - 虫害（食害・吸汁害。虫本体や食痕、すす病の随伴が手がかり）",
+    "   - 生理障害（肥料欠乏・水はけ不良・日照/温度ストレス等。進行が緩慢で、葉脈間黄化か葉全体の均一な黄化かが手がかり）",
+    "   - ウイルス病（モザイク状の濃淡、葉の変形・巻き・縮れが手がかり）",
+    "",
+    "厳守事項:",
+    "- possibilitiesの各nameには「黄化」「変色」など写真に写っている症状をそのまま言い換えたものではなく、具体的な病名・虫名・生理障害名（例:「疫病」「アブラムシ」「窒素欠乏」「根腐れ病」）を入れること。",
+    "- 症状が似ていて紛らわしい候補（例：下位葉からの黄化は窒素欠乏でも根腐れ病でも起こりうる）は、reasonで両者を見分ける決め手（萎れの有無、土壌の過湿の兆候など）に触れること。",
+    "- confidenceは0〜100の整数で、写真から読み取れる根拠の強さに応じて具体的に見積もること。10刻みなどの大雑把な丸めは避け、65のような細かい値も使うこと。",
+    "- 可能性が高いものから最大4件、重複や言い換えを避けて列挙すること。",
+    "- 写真だけでは判断できない場合は inconclusive を true にすること。",
+    "- 注意書き（JA・専門家への相談、農薬登録の確認）は画面側で固定表示するため、生成しないこと。",
   ].join("\n");
 
   const userText = cropName
@@ -46,8 +59,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           ],
         },
       ],
-      temperature: 0.3,
-      max_tokens: 500,
+      temperature: 0.2,
+      max_tokens: 700,
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -59,15 +72,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               inconclusive: { type: "boolean" },
               possibilities: {
                 type: "array",
-                maxItems: 3,
+                maxItems: 4,
                 items: {
                   type: "object",
                   properties: {
                     name:       { type: "string" },
-                    confidence: { type: "string", enum: ["高", "中", "低"] },
+                    category:   { type: "string", enum: ["病害", "虫害", "生理障害", "ウイルス病"] },
+                    confidence: { type: "integer", minimum: 0, maximum: 100 },
                     reason:     { type: "string" },
                   },
-                  required: ["name", "confidence", "reason"],
+                  required: ["name", "category", "confidence", "reason"],
                   additionalProperties: false,
                 },
               },
