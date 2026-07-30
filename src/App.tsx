@@ -194,7 +194,7 @@ interface WeatherInfo {
 }
 interface DiagnosisResult {
   inconclusive: boolean;
-  possibilities: { name: string; confidence: "高" | "中" | "低"; reason: string }[];
+  possibilities: { name: string; category: "病害" | "虫害" | "生理障害" | "ウイルス病"; confidence: number; reason: string }[];
   note: string;
 }
 interface Project {
@@ -1471,8 +1471,8 @@ export default function App() {
     }
   };
 
-  const confidenceColor = (c: "高" | "中" | "低") =>
-    c === "高" ? { fg: C.danger, bg: C.dangerBg } : c === "中" ? { fg: C.warning, bg: C.warningBg } : { fg: C.textMuted, bg: C.well };
+  const confidenceColor = (c: number) =>
+    c >= 70 ? { fg: C.danger, bg: C.dangerBg } : c >= 40 ? { fg: C.warning, bg: C.warningBg } : { fg: C.textMuted, bg: C.well };
 
   const renderDiagnosis = (result: DiagnosisResult) => (
     <>
@@ -1485,9 +1485,10 @@ export default function App() {
             const cc = confidenceColor(p.confidence);
             return (
               <div key={i} style={{ borderBottom: i < result.possibilities.length - 1 ? `1px solid ${C.hairline}` : "none", paddingBottom:8 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" as const }}>
                   <span style={{ fontSize:14, fontWeight:700, color:C.text }}>{p.name}</span>
-                  <span style={{ fontSize:11, fontWeight:700, color:cc.fg, background:cc.bg, borderRadius:999, padding:"2px 8px" }}>可能性: {p.confidence}</span>
+                  <span style={{ fontSize:11, fontWeight:600, color:C.textMuted, background:C.well, borderRadius:999, padding:"2px 8px" }}>{p.category}</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:cc.fg, background:cc.bg, borderRadius:999, padding:"2px 8px" }}>確信度: {p.confidence}%</span>
                 </div>
                 <div style={{ fontSize:13, color:C.textSub, lineHeight:1.6 }}>{p.reason}</div>
               </div>
