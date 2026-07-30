@@ -945,6 +945,15 @@ export default function App() {
       showToast("報告を削除しました");
     });
 
+  const deleteSchedule = (id: string) =>
+    confirmDelete("この予定を削除しますか？", async () => {
+      const { error } = await supabase.from("schedules").delete().eq("id", id);
+      if (error) return showToast(error.message, "err");
+      setSchedules(p => p.filter(s => s.id !== id));
+      setSelectedSchedule(null);
+      showToast("予定を削除しました");
+    });
+
   const deleteUser = (id: number) =>
     confirmDelete("このユーザーを削除しますか？", async () => {
       const { error } = await supabase.from("users").delete().eq("id", id).eq("organization_id", currentOrganizationId);
@@ -2041,7 +2050,9 @@ export default function App() {
             users={users}
             pesticides={pesticides}
             currentUserId={currentUser?.id ?? 0}
+            isAdmin={isAdmin}
             onAddSchedule={addSchedule}
+            onDeleteSchedule={deleteSchedule}
             onLoadComments={loadComments}
             onAddComment={addComment}
             onEditComment={editComment}
@@ -2837,6 +2848,14 @@ export default function App() {
                 >
                   <ClipboardList size={16} strokeWidth={2} />この予定の報告を入力
                 </button>
+                {(isAdmin || s.user_id === currentUser?.id || (!!s.assigned_user_id && s.assigned_user_id === currentUser?.id)) && (
+                  <button
+                    onClick={() => deleteSchedule(s.id)}
+                    style={{ ...btn("tertiary", "sm"), color:C.danger, marginTop:8 }}
+                  >
+                    <Trash2 size={13} strokeWidth={2} />この予定を削除
+                  </button>
+                )}
 
                 {/* コメント */}
                 <div style={{ marginTop:16 }}>
