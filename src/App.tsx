@@ -1631,7 +1631,7 @@ export default function App() {
 
   // ─── スタイル ─────────────────────────────────────────
   const S = {
-    wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:"calc(88px + env(safe-area-inset-bottom))" }),
+    wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:"calc(150px + env(safe-area-inset-bottom))" }),
     header:  css({ background:"#fff", color:C.text, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${C.border}`, position:"sticky" as const, top:0, zIndex:90 }),
     headerTitle: css({ fontSize:16, fontWeight:700, color:C.text, letterSpacing:-0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
     headerSub: css({ background:"#fff", borderBottom:`1px solid ${C.border}`, display:"flex", paddingLeft:4, paddingRight:4, gap:0 }),
