@@ -2157,25 +2157,25 @@ export default function App() {
 
               {/* 件数＋クリア＋帳票出力 */}
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, minHeight:28, gap:8 }}>
-                <span style={{ fontSize:12, color:C.textMuted }}>{filteredReports.length}件の記録</span>
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:12, color:C.textMuted, flexShrink:0, whiteSpace:"nowrap" as const }}>{filteredReports.length}件の記録</span>
+                <div style={{ display:"flex", alignItems:"center", gap:8, overflowX:"auto", minWidth:0 }}>
                   {reportFilterActive && (
-                    <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={btn("tertiary", "sm")}>条件をクリア</button>
+                    <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={{ ...btn("tertiary", "sm"), flexShrink:0 }}>条件をクリア</button>
                   )}
-                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={btn("secondary", "sm")}>
+                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Sparkles size={13} strokeWidth={2} />AI日報
                   </button>
                   {canUseAiFeature("recordSearchChat") && (
-                    <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={btn("secondary", "sm")}>
+                    <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                       <MessageSquare size={13} strokeWidth={2} />AI検索
                     </button>
                   )}
                   {canUseAiFeature("pestDiagnosis") && (
-                    <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={btn("secondary", "sm")}>
+                    <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                       <FlaskConical size={13} strokeWidth={2} />AI画像診断
                     </button>
                   )}
-                  <button onClick={() => setShowExportSheet(true)} style={btn("secondary", "sm")}>
+                  <button onClick={() => setShowExportSheet(true)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Download size={13} strokeWidth={2} />帳票出力
                   </button>
                 </div>
