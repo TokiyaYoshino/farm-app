@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Plus, X,
   CalendarDays, ClipboardList, UserCircle,
   PackageCheck, Clock, Leaf, RefreshCw,
-  FlaskConical,
+  FlaskConical, Trash2,
   CloudRain, Droplets,
   ArrowUpDown,
 } from "lucide-react";
@@ -52,7 +52,9 @@ interface Props {
   users: UserRow[];
   pesticides: PesticideRow[];
   currentUserId: number;
+  isAdmin: boolean;
   onAddSchedule: (date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string) => Promise<boolean>;
+  onDeleteSchedule: (id: string) => void;
   onLoadComments: (targetType: string, targetId: string) => Promise<Comment[]>;
   onAddComment: (targetType: string, targetId: string, message: string) => Promise<boolean>;
   onEditComment: (id: string, message: string) => Promise<boolean>;
@@ -66,8 +68,8 @@ const WORK_TYPES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り
 const shortName = (name: string) => name.slice(0, 2);
 
 export default function CalendarView({
-  reports, schedules, crops, users, pesticides, currentUserId,
-  onAddSchedule, onLoadComments, onAddComment, onEditComment,
+  reports, schedules, crops, users, pesticides, currentUserId, isAdmin,
+  onAddSchedule, onDeleteSchedule, onLoadComments, onAddComment, onEditComment,
 }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const [viewYear, setViewYear]   = useState(() => new Date().getFullYear());
@@ -530,6 +532,14 @@ export default function CalendarView({
                         <div style={css({ fontSize: 12, color: C.textSub, marginTop: 8, padding: "8px 12px", background: C.card, borderRadius: 10 })}>
                           {s.note}
                         </div>
+                      )}
+                      {(isAdmin || s.user_id === currentUserId || s.assigned_user_id === currentUserId) && (
+                        <button
+                          onClick={() => { onDeleteSchedule(s.id); backToList(); }}
+                          style={css({ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", padding: 0, marginTop: 10, fontSize: 12, fontWeight: 600, color: C.danger, cursor: "pointer" })}
+                        >
+                          <Trash2 size={12} strokeWidth={2} />この予定を削除
+                        </button>
                       )}
                     </div>
                   );
