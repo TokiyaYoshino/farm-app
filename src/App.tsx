@@ -13,7 +13,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
-  Download, FileText, FileSpreadsheet, Sparkles,
+  Download, FileText, FileSpreadsheet, Sparkles, Pencil,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -335,6 +335,9 @@ export default function App() {
   const [submitting, setSubmitting]       = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [scheduleEditForm, setScheduleEditForm] = useState({ date:"", workType:"", crop:"", assignedUserId:0, note:"" });
+  const [savingSchedule, setSavingSchedule] = useState(false);
   // 記録タブ：カレンダー/一覧の表示切替＋検索/フィルタ
   const [reportView, setReportView]         = useState<"calendar"|"list">("calendar");
   const [reportQuery, setReportQuery]       = useState("");
@@ -1170,6 +1173,27 @@ export default function App() {
     }
   };
 
+  const updateSchedule = async (id: string, date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string, field?: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.from("schedules").update({
+        title,
+        date,
+        note: note || null,
+        crop: crop || null,
+        field: field || null,
+        assigned_user_id: assignedUserId || null,
+        work_type: workType || null,
+      }).eq("id", id).select().single();
+      if (error) throw error;
+      setSchedules(p => p.map(s => s.id === id ? (data as Schedule) : s));
+      setSelectedSchedule(prev => prev && prev.id === id ? (data as Schedule) : prev);
+      return true;
+    } catch (e) {
+      console.error("updateSchedule error:", e);
+      return false;
+    }
+  };
+
   const loadComments = async (targetType: string, targetId: string): Promise<Comment[]> => {
     const { data } = await supabase.from("comments")
       .select("*").eq("target_type", targetType).eq("target_id", targetId).eq("organization_id", currentOrganizationId).order("created_at");
@@ -1630,11 +1654,12 @@ export default function App() {
   };
 
   // 予定と実績のマッチング
+  // work_typeの完全一致までは求めない（同じ日に担当者が何かしら報告していれば、
+  // 作業種別の選び方の違いだけで「未報告」に残り続けるのを避ける）
   const matchReportToSchedule = (schedule: Schedule): Report | null =>
     reports.find(r =>
       r.user_id === (schedule.assigned_user_id ?? schedule.user_id) &&
-      r.date === schedule.date &&
-      r.work_type === schedule.work_type
+      r.date === schedule.date
     ) ?? null;
 
 
@@ -2052,7 +2077,9 @@ export default function App() {
             currentUserId={currentUser?.id ?? 0}
             isAdmin={isAdmin}
             onAddSchedule={addSchedule}
+            onUpdateSchedule={updateSchedule}
             onDeleteSchedule={deleteSchedule}
+            onDeleteReport={deleteReport}
             onLoadComments={loadComments}
             onAddComment={addComment}
             onEditComment={editComment}
@@ -2785,11 +2812,12 @@ export default function App() {
       </BottomSheet>
 
       {/* ───── 予定詳細（未報告） ───── */}
-      <BottomSheet open={!!selectedSchedule} onClose={() => setSelectedSchedule(null)}>
+      <BottomSheet open={!!selectedSchedule} onClose={() => { setSelectedSchedule(null); setEditingSchedule(false); }}>
         {selectedSchedule && (() => {
         const s = selectedSchedule;
         const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
         const cropObj = crops.find(c => c.name === s.crop);
+        const canEdit = isAdmin || s.user_id === currentUser?.id || (!!s.assigned_user_id && s.assigned_user_id === currentUser?.id);
         return (
           <>
               {/* ヘッダー */}
@@ -2800,12 +2828,85 @@ export default function App() {
                     {s.date}{s.crop && ` · ${s.crop}`}
                   </div>
                 </div>
-                <button onClick={() => setSelectedSchedule(null)} style={S.circleBtn}>
-                  <X size={16} strokeWidth={2} />
-                </button>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  {canEdit && !editingSchedule && (
+                    <button
+                      onClick={() => {
+                        setScheduleEditForm({ date:s.date, workType:s.work_type ?? "", crop:s.crop ?? "", assignedUserId:s.assigned_user_id ?? 0, note:s.note ?? "" });
+                        setEditingSchedule(true);
+                      }}
+                      style={S.circleBtn}
+                    >
+                      <Pencil size={15} strokeWidth={2} />
+                    </button>
+                  )}
+                  <button onClick={() => { setSelectedSchedule(null); setEditingSchedule(false); }} style={S.circleBtn}>
+                    <X size={16} strokeWidth={2} />
+                  </button>
+                </div>
               </div>
 
               <div style={{ padding:"0 16px" }}>
+                {editingSchedule ? (
+                  <>
+                    {/* 編集フォーム */}
+                    <div style={S.wellBox}>
+                      <div style={S.wrow}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl2}>日付</div>
+                          <input type="date" style={{ ...S.fieldInput, maxWidth:"100%" }} value={scheduleEditForm.date} onChange={e => setScheduleEditForm(f => ({ ...f, date:e.target.value }))} />
+                        </div>
+                      </div>
+                      <div style={{ ...S.wrow, marginTop:6 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl2}>作業種別</div>
+                          <select style={S.fieldSelect} value={scheduleEditForm.workType} onChange={e => setScheduleEditForm(f => ({ ...f, workType:e.target.value }))}>
+                            {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ ...S.wrow, marginTop:6 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl2}>担当者</div>
+                          <select style={S.fieldSelect} value={scheduleEditForm.assignedUserId} onChange={e => setScheduleEditForm(f => ({ ...f, assignedUserId:Number(e.target.value) }))}>
+                            <option value={0}>未設定</option>
+                            {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ flex:1, minWidth:0, borderLeft:`1px solid ${C.hairline}`, paddingLeft:16 }}>
+                          <div style={S.lbl2}>作物</div>
+                          <select style={S.fieldSelect} value={scheduleEditForm.crop} onChange={e => setScheduleEditForm(f => ({ ...f, crop:e.target.value }))}>
+                            <option value="">未設定</option>
+                            {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ ...S.wrow, marginTop:6 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl2}>メモ</div>
+                          <input style={S.fieldInput} value={scheduleEditForm.note} onChange={e => setScheduleEditForm(f => ({ ...f, note:e.target.value }))} placeholder="メモ（任意）" />
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button onClick={() => setEditingSchedule(false)} style={{ ...btn("secondary", "lg"), flex:1 }}>キャンセル</button>
+                      <button
+                        disabled={savingSchedule}
+                        onClick={async () => {
+                          setSavingSchedule(true);
+                          const ok = await updateSchedule(s.id, scheduleEditForm.date, scheduleEditForm.workType, scheduleEditForm.note, scheduleEditForm.crop, scheduleEditForm.assignedUserId || null, scheduleEditForm.workType, s.field);
+                          setSavingSchedule(false);
+                          if (ok) { setEditingSchedule(false); showToast("予定を更新しました"); }
+                          else showToast("更新に失敗しました", "err");
+                        }}
+                        style={{ ...btn("primary", "lg"), flex:1 }}
+                      >
+                        {savingSchedule ? "保存中..." : "保存"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
                 {/* 基本情報 */}
                 <div style={{ background:C.well, borderRadius:14, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   {s.work_type && scheduleTitle(s) && (
@@ -2848,13 +2949,15 @@ export default function App() {
                 >
                   <ClipboardList size={16} strokeWidth={2} />この予定の報告を入力
                 </button>
-                {(isAdmin || s.user_id === currentUser?.id || (!!s.assigned_user_id && s.assigned_user_id === currentUser?.id)) && (
+                {canEdit && (
                   <button
                     onClick={() => deleteSchedule(s.id)}
                     style={{ ...btn("tertiary", "sm"), color:C.danger, marginTop:8 }}
                   >
                     <Trash2 size={13} strokeWidth={2} />この予定を削除
                   </button>
+                )}
+                  </>
                 )}
 
                 {/* コメント */}
