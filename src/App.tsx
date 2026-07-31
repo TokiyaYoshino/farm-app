@@ -13,7 +13,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
-  Download, FileText, FileSpreadsheet, Sparkles,
+  Download, FileText, FileSpreadsheet, Sparkles, BookOpen,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -48,6 +48,10 @@ const supabase = createClient(
 
 // ─── 定数 ───────────────────────────────────────────────
 const WORK_TEMPLATES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り", "剪定", "その他"];
+
+// ai_outputs.model に残すモデル名。api/*.ts が使うモデルと合わせること
+// （api/generate-report.ts・diagnose-image.ts 等の model 指定が正）。
+const AI_MODEL = "gpt-4o-mini";
 
 // 農薬散布系の作業区分か判定（カスタムカテゴリ名「農薬散布」とレガシーテンプレート「防除」の両方に対応）
 const isPesticideWorkType = (workType: string) => workType === "農薬散布" || workType === "防除";
@@ -124,11 +128,16 @@ async function fetchWeatherForPeriod(
 
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
-// 防除タイミング助言用: 今日から3日分の日次予報を人間可読テキストに整形する（無料API・キー不要）。
+// 防除タイミング助言用: 直近7日の実績と今日から7日分の予報を人間可読テキストに整形する
+// （無料API・キー不要）。散布直後の降雨が薬効を流すのと同様、直前の降雨で葉が濡れている状態も
+// 薬液の付着に影響するため、予報だけでなく実績も材料として渡す。
+// past_days で実績が同じ daily 配列に入るので、archive API を別途叩く必要はない。
 async function fetchPestControlForecast(lat: number, lng: number): Promise<string> {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
     `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max` +
-    `&timezone=Asia%2FTokyo&forecast_days=3`;
+    // wind_speed_unit=ms は必須。Open-Meteo の既定は km/h で、指定しないと
+    // 「16(km/h)」を「16m/s」と表示してしまい、ドリフト（飛散）の判断を誤らせる
+    `&wind_speed_unit=ms&timezone=Asia%2FTokyo&past_days=7&forecast_days=7`;
   const res = await fetch(url);
   const data = await res.json();
   const days: string[] = data.daily?.time ?? [];
@@ -138,12 +147,31 @@ async function fetchPestControlForecast(lat: number, lng: number): Promise<strin
   const rainSum: number[] = data.daily?.precipitation_sum ?? [];
   const rainProb: number[] = data.daily?.precipitation_probability_max ?? [];
   const windMax: number[] = data.daily?.wind_speed_10m_max ?? [];
-  return days.map((d, i) => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const line = (d: string, i: number): string => {
     const dt = new Date(d + "T00:00:00+09:00");
     const label = `${d.slice(5).replace("-", "/")}(${WEEKDAY_JA[dt.getDay()]})`;
-    return `${label}: 天気${wmoToLabel(codes[i])} / 最高${Math.round(tMax[i])}℃・最低${Math.round(tMin[i])}℃ / ` +
-      `降水確率${Math.round(rainProb[i] ?? 0)}% / 降水量${(rainSum[i] ?? 0).toFixed(1)}mm / 最大風速${Math.round(windMax[i] ?? 0)}m/s`;
-  }).join("\n");
+    const parts = [
+      `天気${wmoToLabel(codes[i])}`,
+      `最高${Math.round(tMax[i])}℃・最低${Math.round(tMin[i])}℃`,
+      `降水量${(rainSum[i] ?? 0).toFixed(1)}mm`,
+      `最大風速${Math.round(windMax[i] ?? 0)}m/s`,
+    ];
+    // 降水確率は予報にしか無い（実績日は null で返る）
+    if (d >= today && rainProb[i] != null) parts.splice(2, 0, `降水確率${Math.round(rainProb[i])}%`);
+    return `${label}: ${parts.join(" / ")}`;
+  };
+
+  const past = days.map((d, i) => (d < today ? line(d, i) : "")).filter(Boolean);
+  const future = days.map((d, i) => (d >= today ? line(d, i) : "")).filter(Boolean);
+  return [
+    "【直近7日の実績】",
+    ...(past.length > 0 ? past : ["（実績を取得できませんでした）"]),
+    "",
+    "【今日からの予報】",
+    ...future,
+  ].join("\n");
 }
 
 
@@ -161,10 +189,26 @@ interface PesticideMaster {
   company: string | null; dilution_rate: string | null;
   target_crop: string | null; target_pest: string | null; is_active: boolean;
 }
+// FAMIC 登録適用部の1行（api/pesticide-registration.ts が返す形）
+interface PesticideRegistration {
+  id?: string;
+  pesticide_id?: string;
+  registration_no: string;
+  product_name: string;
+  crop_name: string;
+  pest_name: string;
+  dilution: string;
+  usage_timing: string;
+  usage_count: string;
+  total_count: string;
+  application: string;
+  raw?: Record<string, string>;
+}
 interface Pesticide {
   id: string; org: string; name: string; type: string;
   dilution_rate: string; notes: string; created_at: string;
   master_id?: string;
+  registration_no?: string | null;  // FAMIC 農薬登録番号
   active_ingredient?: string;      // 有効成分（GAP監査 必須項目）
   pre_harvest_interval?: string;   // 収穫前日数・使用時期（GAP監査 必須項目）
   usage_method?: string;           // 使用方法（散布機等、GAP監査 必須項目）
@@ -274,6 +318,12 @@ export default function App() {
   const [pManualMode, setPManualMode]     = useState(false);
   const [masterSearch, setMasterSearch]   = useState("");
   const [masterResults, setMasterResults] = useState<PesticideMaster[]>([]);
+  // 農薬の適用情報（FAMIC 登録適用部）。件数が多くなりうるので展開時に遅延読み込みする
+  const [pRegs, setPRegs]               = useState<Record<string, PesticideRegistration[]>>({});
+  const [pRegOpen, setPRegOpen]         = useState<string | null>(null);
+  const [pRegLoading, setPRegLoading]   = useState<string | null>(null);
+  const [pRegCandidates, setPRegCandidates] =
+    useState<{ pesticideId: string; list: { registration_no: string; product_name: string }[] } | null>(null);
   const [masterSearching, setMasterSearching] = useState(false);
   const [selectedMaster, setSelectedMaster]   = useState<PesticideMaster | null>(null);
   const masterTimerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -370,6 +420,7 @@ export default function App() {
   const [showPestAdviceSheet, setShowPestAdviceSheet] = useState(false);
   const [pestAdviceForecast, setPestAdviceForecast] = useState("");
   const [pestAdviceResult, setPestAdviceResult]     = useState("");
+  const [pestAdvicePesticideId, setPestAdvicePesticideId] = useState("");
   const [pestAdviceLoading, setPestAdviceLoading]   = useState(false);
   const [pestAdviceError, setPestAdviceError]       = useState("");
 
@@ -377,7 +428,26 @@ export default function App() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagResult, setDiagResult]   = useState<DiagnosisResult | null>(null);
   const [diagError, setDiagError]     = useState("");
-  useEffect(() => { setDiagResult(null); setDiagError(""); setDiagLoading(false); }, [selectedReport?.id]);
+  // 記録を切り替えたら表示をリセットし、保存済みの診断結果（ai_outputs）があれば復元する。
+  // 従来は診断結果が state だけに載っていたため、シートを閉じると消えていた。
+  useEffect(() => {
+    setDiagResult(null); setDiagError(""); setDiagLoading(false);
+    const reportId = selectedReport?.id;
+    if (!reportId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("ai_outputs")
+        .select("output_json")
+        .eq("kind", "diagnosis")
+        .eq("report_id", reportId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const saved = data?.[0]?.output_json as DiagnosisResult | undefined;
+      if (!cancelled && saved) setDiagResult(saved);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedReport?.id]);
 
   // AI画像診断（単体・記録作成を介さず写真から直接診断）
   const [showDiagPhotoSheet, setShowDiagPhotoSheet] = useState(false);
@@ -913,6 +983,12 @@ export default function App() {
         if (matchedIds.length > 0) setSelectedPesticides(prev => Array.from(new Set([...prev, ...matchedIds])));
       }
       if (s.soil_ph != null) setSoilPh(String(s.soil_ph));
+      // structure-voice は構造化JSONをそのまま返す仕様で usage / costUsd を含まないため、
+      // ここだけコストは残らない（api/structure-voice.ts）。
+      void saveAiOutput("voice_structure", {
+        targetDate: rForm.date, field: s.field ?? rForm.field ?? null,
+        inputSummary: rForm.note, outputJson: s,
+      });
       showToast("AIでフォームに反映しました");
     } catch (e: unknown) {
       console.error("structure-voice error:", e);
@@ -1122,12 +1198,117 @@ export default function App() {
     const { data, error } = await supabase.from("pesticides").insert([{
       ...pForm, org: currentOrg, organization_id: currentOrganizationId,
       master_id: selectedMaster?.id || null,
+      // マスタ経由で選んだ場合は登録番号が分かっているので引き継ぐ（適用情報の取得に使う）
+      registration_no: selectedMaster?.reg_no || null,
     }]).select();
     setSubmitting(false);
     if (error) { console.error("addPesticide error:", error); return showToast(error.message, "err"); }
     if (data) setPesticides(p => [...p, data[0] as Pesticide].sort((a, b) => a.name.localeCompare(b.name)));
     resetPesticideForm();
     showToast("農薬を追加しました");
+  };
+
+  // ─── 農薬の適用情報（FAMIC 農薬登録情報）───────────────────
+  // 登録番号ごとの適用情報を api/pesticide-registration.ts 経由で取得し、
+  // pesticide_registrations に保存する（FAMICのZIPにCORSが無くブラウザから直接取得できないため）。
+  // 取得した値は正規化せず原文のまま保持する。最終的に正しいのは製品ラベルの表示。
+  const saveRegistrations = async (p: Pesticide, registrationNo: string): Promise<void> => {
+    const res = await fetch("/api/pesticide-registration", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ registrationNo }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || "適用情報を取得できませんでした。");
+    const rows = (d.rows ?? []) as PesticideRegistration[];
+    if (rows.length === 0) throw new Error(`登録番号 ${registrationNo} の適用情報が見つかりませんでした。`);
+
+    // 取り直しのたびに増えないよう、この農薬の既存ぶんを置き換える
+    await supabase.from("pesticide_registrations").delete().eq("pesticide_id", p.id);
+    const { error } = await supabase.from("pesticide_registrations").insert(
+      rows.map(r => ({
+        organization_id: currentOrganizationId,
+        pesticide_id: p.id,
+        registration_no: r.registration_no,
+        product_name: r.product_name,
+        crop_name: r.crop_name,
+        pest_name: r.pest_name,
+        dilution: r.dilution,
+        usage_timing: r.usage_timing,
+        usage_count: r.usage_count,
+        total_count: r.total_count,
+        application: r.application,
+        raw: r.raw ?? null,
+      })),
+    );
+    if (error) throw new Error(error.message);
+
+    // 農薬マスタ側にも登録番号を残し、次回以降は候補選択を挟まずに済むようにする
+    if (p.registration_no !== registrationNo) {
+      await supabase.from("pesticides").update({ registration_no: registrationNo }).eq("id", p.id);
+      setPesticides(list => list.map(x => (x.id === p.id ? { ...x, registration_no: registrationNo } : x)));
+    }
+    setPRegs(m => ({ ...m, [p.id]: rows }));
+  };
+
+  const openRegistrations = async (p: Pesticide) => {
+    if (pRegOpen === p.id) { setPRegOpen(null); return; }
+    setPRegOpen(p.id);
+    setPRegCandidates(null);
+    if (pRegs[p.id]) return; // 取得済み
+
+    setPRegLoading(p.id);
+    try {
+      // まず保存済みを見る
+      const { data: saved } = await supabase
+        .from("pesticide_registrations")
+        .select("*")
+        .eq("pesticide_id", p.id);
+      if (saved && saved.length > 0) {
+        setPRegs(m => ({ ...m, [p.id]: saved as PesticideRegistration[] }));
+        return;
+      }
+      if (p.registration_no) {
+        await saveRegistrations(p, p.registration_no);
+        return;
+      }
+      // 登録番号が分からない農薬は、名前から候補を出して選んでもらう
+      const res = await fetch("/api/pesticide-registration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: p.name }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "農薬登録情報を検索できませんでした。");
+      const list = (d.candidates ?? []) as { registration_no: string; product_name: string }[];
+      if (list.length === 0) {
+        showToast(`「${p.name}」に一致する登録農薬が見つかりませんでした`, "err");
+        setPRegOpen(null);
+        return;
+      }
+      if (list.length === 1) {
+        await saveRegistrations(p, list[0].registration_no);
+        return;
+      }
+      setPRegCandidates({ pesticideId: p.id, list });
+    } catch (e: unknown) {
+      showToast((e as Error).message || "適用情報の取得に失敗しました", "err");
+      setPRegOpen(null);
+    } finally {
+      setPRegLoading(null);
+    }
+  };
+
+  const pickRegistrationCandidate = async (p: Pesticide, registrationNo: string) => {
+    setPRegCandidates(null);
+    setPRegLoading(p.id);
+    try {
+      await saveRegistrations(p, registrationNo);
+    } catch (e: unknown) {
+      showToast((e as Error).message || "適用情報の取得に失敗しました", "err");
+    } finally {
+      setPRegLoading(null);
+    }
   };
 
   const deletePesticide = (id: string) =>
@@ -1279,6 +1460,43 @@ export default function App() {
     fontSize: 12, fontWeight: 600, cursor: "pointer",
   });
 
+  // ─── AI出力の保存 ─────────────────────────────────────────
+  // AI機能の出力を ai_outputs に残す。分析タブの診断集計とAI履歴の元データになる。
+  // 保存の失敗はAI機能自体を止めない（画面に出すことが本体で、保存は付随価値のため）。
+  const saveAiOutput = async (
+    kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure",
+    payload: {
+      reportId?: number | null;
+      targetDate?: string | null;
+      field?: string | null;
+      cropId?: number | null;
+      inputSummary?: string | null;
+      outputJson?: unknown;
+      outputText?: string | null;
+      usage?: unknown;
+      costUsd?: number | null;
+    },
+  ): Promise<void> => {
+    if (!currentOrganizationId) return;
+    const { error } = await supabase.from("ai_outputs").insert([{
+      organization_id: currentOrganizationId,
+      kind,
+      report_id:     payload.reportId ?? null,
+      target_date:   payload.targetDate ?? new Date().toISOString().slice(0, 10),
+      field:         payload.field ?? null,
+      crop_id:       payload.cropId ?? null,
+      // 材料が長くなりうるので頭2000字だけ残す（監査・再現の手がかり用）
+      input_summary: payload.inputSummary?.slice(0, 2000) ?? null,
+      output_json:   payload.outputJson ?? null,
+      output_text:   payload.outputText ?? null,
+      model:         AI_MODEL,
+      usage:         payload.usage ?? null,
+      cost_usd:      payload.costUsd ?? null,
+      created_by:    currentUser?.id ?? null,
+    }]);
+    if (error) console.error("saveAiOutput failed:", kind, error);
+  };
+
   // ─── AI日報生成（PoC）─────────────────────────────────────
   // その日の作業記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）
   const formatDayRecords = (date: string): string => {
@@ -1319,6 +1537,10 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.report) {
         setGenResult(d.report);
+        void saveAiOutput("daily_report", {
+          targetDate: genDate, inputSummary: records,
+          outputText: d.report, usage: d.usage, costUsd: d.costUsd,
+        });
       } else {
         setGenError(d.error || "生成に失敗しました。");
       }
@@ -1340,14 +1562,22 @@ export default function App() {
       const forecast = await fetchPestControlForecast(lat, lng);
       if (!forecast) { setPestAdviceError("天気予報を取得できませんでした。"); setPestAdviceLoading(false); return; }
       setPestAdviceForecast(forecast);
+      // 農薬を選んでいて適用情報を取得済みなら、使用基準の観点も助言に含めてもらう
+      const registrations = pestAdvicePesticideId ? (pRegs[pestAdvicePesticideId] ?? []) : [];
       const res = await fetch("/api/pest-control-advice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ forecast }),
+        // lat/lng は気象庁の警報を引くためにサーバー側で使う
+        // （地域コードの解決に使う国土地理院の逆ジオコーダにCORSが無く、ブラウザから直接叩けないため）
+        body: JSON.stringify({ forecast, lat, lng, registrations }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.advice) {
         setPestAdviceResult(d.advice);
+        void saveAiOutput("pest_advice", {
+          inputSummary: forecast,
+          outputText: d.advice, usage: d.usage, costUsd: d.costUsd,
+        });
       } else {
         setPestAdviceError(d.error || "助言の生成に失敗しました。");
       }
@@ -1425,17 +1655,26 @@ export default function App() {
 
   // ─── 病害虫画像診断 ───────────────────────────────────────
   // 記録に添付済みの写真（Supabase公開URL）をそのままOpenAIのvisionに渡す。
-  const diagnoseImage = async (imageUrl: string, cropName?: string) => {
+  // 診断結果を ai_outputs に紐付けて残すため、URLだけでなく記録そのものを受け取る。
+  const diagnoseImage = async (report: Report) => {
+    if (!report.image_url) return;
     setDiagLoading(true); setDiagError(""); setDiagResult(null);
     try {
+      const crop = cropName(report.crop_id);
       const res = await fetch("/api/diagnose-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl, cropName }),
+        body: JSON.stringify({ imageUrl: report.image_url, cropName: crop }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.diagnosis) {
         setDiagResult(d.diagnosis as DiagnosisResult);
+        void saveAiOutput("diagnosis", {
+          reportId: report.id, targetDate: report.date,
+          field: report.field, cropId: report.crop_id,
+          inputSummary: `写真:${report.image_url}${crop ? ` / 作物:${crop}` : ""}`,
+          outputJson: d.diagnosis, usage: d.usage, costUsd: d.costUsd,
+        });
       } else {
         setDiagError(d.error || "診断に失敗しました。");
       }
@@ -1461,6 +1700,11 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.diagnosis) {
         setDiagPhotoResult(d.diagnosis as DiagnosisResult);
+        // 記録を介さない単体診断のため report_id / field / crop_id は持たない
+        void saveAiOutput("diagnosis", {
+          inputSummary: `写真:${imageUrl}`,
+          outputJson: d.diagnosis, usage: d.usage, costUsd: d.costUsd,
+        });
       } else {
         setDiagPhotoError(d.error || "診断に失敗しました。");
       }
@@ -2507,6 +2751,68 @@ export default function App() {
                       items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deletePesticide(p.id) }]} />
                   )}
                 </div>
+
+                {/* 適用情報（FAMIC 農薬登録情報） */}
+                <button
+                  onClick={() => openRegistrations(p)}
+                  disabled={pRegLoading === p.id}
+                  style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:4, opacity:pRegLoading === p.id ? 0.6 : 1 }}
+                >
+                  <BookOpen size={13} strokeWidth={2} />
+                  {pRegLoading === p.id
+                    ? "取得中…"
+                    : pRegOpen === p.id
+                      ? "適用情報を閉じる"
+                      : `適用情報${pRegs[p.id] ? `（${pRegs[p.id].length}件）` : "を見る"}`}
+                </button>
+
+                {pRegOpen === p.id && pRegCandidates?.pesticideId === p.id && (
+                  <div style={{ ...S.wellBox, padding:12, marginTop:8 }}>
+                    <div style={{ fontSize:12, color:C.textSub, marginBottom:8, lineHeight:1.6 }}>
+                      同じ名前の登録農薬が複数あります。使用しているものを選んでください。
+                    </div>
+                    {pRegCandidates.list.map(c => (
+                      <button
+                        key={c.registration_no}
+                        onClick={() => pickRegistrationCandidate(p, c.registration_no)}
+                        style={{ ...btn("secondary", "sm"), width:"100%", marginBottom:6, justifyContent:"space-between" }}
+                      >
+                        <span>{c.product_name}</span>
+                        <span style={{ color:C.textMuted, fontSize:11 }}>第{c.registration_no}号</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {pRegOpen === p.id && pRegs[p.id] && (
+                  <div style={{ ...S.wellBox, padding:12, marginTop:8 }}>
+                    <div style={{ fontSize:11, color:C.textMuted, marginBottom:10, lineHeight:1.6 }}>
+                      農薬登録第{p.registration_no}号の適用内容（FAMIC 農薬登録情報より）。
+                      <strong style={{ color:C.textSub }}>実際の使用時は必ず製品ラベルの表示を確認してください。</strong>
+                    </div>
+                    {pRegs[p.id].slice(0, 30).map((r, i) => (
+                      <div key={r.id ?? i} style={{ ...S.wrow, display:"block", padding:"8px 10px", marginBottom:6 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:C.text }}>
+                          {r.crop_name}{r.pest_name ? ` / ${r.pest_name}` : ""}
+                        </div>
+                        <div style={{ fontSize:12, color:C.textMuted, marginTop:2, lineHeight:1.6 }}>
+                          {[
+                            r.dilution && `希釈 ${r.dilution}`,
+                            r.usage_timing && `使用時期 ${r.usage_timing}`,
+                            r.usage_count && `本剤 ${r.usage_count}`,
+                            r.total_count && `総使用回数 ${r.total_count}`,
+                            r.application && `方法 ${r.application}`,
+                          ].filter(Boolean).join(" · ")}
+                        </div>
+                      </div>
+                    ))}
+                    {pRegs[p.id].length > 30 && (
+                      <div style={{ fontSize:11, color:C.textMuted, textAlign:"center" as const, paddingTop:4 }}>
+                        ほか{pRegs[p.id].length - 30}件（登録内容の全文はラベル・登録情報でご確認ください）
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </>}
@@ -2733,7 +3039,7 @@ export default function App() {
                       </div>
                     )}
                     <button
-                      onClick={() => diagnoseImage(r.image_url, cropName(r.crop_id))}
+                      onClick={() => diagnoseImage(r)}
                       disabled={diagLoading}
                       style={{ ...btn("tertiary", "sm"), width:"100%", opacity:diagLoading ? 0.6 : 1 }}
                     >
@@ -3065,7 +3371,12 @@ export default function App() {
       {/* ── 分析タブ ── */}
       {tab === "analytics" && (
         analyticsSubTab === "report" ? (
-          <AnalyticsView currentOrg={currentOrg} />
+          <AnalyticsView
+            currentOrg={currentOrg}
+            organizationId={currentOrganizationId}
+            lat={weatherCoords?.lat ?? null}
+            lng={weatherCoords?.lng ?? null}
+          />
         ) : (
           <GanttChart
             projects={projects}
@@ -3593,6 +3904,26 @@ export default function App() {
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
             <Wind size={17} strokeWidth={2} color={C.ink} />防除タイミング助言
+          </div>
+
+          {/* 農薬を選ぶと、その農薬の適用情報（作物・希釈倍数・使用時期・使用回数）も助言の材料に渡る */}
+          <div style={S.wellBox}>
+            <div style={{ ...S.wrow, display:"block" }}>
+              <div style={S.lbl2}>使用予定の農薬（任意）</div>
+              <select
+                style={S.fieldSelect}
+                value={pestAdvicePesticideId}
+                onChange={e => setPestAdvicePesticideId(e.target.value)}
+              >
+                <option value="">選ばない（天気だけで判断）</option>
+                {pesticides.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            {pestAdvicePesticideId && !pRegs[pestAdvicePesticideId] && (
+              <div style={{ fontSize:11, color:C.textMuted, padding:"8px 10px 4px", lineHeight:1.6 }}>
+                この農薬の適用情報はまだ取得していません。管理タブの農薬一覧で「適用情報を見る」を一度実行すると、助言にも反映されます。
+              </div>
+            )}
           </div>
 
           {pestAdviceForecast && (
