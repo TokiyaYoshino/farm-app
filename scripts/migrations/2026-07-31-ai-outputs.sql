@@ -10,6 +10,7 @@
 --
 -- テナント列は organization_id のみを使う。レガシーの org 文字列カラムは新規テーブルには持ち込まない。
 -- reports/crops/users の id は integer 系のため、FK 列は bigint で受ける（int8→int4 のFKはPostgreSQLで有効）。
+-- ただし pesticides.id のみ uuid（Supabase UI経由で後から作成されたテーブルのため）。FK列もuuidで受ける。
 
 -- ────────────────────────────────────────────────────────────
 -- 1) ai_outputs
@@ -76,7 +77,7 @@ create policy allow_all on daily_weather for all using (true) with check (true);
 create table if not exists pesticide_registrations (
   id              uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id),
-  pesticide_id    bigint references pesticides(id) on delete cascade,
+  pesticide_id    uuid references pesticides(id) on delete cascade,
   registration_no text not null,
   product_name    text,   -- 農薬の名称（CSV の登録上の正式名）
   crop_name       text,   -- 作物名
