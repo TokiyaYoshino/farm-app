@@ -1,0 +1,937 @@
+<title>農業プラットフォーム台帳 — 2026年8月調査</title>
+<style>
+  :root{
+    --paper:#F1ECDF;
+    --paper-raised:#FFFFFF;
+    --paper-well:#E9E2CE;
+    --ink:#211F1A;
+    --ink-soft:#5B5642;
+    --ink-faint:#8B8570;
+    --line:#D8CFB4;
+    --line-strong:#C3B896;
+    --indigo:#2B3A55;
+    --indigo-soft:#5A6C8C;
+    --indigo-bg:#E1E6ED;
+    --moss:#4E6238;
+    --moss-bg:#E1E7CF;
+    --hanko:#A3392C;
+    --hanko-bg:#F2DAD1;
+    --amber:#8C6A24;
+    --amber-bg:#EEE2BF;
+    --shadow:0 1px 2px rgba(33,31,26,.06), 0 8px 24px -12px rgba(33,31,26,.18);
+    --f-display:Georgia,"Iowan Old Style","Palatino Linotype","Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;
+    --f-body:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic Medium","Yu Gothic","Noto Sans JP",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#171A22;
+      --paper-raised:#1E2330;
+      --paper-well:#252B3A;
+      --ink:#ECE6D6;
+      --ink-soft:#AEA890;
+      --ink-faint:#7A7566;
+      --line:#333A4C;
+      --line-strong:#454F66;
+      --indigo:#93A7CC;
+      --indigo-soft:#6C7C9E;
+      --indigo-bg:#232B3C;
+      --moss:#9EBA7E;
+      --moss-bg:#25301F;
+      --hanko:#E58269;
+      --hanko-bg:#3A241E;
+      --amber:#DCBB6E;
+      --amber-bg:#362E18;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#171A22; --paper-raised:#1E2330; --paper-well:#252B3A;
+    --ink:#ECE6D6; --ink-soft:#AEA890; --ink-faint:#7A7566;
+    --line:#333A4C; --line-strong:#454F66;
+    --indigo:#93A7CC; --indigo-soft:#6C7C9E; --indigo-bg:#232B3C;
+    --moss:#9EBA7E; --moss-bg:#25301F;
+    --hanko:#E58269; --hanko-bg:#3A241E;
+    --amber:#DCBB6E; --amber-bg:#362E18;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+  }
+  :root[data-theme="light"]{
+    --paper:#F1ECDF; --paper-raised:#FFFFFF; --paper-well:#E9E2CE;
+    --ink:#211F1A; --ink-soft:#5B5642; --ink-faint:#8B8570;
+    --line:#D8CFB4; --line-strong:#C3B896;
+    --indigo:#2B3A55; --indigo-soft:#5A6C8C; --indigo-bg:#E1E6ED;
+    --moss:#4E6238; --moss-bg:#E1E7CF;
+    --hanko:#A3392C; --hanko-bg:#F2DAD1;
+    --amber:#8C6A24; --amber-bg:#EEE2BF;
+    --shadow:0 1px 2px rgba(33,31,26,.06), 0 8px 24px -12px rgba(33,31,26,.18);
+  }
+
+  *{box-sizing:border-box;}
+  html{background:var(--paper);}
+  body{margin:0;}
+  .ledger{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--f-body);
+    line-height:1.7;
+    font-size:16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .ledger *{min-width:0;}
+  .ledger a{color:var(--indigo); text-decoration-thickness:1px; text-underline-offset:2px;}
+  .ledger a:hover{color:var(--hanko);}
+  .ledger a:focus-visible, .ledger button:focus-visible{outline:2px solid var(--indigo); outline-offset:2px; border-radius:2px;}
+  .ledger h1,.ledger h2,.ledger h3,.ledger h4{font-family:var(--f-display); font-weight:700; text-wrap:balance; margin:0;}
+  .ledger p{margin:0 0 1em; max-width:64ch;}
+  .ledger .wide p{max-width:none;}
+  .ledger table{font-variant-numeric:tabular-nums;}
+
+  /* ---------- cover ---------- */
+  .cover{
+    position:relative;
+    padding:5.5rem 1.5rem 4rem;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 119px, var(--line) 119px 120px),
+      var(--paper);
+    border-bottom:1px solid var(--line-strong);
+    overflow:hidden;
+  }
+  .cover::before{
+    content:"";
+    position:absolute; inset:0;
+    background:linear-gradient(180deg, var(--paper) 0%, transparent 14%, transparent 86%, var(--paper) 100%);
+    pointer-events:none;
+  }
+  .cover-inner{position:relative; max-width:760px; margin:0 auto; text-align:left;}
+  .cover-eyebrow{
+    display:flex; align-items:center; gap:.6em;
+    font-family:var(--f-body); font-size:.78rem; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--indigo-soft); margin-bottom:1.6rem;
+  }
+  .cover-eyebrow::before{content:""; width:2.4em; height:1px; background:var(--indigo-soft); display:inline-block;}
+  .cover h1{
+    font-size:clamp(2.1rem, 5vw, 3.1rem);
+    line-height:1.28;
+    color:var(--ink);
+    margin-bottom:1.1rem;
+  }
+  .cover h1 em{font-style:normal; color:var(--indigo); border-bottom:2px solid var(--hanko-bg);}
+  .cover .lede{
+    font-size:1.08rem; color:var(--ink-soft); max-width:56ch; margin-bottom:2.2rem;
+  }
+  .cover-meta{
+    display:flex; flex-wrap:wrap; gap:.5rem 1.6rem;
+    font-size:.86rem; color:var(--ink-faint);
+    border-top:1px solid var(--line); padding-top:1.2rem;
+  }
+  .cover-meta dt{font-weight:600; color:var(--ink-soft); display:inline;}
+  .cover-meta div{display:flex; gap:.4em;}
+
+  /* ---------- layout ---------- */
+  .layout{
+    max-width:1180px; margin:0 auto;
+    display:grid; grid-template-columns:216px minmax(0,1fr);
+    gap:3rem;
+    padding:3rem 1.5rem 2rem;
+  }
+  @media (max-width:900px){
+    .layout{grid-template-columns:1fr; padding-top:0;}
+  }
+
+  .toc{align-self:start; position:sticky; top:1.5rem;}
+  @media (max-width:900px){
+    .toc{
+      position:sticky; top:0; z-index:5;
+      background:var(--paper);
+      border-bottom:1px solid var(--line-strong);
+      padding:.9rem 0;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+  }
+  .toc-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.15rem;}
+  @media (max-width:900px){
+    .toc-list{flex-direction:row; gap:0; padding:0 1.5rem; width:max-content;}
+  }
+  .toc-list a{
+    display:flex; align-items:baseline; gap:.6em;
+    padding:.4rem .5rem; margin:0 -.5rem;
+    border-radius:3px;
+    color:var(--ink-soft); text-decoration:none;
+    font-size:.88rem; white-space:nowrap;
+    border-left:2px solid transparent;
+  }
+  @media (max-width:900px){
+    .toc-list a{border-left:none; border-bottom:2px solid transparent; margin:0;}
+  }
+  .toc-list a:hover{color:var(--ink); background:var(--paper-well);}
+  .toc-list a .tag{
+    font-family:var(--f-display); color:var(--indigo-soft); font-size:.95em; flex-shrink:0;
+  }
+  .toc-foot{margin-top:1.4rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.78rem; color:var(--ink-faint);}
+  @media (max-width:900px){ .toc-foot{display:none;} }
+
+  main{min-width:0;}
+  section{margin-bottom:4.4rem; scroll-margin-top:1.5rem;}
+  section:last-of-type{margin-bottom:2rem;}
+
+  .chapter-head{
+    display:flex; align-items:baseline; gap:1rem;
+    margin-bottom:1.6rem;
+    padding-bottom:.9rem;
+    border-bottom:1px solid var(--line-strong);
+  }
+  .chapter-num{
+    font-family:var(--f-display); font-size:1.5rem; color:var(--indigo);
+    flex-shrink:0; line-height:1;
+  }
+  .chapter-head h2{font-size:1.5rem; color:var(--ink);}
+  .chapter-kicker{
+    display:block; font-size:.76rem; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-faint); margin-bottom:.35rem; font-family:var(--f-body); font-weight:600;
+  }
+
+  h3{font-size:1.14rem; margin:2rem 0 .7rem; color:var(--ink);}
+  h4{font-size:.96rem; margin:1.4rem 0 .5rem; color:var(--indigo);}
+
+  .lead{font-size:1.05rem; color:var(--ink-soft); max-width:62ch;}
+
+  /* pull quote / answer box */
+  .answer{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-left:3px solid var(--indigo);
+    border-radius:8px;
+    padding:1.3rem 1.5rem;
+    box-shadow:var(--shadow);
+    margin:1.4rem 0 1.8rem;
+  }
+  .answer h4{margin-top:0; color:var(--indigo); font-size:.82rem; letter-spacing:.08em; text-transform:uppercase;}
+  .answer p:last-child{margin-bottom:0;}
+
+  /* stat strip */
+  .stat-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px; background:var(--line);
+    border:1px solid var(--line);
+    border-radius:8px; overflow:hidden;
+    margin:1.6rem 0 2rem;
+  }
+  .stat{background:var(--paper-raised); padding:1.1rem 1.2rem;}
+  .stat .n{font-family:var(--f-display); font-size:1.6rem; color:var(--ink); display:block; line-height:1.15;}
+  .stat .l{font-size:.78rem; color:var(--ink-soft); margin-top:.3rem; display:block;}
+  .stat .src{font-size:.7rem; color:var(--ink-faint); display:block; margin-top:.4rem;}
+  .stat .src a{color:var(--ink-faint);}
+
+  /* type cards (9 categories) */
+  .type-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:1rem; margin:1.6rem 0;}
+  .type-card{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:1.2rem 1.3rem; box-shadow:var(--shadow);
+  }
+  .type-card .idx{font-family:var(--f-display); color:var(--indigo-soft); font-size:.85rem;}
+  .type-card h4{margin:.3rem 0 .5rem; color:var(--ink); font-size:1rem;}
+  .type-card p{font-size:.88rem; color:var(--ink-soft); margin-bottom:.6rem;}
+  .type-card .eg{font-size:.78rem; color:var(--ink-faint); border-top:1px solid var(--line); padding-top:.55rem;}
+  .type-card .eg b{color:var(--ink-soft); font-weight:600;}
+
+  /* table (ledger style) */
+  .twrap{overflow-x:auto; margin:1.4rem 0 2rem; border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow);}
+  table.ledger-table{width:100%; border-collapse:collapse; background:var(--paper-raised); font-size:.88rem;}
+  table.ledger-table caption{
+    text-align:left; font-size:.78rem; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-faint); padding:.7rem 1rem 0;
+  }
+  table.ledger-table th, table.ledger-table td{
+    padding:.65rem .9rem; text-align:left; border-bottom:1px solid var(--line); vertical-align:top;
+  }
+  table.ledger-table thead th{
+    background:var(--indigo-bg); color:var(--indigo); font-weight:700;
+    font-size:.76rem; letter-spacing:.05em; text-transform:uppercase;
+    border-bottom:1px solid var(--line-strong); white-space:nowrap;
+  }
+  table.ledger-table tbody tr:last-child td{border-bottom:none;}
+  table.ledger-table tbody tr:hover{background:var(--paper-well);}
+  table.ledger-table td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
+  table.ledger-table td.name{font-weight:600; white-space:nowrap;}
+  table.ledger-table .cell-src{font-size:.78rem; color:var(--ink-faint);}
+
+  /* hanko stamp badge */
+  .hanko-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:3.6em; height:3.6em; border-radius:50%;
+    border:1.5px solid currentColor; position:relative;
+    font-family:var(--f-display); font-weight:700; font-size:.66rem;
+    line-height:1.15; text-align:center; letter-spacing:.02em;
+    transform:rotate(-4deg);
+    flex-shrink:0;
+  }
+  .hanko-badge::before{
+    content:""; position:absolute; inset:3px; border:1px solid currentColor; border-radius:50%; opacity:.55;
+  }
+  .hanko-badge.on{color:var(--moss); background:var(--moss-bg);}
+  .hanko-badge.off{color:var(--hanko); background:var(--hanko-bg);}
+  .hanko-badge.pivot{color:var(--amber); background:var(--amber-bg);}
+  .hanko-badge.unk{color:var(--ink-faint); background:var(--paper-well);}
+
+  .tag{
+    display:inline-flex; align-items:center; gap:.4em;
+    font-size:.72rem; letter-spacing:.04em; font-weight:600;
+    padding:.18rem .55rem; border-radius:999px;
+    white-space:nowrap;
+  }
+  .tag.on{color:var(--moss); background:var(--moss-bg);}
+  .tag.off{color:var(--hanko); background:var(--hanko-bg);}
+  .tag.pivot{color:var(--amber); background:var(--amber-bg);}
+  .tag.unk{color:var(--ink-faint); background:var(--paper-well);}
+  .tag::before{content:"●"; font-size:.6em;}
+
+  /* growth-pattern list */
+  .pattern{
+    display:grid; grid-template-columns:2.6rem 1fr; gap:1rem;
+    padding:1.4rem 0; border-top:1px solid var(--line);
+  }
+  .pattern:first-of-type{border-top:none; padding-top:.4rem;}
+  .pattern .glyph{font-family:var(--f-display); font-size:1.7rem; color:var(--indigo-soft); line-height:1;}
+  .pattern h4{margin:0 0 .4rem; font-size:1.02rem; color:var(--ink);}
+  .pattern .cases{font-size:.85rem; color:var(--ink-soft); margin-top:.6rem;}
+  .pattern .cases b{color:var(--ink);}
+
+  /* failure factors */
+  .factor{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:1.2rem 1.4rem; margin-bottom:1rem; box-shadow:var(--shadow);
+  }
+  .factor h4{margin:0 0 .5rem; color:var(--hanko); font-size:1rem;}
+  .factor p{margin-bottom:.5rem; font-size:.92rem;}
+  .factor .evidence{font-size:.82rem; color:var(--ink-soft); border-top:1px dashed var(--line); padding-top:.6rem; margin-top:.6rem;}
+
+  /* callout box variants */
+  .note{
+    border:1px solid var(--line); border-radius:8px; padding:1rem 1.2rem;
+    background:var(--paper-well); font-size:.9rem; color:var(--ink-soft); margin:1.4rem 0;
+  }
+  .note.caution{border-color:var(--hanko-bg); background:var(--hanko-bg); color:var(--ink);}
+  .note strong{color:var(--ink);}
+
+  ul.plain, ol.plain{padding-left:1.3rem; margin:0 0 1.2rem;}
+  ul.plain li, ol.plain li{margin-bottom:.5rem; max-width:60ch;}
+
+  /* coda */
+  .coda{
+    background:var(--indigo); color:#F3EFE1;
+    border-radius:14px; padding:2.2rem 2rem;
+    margin-top:1.5rem;
+  }
+  :root[data-theme="dark"] .coda, :root:not([data-theme="light"]) .coda{color:#EFE9D6;}
+  .coda h3{color:inherit; font-size:1.2rem; margin-top:0;}
+  .coda p{color:#E4DFD0; max-width:60ch;}
+  .coda a{color:#F3EFE1; text-decoration-color:rgba(243,239,225,.5);}
+  @media (prefers-color-scheme: light){ .coda{color:#F3EFE1;} }
+
+  /* sources */
+  .src-group{margin-bottom:1.6rem;}
+  .src-group h4{color:var(--ink-soft); font-size:.82rem; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.6rem;}
+  .src-group ul{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:.35rem;}
+  .src-group li{font-size:.84rem; color:var(--ink-faint); padding-left:1.1em; text-indent:-1.1em;}
+
+  footer.colophon{
+    max-width:1180px; margin:0 auto; padding:2rem 1.5rem 4rem;
+    border-top:1px solid var(--line-strong);
+    font-size:.82rem; color:var(--ink-faint);
+    display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+  }
+
+  @media (prefers-reduced-motion:no-preference){
+    .toc-list a{transition:background .15s ease, color .15s ease;}
+    .ledger a{transition:color .15s ease;}
+  }
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto;} }
+</style>
+
+<div class="ledger">
+
+  <header class="cover">
+    <div class="cover-inner">
+      <p class="cover-eyebrow">FIELD LEDGER · 農業プラットフォーム調査</p>
+      <h1>誰が農機を貸し、誰が人手を集めているか。<br><em>日本と世界の農業プラットフォーム台帳</em></h1>
+      <p class="lede">「農機具の貸し借り」も「人手不足時の掲示板」も、すでに存在する。ただし、うまくいっているものほど、掲示板の形をしていない ——
+      国内外あわせて70件超のサービスを洗い出し、会員数・成長の手口・解決している課題を出典つきで記録した。</p>
+      <dl class="cover-meta">
+        <div><dt>調査時点</dt><dd>2026年8月</dd></div>
+        <div><dt>対象</dt><dd>日本国内を中心に、米・欧・印・アフリカ・豪の類例を含む</dd></div>
+        <div><dt>方式</dt><dd>公開情報の一次・二次ソースを横断調査（数字は出典・取得時点つき）</dd></div>
+      </dl>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="目次">
+      <ul class="toc-list">
+        <li><a href="#prologue"><span class="tag">序</span>要約</a></li>
+        <li><a href="#ch1"><span class="tag">一</span>産業の輪郭</a></li>
+        <li><a href="#ch2"><span class="tag">二</span>九つの型</a></li>
+        <li><a href="#ch3"><span class="tag">三</span>農機具を貸す</a></li>
+        <li><a href="#ch4"><span class="tag">四</span>人手を集める</a></li>
+        <li><a href="#ch5"><span class="tag">五</span>誰が広めたか</a></li>
+        <li><a href="#ch6"><span class="tag">六</span>潰れる理由</a></li>
+        <li><a href="#ch7"><span class="tag">終</span>紀州から</a></li>
+        <li><a href="#sources"><span class="tag">附</span>出典</a></li>
+      </ul>
+      <p class="toc-foot">全70件超のサービスのうち、主要なもののみ本文に掲載。数字が確認できないものは「非公開」「未確認」と明記。</p>
+    </nav>
+
+    <main>
+
+      <section id="prologue">
+        <div class="chapter-head">
+          <span class="chapter-num">序</span>
+          <h2>要約 —— 二つの質問への回答</h2>
+        </div>
+        <p class="lead">結論から言うと、両方とも「ある」。ただし生き残っているものほど、単純な掲示板やマーケットプレイスの形をしていない。</p>
+
+        <div class="answer">
+          <h4>問1. 農機具の貸し借りはあるか</h4>
+          <p><strong>ある。</strong>ただし日本で数字が出ているのは「シェアリング」ではなく「中古流通」。<a href="https://agri-with.com/">アグリウィズ</a>（渡辺パイプ運営、登録1万40名・2023年6月）が最も"貸し借り"に近い。クボタは自治体連携の自社保有機シェアで対応するが利用者数は非公開。農家間の直接貸借（C2C）が広がらない理由ははっきりしている ——
+          近隣農家は作業時期が競合し、機械損傷の責任や保険の担い手がいないからだ（第三章）。</p>
+        </div>
+
+        <div class="answer">
+          <h4>問2. 人手不足時に人を募集する掲示板はあるか</h4>
+          <p><strong>ある。しかも4層に分かれている。</strong>1日単位（<a href="https://day.work/">daywork</a>・<a href="https://timee.co.jp/">タイミー</a>）、数日〜数週間の宿泊付き（<a href="https://otetsutabi.com/">おてつたび</a>）、季節雇用の産地間リレー（<a href="https://yuime.co.jp/">YUIME</a>）、正社員（<a href="https://www.agri-navi.com/">あぐりナビ</a>）。共通するのは、成功したサービスほど「農業の求人」として売っていないこと ——
+          おてつたびは"旅"として、Backpacker Job Board は"ワーホリビザの88日要件"として農業労働を売っている（第四章・第五章）。</p>
+        </div>
+
+        <p>本稿は9つの類型・約30件の個別サービス・失敗した6件の事例をたどり、最後に紀州・梅産地の視点で締める。数字はすべて出典と取得時点を付した。確認できなかった数字は「非公開」「未確認」と明記し、推測はしていない。</p>
+      </section>
+
+      <section id="ch1">
+        <div class="chapter-head">
+          <span class="chapter-num">一</span>
+          <h2>この産業の輪郭 —— なぜプラットフォームが林立するのか</h2>
+        </div>
+        <p class="lead">担い手が20年で半減し、残った層の7割が65歳以上。この一点が、以降のすべての類型に共通する需要源になっている。</p>
+
+        <div class="stat-grid">
+          <div class="stat">
+            <span class="n">102.1万人</span>
+            <span class="l">基幹的農業従事者数（2025年）。1985年は346万人</span>
+            <span class="src"><a href="https://smartagri.jp/p/2191/">先端農業マガジン</a></span>
+          </div>
+          <div class="stat">
+            <span class="n">67.6歳</span>
+            <span class="l">平均年齢（2025年）。1995年以降で初めて前年比低下＝高齢層の離農加速の結果</span>
+            <span class="src">2025年農林業センサス</span>
+          </div>
+          <div class="stat">
+            <span class="n">69.5%</span>
+            <span class="l">65歳以上が占める割合。70歳以上だけで55.0%</span>
+            <span class="src">同上</span>
+          </div>
+          <div class="stat">
+            <span class="n">39,234人</span>
+            <span class="l">特定技能「農業」在留者（2025年12月末）。同時点で技能実習を初めて上回る</span>
+            <span class="src">出入国在留管理庁系集計</span>
+          </div>
+        </div>
+
+        <p>農林水産省はこの構造に対して「農業支援サービス事業体」という受け皿を政策的に用意している —— 作業代行（ドローン散布・草刈り・収穫）、<strong>農業機械のシェアリング</strong>、<strong>農業現場への人材供給</strong>を提供する業種で、令和6年度補正予算で「農業支援サービス事業育成対策」が実施され、新規立上げ・事業拡大やスマート農機購入費に補助が出る（<a href="https://www.maff.go.jp/j/seisan/sien/sizai/service.html">農水省</a>）。<strong>つまりこの領域は初期グロースを行政予算で回せる構造がある</strong> —— 後述する「補助金型グロース」の多くはここに乗っている。</p>
+
+        <div class="note">
+          <strong>もう一つの追い風：収入保険と青色申告。</strong> 2019年開始の収入保険（NOSAI）は加入に青色申告を要件としており、これが農業経営の記帳デジタル化を事実上後押ししている。営農記録SaaSにとっては制度が需要を作っている数少ない例。
+        </div>
+      </section>
+
+      <section id="ch2">
+        <div class="chapter-head">
+          <span class="chapter-num">二</span>
+          <h2>プラットフォームの九つの型</h2>
+        </div>
+        <p class="lead">農機具と人材以外にも、農業には少なくとも7つの隣接類型がある。それぞれが解いている課題は明確に異なる。</p>
+
+        <div class="type-grid">
+          <div class="type-card">
+            <span class="idx">01</span>
+            <h4>産直EC</h4>
+            <p>卸売市場は「規格・量」でしか評価しないため、小規模・高付加価値生産者ほど不利になる。価格決定権を生産者に返す。</p>
+            <p class="eg"><b>代表例</b> 食べチョク（登録生産者11,200軒・ユーザー125万人）／ポケットマルシェ／JAタウン</p>
+          </div>
+          <div class="type-card">
+            <span class="idx">02</span>
+            <h4>B2B卸・流通</h4>
+            <p>小ロット生産者と個人経営の飲食店という「小ロット同士」を市場流通は繋げない。ただし物流原価が粗利を食い、この類型は最も潰れやすい。</p>
+            <p class="eg"><b>代表例</b> やさいバス（出荷者700・購買者1,800）／<span class="tag off">終了</span> SEND（コロナで飲食店需要消滅→2022年破産）</p>
+          </div>
+          <div class="type-card">
+            <span class="idx">03</span>
+            <h4>資材EC・相見積もり</h4>
+            <p>価格の不透明性を可視化しようとする類型。しかし資材は掛売り・栽培指導・緊急配送とバンドルされており、価格比較だけでは代替できない。</p>
+            <p class="eg"><b>代表例</b> アグリズ／<span class="tag off">終了</span> AGMIRU（農水省補助事業起点、2023年6月終了）</p>
+          </div>
+          <div class="type-card">
+            <span class="idx">04</span>
+            <h4>営農管理SaaS</h4>
+            <p>farm-appの直接競合類型。記録がコストのままだと定着しない。入力を自動化するか、記録の対価を用意する必要がある。</p>
+            <p class="eg"><b>代表例</b> アグリノート（3万組織・2025年8月）／KSAS（クボタ）／AGRIHUB（登録2万人）</p>
+          </div>
+          <div class="type-card">
+            <span class="idx">05</span>
+            <h4>農地マッチング・継承</h4>
+            <p>農地法・農業委員会という規制もあり取引コストが極端に高い。近年は農地だけでなく経営体そのものの第三者承継が課題化。</p>
+            <p class="eg"><b>代表例</b> 農地中間管理機構（集積率61.5%）／シェア畑（会員10万人）／relay</p>
+          </div>
+          <div class="type-card">
+            <span class="idx">06</span>
+            <h4>知識共有・コミュニティ</h4>
+            <p>農業技術は極めてローカルで暗黙知。単体で収益化した例はほぼなく、他の類型への導線としてのみ機能している。</p>
+            <p class="eg"><b>代表例</b> マイナビ農業／AGRI JOURNAL（配布約6,800拠点）</p>
+          </div>
+          <div class="type-card">
+            <span class="idx">07</span>
+            <h4>金融・保険</h4>
+            <p>収入が天候で数割ブレ、収穫まで現金が入らない。生存側は保険を単独で売らず、種苗や肥料に同梱するなど「何かに埋め込む」。</p>
+            <p class="eg"><b>代表例</b> 収入保険（NOSAI）／Pula（アフリカ・累計1,540万農家に付保）</p>
+          </div>
+          <div class="type-card">
+            <span class="idx">08</span>
+            <h4>衛星・収量データ</h4>
+            <p>農家は単体では金を払わない。ほぼ全社が自治体・JA・大企業に売るB2G/B2Bモデルに収斂している。</p>
+            <p class="eg"><b>代表例</b> サグリ（約50自治体で実証、シリーズA約10億円）／天地人</p>
+          </div>
+          <div class="type-card">
+            <span class="idx">09</span>
+            <h4>作業受託・ドローン代行</h4>
+            <p>機械を貸すのではなく作業そのものを売る。日本で実際に機能している「シェアリング」の実質はこれ。</p>
+            <p class="eg"><b>代表例</b> オプティム ドローン防除（年間約26,000ha請負）／コントラクター</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="ch3">
+        <div class="chapter-head">
+          <span class="chapter-num">三</span>
+          <h2>農機具を貸す —— なぜC2Cは広がらず、中古流通だけが伸びたか</h2>
+        </div>
+        <p class="lead">日本で数字が出ているのは「シェアリング」ではなく「中古流通」と「作業受託」。純粋な農家間の貸し借りは、確認できた限りどのサービスも会員数か利用実績のどちらかを公開していない。</p>
+
+        <div class="twrap">
+          <table class="ledger-table">
+            <caption>国内 —— 貸借・シェアリング系</caption>
+            <thead>
+              <tr><th>状態</th><th>サービス</th><th>運営</th><th>規模（時点）</th><th>ユーザーの作り方</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://agri-with.com/">アグリウィズ</a></td>
+                <td>渡辺パイプ（2019年7月〜）</td>
+                <td class="num">登録1万40名<br><span class="cell-src">2023年6月時点</span></td>
+                <td>農業資材商社としての既存顧客基盤を転用。貸借・売買・作業手伝いを1つのマッチングに統合し、代金授受も運営が代行</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge unk">非公開</span></td>
+                <td class="name"><a href="https://agriculture.kubota.co.jp/service/agrisharing/">クボタ農機シェアリング</a></td>
+                <td>クボタ（2021年〜）</td>
+                <td class="num">利用者数非公開<br><span class="cell-src">自治体連携7拠点以上</span></td>
+                <td>C2Cを最初から捨て、自社保有機×自治体連携のB2Cに。燃料費・保険料込み定額、操作説明会を必須化してリスクを一元管理</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge unk">非公開</span></td>
+                <td class="name"><a href="https://www.agriz.net/">アグリズ 宅配レンタル</a></td>
+                <td>藤原農機／GROWLAND（和歌山県みなべ町）</td>
+                <td class="num">非公開</td>
+                <td><strong>宅配できるサイズ（草刈機・チェーンソー等）に絞り、大型機の物流問題を回避</strong>した設計</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge unk">非公開</span></td>
+                <td class="name">JA全農・各JA レンタル</td>
+                <td>JAグループ</td>
+                <td class="num">全国21県78JAで一体運営</td>
+                <td>組合員基盤は既に持つが、デジタル流通への転換は途上。広域部品センターなど整備インフラは唯一まとまって持つ</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="twrap">
+          <table class="ledger-table">
+            <caption>国内 —— 中古売買（貸借ではなく所有権移転だが、対比のため併記）</caption>
+            <thead>
+              <tr><th>サービス</th><th>規模（時点）</th><th>ユーザーの作り方</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="name"><a href="https://noukiguou.com/">農機具王</a></td>
+                <td class="num">売上59億円・37店舗<br>累計買取5万人</td>
+                <td>廃品回収業から転換。「農家は農機を捨てるのに金を払っている」を発見し無料引取でリスト獲得。店舗ドミナント出店＋機種別SEO＋YouTube</td>
+              </tr>
+              <tr>
+                <td class="name"><a href="https://ummkt.com/">UMM</a></td>
+                <td class="num">農機具店1,000事業者<br>農家会員 約1.4万人・年5,000台超</td>
+                <td>先に買取事業（2017年）で在庫と農家リストを作ってからPF化。海外輸出の出口を自社で持つ。<strong>成約時のみ11,000円固定・農家は無料会員</strong></td>
+              </tr>
+              <tr>
+                <td class="name"><a href="https://www.noukinavi.com/">ノウキナビ</a></td>
+                <td class="num">加盟店300超・年400万PV<br>累計取引18億円超</td>
+                <td>自社が地方の農機修理店。同業販売店を横につなぐボトムアップ型。部品取寄せ・運送まで広げ再訪頻度を作った</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="twrap">
+          <table class="ledger-table">
+            <caption>海外</caption>
+            <thead>
+              <tr><th>状態</th><th>サービス</th><th>国</th><th>規模（時点）</th><th>要点</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://hellotractor.com/">Hello Tractor</a></td>
+                <td>ナイジェリア／ケニア</td>
+                <td class="num">小規模農家100万人超<br>トラクターオーナー6,500超</td>
+                <td>スマホを持たない農家を前提に、村の「ブッキングエージェント」が仲介するUber型</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://www.tractorjunction.com/">Tractor Junction</a></td>
+                <td>インド</td>
+                <td class="num">年6千万訪問・直営75店舗<br>SeriesA $22.6M（2025年11月）</td>
+                <td>SEOで検索トラフィックを先に作り、実店舗と金融（ローン）で成約させる。純粋マーケットプレイスでは中古トラクターは売れないと判断</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://www.traktorpool.de/">traktorpool</a></td>
+                <td>ドイツ</td>
+                <td class="num">月間400万訪問<br>独業者間販売の60%超が経由</td>
+                <td>農業専門出版社（Landwirtschaftsverlag）が親会社。既存の読者網と広告営業を垂直立ち上げに使った</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://www.machinerypete.com/">Machinery Pete</a></td>
+                <td>米国</td>
+                <td class="num">落札価格77.5万件を保有</td>
+                <td>相場データを無料公開した結果トラフィック400%増。「在庫より先にデータ」の好例</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge off">終了</span></td>
+                <td class="name">MachineryLink Solutions</td>
+                <td>米国</td>
+                <td class="num">—</td>
+                <td>南から北へ収穫期を追うコンバインの地域間リースを事業化しようとしたが、分割後まもなく閉鎖</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge off">終了</span></td>
+                <td class="name">Yard Club</td>
+                <td>米国</td>
+                <td class="num">2016年 $120Mのレンタル取引を処理</td>
+                <td>2017年Caterpillarが買収後、アプリが消滅。業界紙は「買収目的はフリート管理ソフトで、シェアリングではなかった」と総括</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>なぜ農家間の直接貸借（C2C）が育たないか</h3>
+        <p>農水省・岡山県の広域シェアリング実証がもっとも端的にこれを言い当てている —— 南北約100km・標高差約500mという広域でようやく作期をずらして稼働率を上げられたが、それでも次の課題が残った。</p>
+        <ul class="plain">
+          <li><strong>需要の同時発生。</strong>近隣農家は作業時期が競合する。「借りたい機械が予約で埋まっていた」がレンタルを使わない理由の上位に挙がる。</li>
+          <li><strong>整備・故障責任の所在が不明瞭。</strong>貸し手・借り手のどちらが負うか、乗用車の車検にあたる客観的な安全性担保制度がない。</li>
+          <li><strong>調整コスト。</strong>料金設定・スケジュール調整・故障対応に第三者機関の介在が事実上必要になる。</li>
+          <li><strong>大型機の運搬コスト。</strong>実際にスケールしたレンタル（アグリズ）が宅配可能な小型機に絞っているのはこのため。</li>
+        </ul>
+        <p>結果として、日本で実際に回っているのは機械の貸借ではなく<strong>作業の受託</strong>（コントラクター）である。北海道の飼料生産・畑作で普及しているが、課題は「コントラクターの選定や適正価格設定の業務負荷」——
+        これはマッチングで解ける課題であり、TOPPANエッジ「農託」（2023年10月開始）はここを狙っている。</p>
+      </section>
+
+      <section id="ch4">
+        <div class="chapter-head">
+          <span class="chapter-num">四</span>
+          <h2>人手を集める —— 掲示板は4層に分かれている</h2>
+        </div>
+        <p class="lead">「農業の求人」を検索する人だけを相手にすると母集団が小さすぎる。生き残ったサービスは例外なく、期間の長さで層を分けている。</p>
+
+        <div class="twrap">
+          <table class="ledger-table">
+            <caption>層1 —— 1日単位スポット</caption>
+            <thead>
+              <tr><th>状態</th><th>サービス</th><th>規模（時点）</th><th>ユーザーの作り方</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://day.work/">daywork</a></td>
+                <td class="num">マッチング成立 2020年16,493人<br>→ <strong>2024年178,968人</strong>（約11倍）<br>成立率83〜89%</td>
+                <td><strong>JAを代理店化</strong>（JA道央・上伊那・熊本など）＋自治体の公式広報。<strong>農家・求職者とも完全無料</strong>にしたことがJA経由での普及の前提になっている</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name">タイミー（一次産業）</td>
+                <td class="num">一次産業の掲載事業所数<br>2年で<strong>約8.7倍</strong>（2023→2025年）<br>利用農家の<strong>28.9%</strong>が長期採用に転換</td>
+                <td>既存1,000万人規模のワーカー基盤を流入。農水省と連携。<strong>作物別の「業務切り分けマニュアル」を自社で作成</strong>し未経験者の障壁を下げた</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge pivot">ピボット</span></td>
+                <td class="name">シェアグリ</td>
+                <td class="num">2019年開始時：登録1,500人<br>現在：特定技能150名超を月800名規模で派遣</td>
+                <td>1日単位の日本人向けマッチングでは供給の確実性を作れず、<strong>特定技能外国人のスポット派遣（人材を自社雇用する派遣業）へ主軸を移動</strong></td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge pivot">縮小</span></td>
+                <td class="name">農mers（マイナビ）</td>
+                <td class="num">実数非公開</td>
+                <td>マッチング完全無料で運営した結果収益化できず、住友化学「つなあぐ」との統合へ。<strong>「無料だと事業として成立しにくい」ことの実例</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="twrap">
+          <table class="ledger-table">
+            <caption>層2 —— 数日〜数週間（宿泊付き・援農）</caption>
+            <thead>
+              <tr><th>状態</th><th>サービス</th><th>規模（時点）</th><th>ユーザーの作り方</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://otetsutabi.com/">おてつたび</a></td>
+                <td class="num">登録者 2021年5,000人<br>→ <strong>2025年9月85,000人</strong><br>事業者2,000件・SeriesA 2億円</td>
+                <td><strong>「農業バイト」ではなく「旅」として売った。</strong>宿泊費無料が旅費を下げたい若年層への強いフック。手数料は賃金の25%＋保険350円/人日</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://www.volubeit.com/">ボラバイト</a></td>
+                <td class="num">1999年開始、実績非公開</td>
+                <td>寮完備の住み込みを20年以上前から成立させていた古参。おてつたびが変えたのは「アプリ化とZ世代向けの旅ブランディング」</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://www.wwoofjapan.com/">WWOOFジャパン</a></td>
+                <td class="num">全国400ヶ所以上のホスト</td>
+                <td>賃金の授受をゼロにし労働法適用を回避する設計。「ホストとウーファーは家族のような友達同士」という建て付け</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="twrap">
+          <table class="ledger-table">
+            <caption>層3 —— 季節雇用・産地間リレー</caption>
+            <thead>
+              <tr><th>状態</th><th>サービス／取り組み</th><th>規模（時点）</th><th>ユーザーの作り方</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name"><a href="https://yuime.co.jp/">YUIME</a></td>
+                <td class="num">常時 約600人の特定技能スタッフ<br>繁忙期派遣分野シェアNo.1（自社主張）</td>
+                <td><strong>「循環型派遣：冬は沖縄、夏は日本各地」</strong>——産地リレーの最も進んだ実装。1人の年間稼働日数を最大化する</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name">宮崎×群馬・嬬恋 産地間人財リレー</td>
+                <td class="num">2023年11月、20人を宮崎→翌春に嬬恋へ</td>
+                <td>農水省「農業労働力産地間連携等推進事業」を活用。繁忙期が真逆の2産地を人材会社が雇用主として繋ぐ</td>
+              </tr>
+              <tr>
+                <td><span class="hanko-badge on">現存</span></td>
+                <td class="name">特定地域づくり事業協同組合</td>
+                <td class="num">2022年2月時点で全国33組合<br>派遣先業種は農業が最多（10組合）</td>
+                <td>農業単独では通年の仕事量が作れないため、<strong>農業＋水産＋宿泊＋除雪を束ねて1人分の通年雇用を制度で作る</strong>（総務省制度）</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="twrap">
+          <table class="ledger-table">
+            <caption>層4 —— 正社員・通年雇用</caption>
+            <thead>
+              <tr><th>サービス</th><th>規模（時点）</th><th>ユーザーの作り方</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="name"><a href="https://www.agri-navi.com/">あぐりナビ</a></td>
+                <td class="num">会員5万人（2019年）<br>延べ16万人超</td>
+                <td>全求人を取材する編集型メディアでSEO資産を蓄積。市民農園事業「シェア畑」のブランドを横展開</td>
+              </tr>
+              <tr>
+                <td class="name"><a href="https://agrijob.jp/">農業ジョブ</a></td>
+                <td class="num">求職者13万人超</td>
+                <td>シンクロ・フード（飲食店ドットコム）の現場求人SEO基盤を流用</td>
+              </tr>
+              <tr>
+                <td class="name">マイナビ農業</td>
+                <td class="num">非公開</td>
+                <td>先に農業情報メディアを立ち上げ、栽培・経営記事の検索流入から求人へ送客するメディアファースト型</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="note caution">
+          <strong>未解決の論点：天候ドタキャン。</strong> タイミーは2025年9月から、勤務開始24時間前以内の事業者都合キャンセルに原則休業手当を導入した。ただし<strong>地震・台風など天災事変等の不可抗力は「解約可能事由」として対象外</strong>——
+          「雨天中止の可能性が明示されている案件」は必ずしも補償されない。農業の中止理由の大半は雨であり、リスクは今もワーカー側に寄っている。おてつたびのように<strong>期間を数日〜数週間に伸ばすことで天候リスクを平準化する</strong>のが、現状もっとも実効的な回避策になっている。
+        </div>
+      </section>
+
+      <section id="ch5">
+        <div class="chapter-head">
+          <span class="chapter-num">五</span>
+          <h2>誰が最初のユーザーを作ったか —— 五つの型</h2>
+        </div>
+        <p class="lead">農業プラットフォームにWeb広告やSEOだけで会員を集めた例はほとんどない。効いている手口は5つに収斂する。</p>
+
+        <div class="pattern">
+          <span class="glyph">壱</span>
+          <div>
+            <h4>行脚・直接営業型</h4>
+            <p>創業者が物理的に現場を回り、信頼を移動距離で作る。農家は「誰が言っているか」で判断するため、Web広告のCACが機能しない。</p>
+            <p class="cases"><b>食べチョク</b>：最初の1年は農家に門前払いされ続け、社長が365日オリジナルTシャツで宣伝。／<b>ポケットマルシェ</b>：高橋博之氏が14年間現場を歩き、2020年は「REIWA 47キャラバン」で全国行脚。</p>
+          </div>
+        </div>
+        <div class="pattern">
+          <span class="glyph">弐</span>
+          <div>
+            <h4>既存組織の顧客転用型</h4>
+            <p>獲得コストがほぼゼロ。ただし「名簿」と「使ってくれる顧客」は別物 —— JAタウンは会員108万人で流通総額48億円、会員あたり年4,400円にとどまる。</p>
+            <p class="cases"><b>JAタウン</b>：組合員基盤をそのままECに。／<b>KSAS</b>（クボタ）：農機を買った時点でディーラーが設定。／<b>xarvio</b>：JA全農との協業で国内上市。</p>
+          </div>
+        </div>
+        <div class="pattern">
+          <span class="glyph">参</span>
+          <div>
+            <h4>メディア→サービス転換型</h4>
+            <p>情報を探しに来た人に、供給側・需要側を同時に集めさせる。両面市場のコールドスタート問題をメディアで先に解いている。</p>
+            <p class="cases"><b>ポケットマルシェ</b>：情報誌「東北食べる通信」の生産者網と読者リストがそのまま初期供給・需要になった。／<b>シェア畑</b>：YouTube登録20万人がリード獲得装置に。</p>
+          </div>
+        </div>
+        <div class="pattern">
+          <span class="glyph">四</span>
+          <div>
+            <h4>自治体・JA・補助金型</h4>
+            <p>農業予算は自治体・JAに集中しており、支払い能力ではなく組織の予算で買ってもらえる。ただし補助が切れると会員だけが残って消える危険がある。</p>
+            <p class="cases"><b>サグリ</b>：約50自治体で耕作放棄地調査という<strong>既存の法定業務を置き換え</strong>継続予算に接続。／<b class="tag off" style="display:inline">終了</b> <b>AGMIRU</b>：農水省の補助事業として構築され自治体が広報したが、2023年6月に終了。</p>
+          </div>
+        </div>
+        <div class="pattern">
+          <span class="glyph">伍</span>
+          <div>
+            <h4>当事者性・口コミ型</h4>
+            <p>農家自身が作った実感が最強の証明になる。ただし単独では地域規模で頭打ちになりやすく、型四と接続して初めて全国化する。</p>
+            <p class="cases"><b>AGRIHUB</b>：農家兼エンジニアが開発、口コミのみで登録2万人・日誌100万件。JAアクセラレーターで準優勝しJAチャネルへ接続した。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="ch6">
+        <div class="chapter-head">
+          <span class="chapter-num">六</span>
+          <h2>なぜ潰れるのか</h2>
+        </div>
+        <p class="lead">失敗した事例をたどると、要因は驚くほど繰り返している。</p>
+
+        <div class="factor">
+          <h4>物流原価が粗利を必ず食い尽くす</h4>
+          <p>生鮮の物理法則。自前で「最後の1マイル」（洗浄・梱包・冷蔵・分散配送）を持った側が軒並み消えている。</p>
+          <p class="evidence">Farmdrop（英・累計損失5,000万ポンド超、2021年12月破綻）、Farmigo（米・2016年デリバリー撤退）、SEND（プラネット・テーブル・2022年破産）。生存側の食べチョク／ポケマルは生産者直送で物流を持たず、やさいバスは巡回バス停に集約して個別配送をやめた。</p>
+        </div>
+
+        <div class="factor">
+          <h4>単一セグメント依存が外部ショックで致命傷になる</h4>
+          <p>B向け特化はC向け特化と逆符号のショックを受けることがある。</p>
+          <p class="evidence">SENDは飲食店4,500店に依存し、コロナで需要が消えて破産。同じコロナで食べチョク（C向け）は5ヶ月で流通額35倍に伸びた。</p>
+        </div>
+
+        <div class="factor">
+          <h4>補助金型グロースは会員数は作れてもLTVは作れない</h4>
+          <p>行政広報で獲得した会員は、サービス価値ではなく補助で来ているため、補助が切れると消える。</p>
+          <p class="evidence">AGMIRU（農業版価格ドットコム）は農水省の資材価格見える化推進事業として構築され、2019年に4,800会員を集めたが2023年6月に終了。農業資材は掛売り・栽培指導・緊急配送とバンドルされており、価格比較だけでは乗り換えコストに見合わなかった。</p>
+        </div>
+
+        <div class="factor">
+          <h4>市場そのものが毎年縮む</h4>
+          <p>VCが期待する成長曲線と、担い手人口の縮小が真っ向から矛盾する。</p>
+          <p class="evidence">基幹的農業従事者は2000年240万人→2025年102.1万人。ビビッドガーデン（食べチョク）は2022年10月期に純損失6.65億円、雨風太陽（ポケマル）も上場後の2025年上期に4,500万円の最終赤字を計上している。</p>
+        </div>
+
+        <div class="factor">
+          <h4>農家個人への直接課金が極めて難しい</h4>
+          <p>生存しているプレイヤーは全員、課金主体を農家個人からずらしている。</p>
+          <p class="evidence">サグリは自治体に、Pulaは種苗・肥料会社に（種の袋に保険を同梱）、Farmers Business Networkはソフトを無料にして資材直販で稼ぎ、xarvioは成果・収量保証型に転換、クボタKSASは農機に課金を埋め込む。</p>
+        </div>
+
+        <div class="factor">
+          <h4>「板」では供給の確実性を保証できない</h4>
+          <p>繁忙期に本当に人が来る保証がないと農家は使い続けない。成功例は軒並みマーケットプレイスから人材を自社で抱える派遣モデルへ移行している。</p>
+          <p class="evidence">シェアグリ（1日単位アプリ→特定技能スポット派遣）、YUIME、豪Agri Labour Australia（創業以来70,000人以上を供給する労働者供給会社）。マッチング「板」の敗北を意味する。</p>
+        </div>
+      </section>
+
+      <section id="ch7">
+        <div class="chapter-head">
+          <span class="chapter-num">終</span>
+          <h2>紀州・梅産地から見ると</h2>
+        </div>
+        <div class="coda">
+          <h3>「求人」ではなく「関係人口」として売る</h3>
+          <p>和歌山県みなべ町の「梅収穫ワーケーション」（2022年開始、町・日本ウェルビーイング推進協議会・協力農家が運営）は、2022年時点で228人が参加した。参加費無料、交通費は自己負担、リモートワークとの兼業も可能。</p>
+          <p>この設計の要点は、<strong>「採用」ではなく「関係人口の創出」としてフレーミングすることで、賃金競争を回避している</strong>点にある。おてつたびが農業労働を"旅"として売ったのと同じ構造で、農業を目的にしている人だけを相手にすると母集団が小さすぎるという、この調査全体を貫く結論と一致する。</p>
+          <p>なお、全国規模で伸びている農機ECの一つ「アグリズ」（<a href="https://www.agriz.net/">agriz.net</a>）の運営元は、みなべ町の藤原農機（1947年創業）。地場の農機具店が、宅配できるサイズに絞ることで全国区の流通に育った例として、同じ産地からの参照事例になる。</p>
+        </div>
+      </section>
+
+      <section id="sources">
+        <div class="chapter-head">
+          <span class="chapter-num">附</span>
+          <h2>出典・注記</h2>
+        </div>
+        <div class="note">
+          本稿の数字は、2026年8月時点の公開情報（各社プレスリリース・報道・農林水産省ほか公的統計）を横断的に調査したもの。調査環境の制約により個別ページの直接取得（WebFetch）が多くのドメインで拒否されたため、一部の数字は検索結果の要約経由での取得となっている。<strong>事業判断・引用に用いる場合は、リンク先の一次情報で必ず再確認すること。</strong>数字が確認できなかった項目はすべて「非公開」「未確認」と明記し、推測値は記載していない。
+        </div>
+
+        <div class="src-group">
+          <h4>マクロ統計・制度</h4>
+          <ul>
+            <li><a href="https://smartagri.jp/p/2191/">日本の農業従事者数の推移【2025年最新】｜先端農業マガジン</a></li>
+            <li><a href="https://www.maff.go.jp/j/seisan/sien/sizai/service.html">農業支援サービス関係情報｜農林水産省</a></li>
+            <li><a href="https://www.maff.go.jp/j/wpaper/w_maff/r6/r6_h/trend/part1/chap3/c3_3_00.html">担い手の育成・確保｜農林水産省 食料・農業・農村白書</a></li>
+          </ul>
+        </div>
+        <div class="src-group">
+          <h4>農機具</h4>
+          <ul>
+            <li><a href="https://agri-with.com/">アグリウィズ</a> ／ <a href="https://noukiguou.com/about/">農機具王</a> ／ <a href="https://ummkt.com/">UMM</a> ／ <a href="https://www.noukinavi.com/">ノウキナビ</a></li>
+            <li><a href="https://agriculture.kubota.co.jp/service/agrisharing/about/">クボタ農機シェアリング</a> ／ <a href="https://www.agriz.net/">アグリズ</a></li>
+            <li><a href="https://www.maff.go.jp/j/kanbo/smart/forum/R2smaforum/rice/seika87.html">岡山県 広域シェアリング実証｜農林水産省</a></li>
+            <li><a href="https://hellotractor.com/">Hello Tractor</a> ／ <a href="https://www.tractorjunction.com/">Tractor Junction</a> ／ <a href="https://www.traktorpool.de/">traktorpool</a> ／ <a href="https://www.machinerypete.com/">Machinery Pete</a></li>
+          </ul>
+        </div>
+        <div class="src-group">
+          <h4>人材マッチング</h4>
+          <ul>
+            <li><a href="https://day.work/">daywork</a> ／ <a href="https://corp.timee.co.jp/news/detail-4574/">タイミー 一次産業レポート</a> ／ <a href="https://otetsutabi.com/">おてつたび</a> ／ <a href="https://www.volubeit.com/">ボラバイト</a> ／ <a href="https://www.wwoofjapan.com/">WWOOFジャパン</a></li>
+            <li><a href="https://yuime.co.jp/">YUIME</a> ／ <a href="https://www.agri-navi.com/">あぐりナビ</a> ／ <a href="https://agrijob.jp/">農業ジョブ</a></li>
+            <li><a href="https://corp.timee.co.jp/news/detail-4758/">タイミー 休業手当方針変更のお知らせ</a></li>
+          </ul>
+        </div>
+        <div class="src-group">
+          <h4>類型全体・失敗事例</h4>
+          <ul>
+            <li><a href="https://www.tabechoku.com/">食べチョク</a> ／ <a href="https://poke-m.com/">ポケットマルシェ</a> ／ <a href="https://vegibus.com/">やさいバス</a></li>
+            <li><a href="https://note.com/agri_strategy/n/n032f1d119724">AGMIRU 終了の分析｜note</a> ／ SEND破産（プラネット・テーブル、帝国データバンク報道）</li>
+            <li><a href="https://www.agri-note.jp/">アグリノート</a> ／ <a href="https://sorabatake.jp/37848/">サグリ｜宙畑</a></li>
+          </ul>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="colophon">
+    <span>農業プラットフォーム台帳 · 2026年8月調査 · farm-app 市場調査メモ</span>
+    <span>数字は出典・取得時点つき。事業判断には一次情報の再確認を。</span>
+  </footer>
+
+</div>
