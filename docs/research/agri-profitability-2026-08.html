@@ -1,0 +1,584 @@
+<title>誰が儲け、誰が空いているか — 農業の決算台帳 続巻</title>
+<style>
+  :root{
+    --paper:#F1ECDF;
+    --paper-raised:#FFFFFF;
+    --paper-well:#E9E2CE;
+    --ink:#211F1A;
+    --ink-soft:#5B5642;
+    --ink-faint:#8B8570;
+    --line:#D8CFB4;
+    --line-strong:#C3B896;
+    --indigo:#2B3A55;
+    --indigo-soft:#5A6C8C;
+    --indigo-bg:#E1E6ED;
+    --moss:#4E6238;
+    --moss-bg:#E1E7CF;
+    --hanko:#A3392C;
+    --hanko-bg:#F2DAD1;
+    --amber:#8C6A24;
+    --amber-bg:#EEE2BF;
+    --shadow:0 1px 2px rgba(33,31,26,.06), 0 8px 24px -12px rgba(33,31,26,.18);
+    --f-display:Georgia,"Iowan Old Style","Palatino Linotype","Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;
+    --f-body:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic Medium","Yu Gothic","Noto Sans JP",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#171A22; --paper-raised:#1E2330; --paper-well:#252B3A;
+      --ink:#ECE6D6; --ink-soft:#AEA890; --ink-faint:#7A7566;
+      --line:#333A4C; --line-strong:#454F66;
+      --indigo:#93A7CC; --indigo-soft:#6C7C9E; --indigo-bg:#232B3C;
+      --moss:#9EBA7E; --moss-bg:#25301F;
+      --hanko:#E58269; --hanko-bg:#3A241E;
+      --amber:#DCBB6E; --amber-bg:#362E18;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#171A22; --paper-raised:#1E2330; --paper-well:#252B3A;
+    --ink:#ECE6D6; --ink-soft:#AEA890; --ink-faint:#7A7566;
+    --line:#333A4C; --line-strong:#454F66;
+    --indigo:#93A7CC; --indigo-soft:#6C7C9E; --indigo-bg:#232B3C;
+    --moss:#9EBA7E; --moss-bg:#25301F;
+    --hanko:#E58269; --hanko-bg:#3A241E;
+    --amber:#DCBB6E; --amber-bg:#362E18;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+  }
+  :root[data-theme="light"]{
+    --paper:#F1ECDF; --paper-raised:#FFFFFF; --paper-well:#E9E2CE;
+    --ink:#211F1A; --ink-soft:#5B5642; --ink-faint:#8B8570;
+    --line:#D8CFB4; --line-strong:#C3B896;
+    --indigo:#2B3A55; --indigo-soft:#5A6C8C; --indigo-bg:#E1E6ED;
+    --moss:#4E6238; --moss-bg:#E1E7CF;
+    --hanko:#A3392C; --hanko-bg:#F2DAD1;
+    --amber:#8C6A24; --amber-bg:#EEE2BF;
+    --shadow:0 1px 2px rgba(33,31,26,.06), 0 8px 24px -12px rgba(33,31,26,.18);
+  }
+
+  *{box-sizing:border-box;}
+  html{background:var(--paper);}
+  body{margin:0;}
+  .ledger{
+    background:var(--paper); color:var(--ink);
+    font-family:var(--f-body); line-height:1.7; font-size:16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .ledger *{min-width:0;}
+  .ledger a{color:var(--indigo); text-decoration-thickness:1px; text-underline-offset:2px;}
+  .ledger a:hover{color:var(--hanko);}
+  .ledger a:focus-visible, .ledger button:focus-visible{outline:2px solid var(--indigo); outline-offset:2px; border-radius:2px;}
+  .ledger h1,.ledger h2,.ledger h3,.ledger h4{font-family:var(--f-display); font-weight:700; text-wrap:balance; margin:0;}
+  .ledger p{margin:0 0 1em; max-width:64ch;}
+  .ledger .wide p{max-width:none;}
+  .ledger table{font-variant-numeric:tabular-nums;}
+
+  /* ---------- cover ---------- */
+  .cover{
+    position:relative; padding:5.5rem 1.5rem 4rem;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 119px, var(--line) 119px 120px),
+      var(--paper);
+    border-bottom:1px solid var(--line-strong);
+    overflow:hidden;
+  }
+  .cover::before{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg, var(--paper) 0%, transparent 14%, transparent 86%, var(--paper) 100%);
+    pointer-events:none;
+  }
+  .cover-inner{position:relative; max-width:760px; margin:0 auto;}
+  .cover-eyebrow{
+    display:flex; align-items:center; gap:.6em;
+    font-size:.78rem; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--indigo-soft); margin-bottom:1.6rem;
+  }
+  .cover-eyebrow::before{content:""; width:2.4em; height:1px; background:var(--indigo-soft); display:inline-block;}
+  .cover h1{ font-size:clamp(2.1rem, 5vw, 3.1rem); line-height:1.28; color:var(--ink); margin-bottom:1.1rem; }
+  .cover h1 em{font-style:normal; color:var(--indigo); border-bottom:2px solid var(--hanko-bg);}
+  .cover .lede{ font-size:1.08rem; color:var(--ink-soft); max-width:56ch; margin-bottom:1.6rem; }
+  .prev-link{
+    display:inline-flex; align-items:center; gap:.5em;
+    font-size:.86rem; color:var(--ink-soft);
+    background:var(--paper-raised); border:1px solid var(--line);
+    border-radius:999px; padding:.45rem 1rem .45rem .7rem; margin-bottom:2rem;
+    text-decoration:none;
+  }
+  .prev-link .stamp{
+    width:1.6em; height:1.6em; border-radius:50%; border:1px solid var(--indigo-soft);
+    display:flex; align-items:center; justify-content:center; font-family:var(--f-display);
+    font-size:.7rem; color:var(--indigo-soft); flex-shrink:0;
+  }
+  .prev-link:hover{color:var(--hanko); border-color:var(--hanko-bg);}
+  .cover-meta{
+    display:flex; flex-wrap:wrap; gap:.5rem 1.6rem;
+    font-size:.86rem; color:var(--ink-faint);
+    border-top:1px solid var(--line); padding-top:1.2rem;
+  }
+  .cover-meta dt{font-weight:600; color:var(--ink-soft); display:inline;}
+  .cover-meta div{display:flex; gap:.4em;}
+
+  /* ---------- layout ---------- */
+  .layout{
+    max-width:1180px; margin:0 auto;
+    display:grid; grid-template-columns:216px minmax(0,1fr);
+    gap:3rem; padding:3rem 1.5rem 2rem;
+  }
+  @media (max-width:900px){ .layout{grid-template-columns:1fr; padding-top:0;} }
+
+  .toc{align-self:start; position:sticky; top:1.5rem;}
+  @media (max-width:900px){
+    .toc{ position:sticky; top:0; z-index:5; background:var(--paper);
+      border-bottom:1px solid var(--line-strong); padding:.9rem 0;
+      overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  }
+  .toc-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.15rem;}
+  @media (max-width:900px){ .toc-list{flex-direction:row; gap:0; padding:0 1.5rem; width:max-content;} }
+  .toc-list a{
+    display:flex; align-items:baseline; gap:.6em; padding:.4rem .5rem; margin:0 -.5rem;
+    border-radius:3px; color:var(--ink-soft); text-decoration:none; font-size:.88rem;
+    white-space:nowrap; border-left:2px solid transparent;
+  }
+  @media (max-width:900px){ .toc-list a{border-left:none; border-bottom:2px solid transparent; margin:0;} }
+  .toc-list a:hover{color:var(--ink); background:var(--paper-well);}
+  .toc-list a .tag{font-family:var(--f-display); color:var(--indigo-soft); font-size:.95em; flex-shrink:0;}
+  .toc-foot{margin-top:1.4rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.78rem; color:var(--ink-faint);}
+  @media (max-width:900px){ .toc-foot{display:none;} }
+
+  main{min-width:0;}
+  section{margin-bottom:4.4rem; scroll-margin-top:1.5rem;}
+  section:last-of-type{margin-bottom:2rem;}
+
+  .chapter-head{
+    display:flex; align-items:baseline; gap:1rem; margin-bottom:1.6rem;
+    padding-bottom:.9rem; border-bottom:1px solid var(--line-strong);
+  }
+  .chapter-num{font-family:var(--f-display); font-size:1.5rem; color:var(--indigo); flex-shrink:0; line-height:1;}
+  .chapter-head h2{font-size:1.5rem; color:var(--ink);}
+
+  h3{font-size:1.14rem; margin:2rem 0 .7rem; color:var(--ink);}
+  h4{font-size:.96rem; margin:1.4rem 0 .5rem; color:var(--indigo);}
+  .lead{font-size:1.05rem; color:var(--ink-soft); max-width:62ch;}
+
+  .answer{
+    background:var(--paper-raised); border:1px solid var(--line); border-left:3px solid var(--indigo);
+    border-radius:8px; padding:1.3rem 1.5rem; box-shadow:var(--shadow); margin:1.4rem 0 1.8rem;
+  }
+  .answer h4{margin-top:0; color:var(--indigo); font-size:.82rem; letter-spacing:.08em; text-transform:uppercase;}
+  .answer p:last-child{margin-bottom:0;}
+
+  .stat-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px; background:var(--line); border:1px solid var(--line);
+    border-radius:8px; overflow:hidden; margin:1.6rem 0 2rem;
+  }
+  .stat{background:var(--paper-raised); padding:1.1rem 1.2rem;}
+  .stat .n{font-family:var(--f-display); font-size:1.6rem; color:var(--ink); display:block; line-height:1.15;}
+  .stat .l{font-size:.78rem; color:var(--ink-soft); margin-top:.3rem; display:block;}
+  .stat .src{font-size:.7rem; color:var(--ink-faint); display:block; margin-top:.4rem;}
+  .stat .src a{color:var(--ink-faint);}
+
+  /* pattern cards (profit patterns) */
+  .pattern-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1rem; margin:1.6rem 0 2rem;}
+  .pattern-card{background:var(--paper-raised); border:1px solid var(--line); border-radius:10px; padding:1.3rem 1.4rem; box-shadow:var(--shadow);}
+  .pattern-card .kind{font-family:var(--f-display); font-size:.82rem; color:var(--indigo-soft); letter-spacing:.02em;}
+  .pattern-card h4{margin:.3rem 0 .6rem; color:var(--ink); font-size:1.02rem;}
+  .pattern-card ul{margin:0; padding-left:1.1em; font-size:.86rem; color:var(--ink-soft);}
+  .pattern-card li{margin-bottom:.4rem;}
+  .pattern-card li b{color:var(--ink);}
+
+  /* table */
+  .twrap{overflow-x:auto; margin:1.4rem 0 2rem; border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow);}
+  table.ledger-table{width:100%; border-collapse:collapse; background:var(--paper-raised); font-size:.88rem;}
+  table.ledger-table caption{
+    text-align:left; font-size:.78rem; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-faint); padding:.7rem 1rem 0;
+  }
+  table.ledger-table th, table.ledger-table td{ padding:.65rem .9rem; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.ledger-table thead th{
+    background:var(--indigo-bg); color:var(--indigo); font-weight:700; font-size:.76rem;
+    letter-spacing:.05em; text-transform:uppercase; border-bottom:1px solid var(--line-strong); white-space:nowrap;
+  }
+  table.ledger-table tbody tr:last-child td{border-bottom:none;}
+  table.ledger-table tbody tr:hover{background:var(--paper-well);}
+  table.ledger-table td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
+  table.ledger-table td.name{font-weight:600; white-space:nowrap;}
+  table.ledger-table .cell-src{font-size:.78rem; color:var(--ink-faint);}
+
+  .tag{ display:inline-flex; align-items:center; gap:.4em; font-size:.72rem; letter-spacing:.04em; font-weight:600;
+    padding:.18rem .55rem; border-radius:999px; white-space:nowrap; }
+  .tag.on{color:var(--moss); background:var(--moss-bg);}
+  .tag.off{color:var(--hanko); background:var(--hanko-bg);}
+  .tag.pivot{color:var(--amber); background:var(--amber-bg);}
+  .tag.unk{color:var(--ink-faint); background:var(--paper-well);}
+  .tag::before{content:"●"; font-size:.6em;}
+
+  /* margin bar chart */
+  .barchart{ background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:1.4rem 1.5rem 1.2rem; box-shadow:var(--shadow); margin:1.6rem 0 2rem; }
+  .barchart .caption{font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:1.1rem;}
+  .bar-row{display:grid; grid-template-columns:11rem 1fr 4.2rem; align-items:center; gap:.8rem; margin-bottom:.85rem;}
+  .bar-row:last-child{margin-bottom:0;}
+  .bar-row .label{font-size:.86rem; color:var(--ink); font-weight:600; text-align:right;}
+  .bar-row .label small{display:block; font-weight:400; color:var(--ink-faint); font-size:.76rem;}
+  .bar-track{background:var(--paper-well); border-radius:4px; height:1.5rem; position:relative; overflow:hidden;}
+  .bar-fill{height:100%; border-radius:4px; background:var(--indigo);}
+  .bar-fill.hi{background:var(--moss);}
+  .bar-fill.lo{background:var(--amber);}
+  .bar-fill.neg{background:var(--hanko);}
+  .bar-row .value{font-size:.9rem; font-weight:700; color:var(--ink); white-space:nowrap;}
+  @media (max-width:640px){
+    .bar-row{grid-template-columns:6.5rem 1fr 3.6rem;}
+    .bar-row .label{font-size:.78rem;}
+  }
+
+  .ja-note{font-size:.82rem; color:var(--ink-soft); margin-top:1rem; padding-top:1rem; border-top:1px dashed var(--line);}
+
+  /* white space cards */
+  .gap-card{ background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:1.3rem 1.5rem; margin-bottom:1rem; box-shadow:var(--shadow); }
+  .gap-card .num{font-family:var(--f-display); font-size:1.3rem; color:var(--indigo); float:left; margin-right:1rem; line-height:1;}
+  .gap-card h4{margin:0 0 .5rem; color:var(--ink); font-size:1.05rem;}
+  .gap-card p{margin-bottom:.5rem; font-size:.92rem;}
+  .gap-card .why{
+    font-size:.84rem; color:var(--ink-soft); background:var(--paper-well);
+    border-radius:6px; padding:.7rem .9rem; margin-top:.6rem;
+  }
+  .gap-card .why b{color:var(--ink);}
+
+  .note{ border:1px solid var(--line); border-radius:8px; padding:1rem 1.2rem;
+    background:var(--paper-well); font-size:.9rem; color:var(--ink-soft); margin:1.4rem 0; }
+  .note.caution{border-color:var(--hanko-bg); background:var(--hanko-bg); color:var(--ink);}
+  .note strong{color:var(--ink);}
+
+  ul.plain, ol.plain{padding-left:1.3rem; margin:0 0 1.2rem;}
+  ul.plain li, ol.plain li{margin-bottom:.5rem; max-width:60ch;}
+
+  .coda{ background:var(--indigo); color:#F3EFE1; border-radius:14px; padding:2.2rem 2rem; margin-top:1.5rem; }
+  .coda h3{color:inherit; font-size:1.2rem; margin-top:0;}
+  .coda p{color:#E4DFD0; max-width:60ch;}
+  .coda a{color:#F3EFE1; text-decoration-color:rgba(243,239,225,.5);}
+
+  .src-group{margin-bottom:1.6rem;}
+  .src-group h4{color:var(--ink-soft); font-size:.82rem; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.6rem;}
+  .src-group ul{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:.35rem;}
+  .src-group li{font-size:.84rem; color:var(--ink-faint); padding-left:1.1em; text-indent:-1.1em;}
+
+  footer.colophon{
+    max-width:1180px; margin:0 auto; padding:2rem 1.5rem 4rem; border-top:1px solid var(--line-strong);
+    font-size:.82rem; color:var(--ink-faint); display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+  }
+
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto;} }
+</style>
+
+<div class="ledger">
+
+  <header class="cover">
+    <div class="cover-inner">
+      <p class="cover-eyebrow">FIELD LEDGER · 続巻 — 収益性編</p>
+      <h1>誰が儲け、誰が空いているか。<br><em>農業の決算を、台帳の続きに記す。</em></h1>
+      <p class="lede">前号は「潰れる理由」を追った。今号は逆から見る —— 農業プラットフォームで実際に黒字を出しているのは誰か、農業という産業全体でお金が集まっているのはどこか、そしてまだ誰も埋めていない市場はどこか。</p>
+      <a class="prev-link" href="https://claude.ai/code/artifact/e3e693d3-aca7-4d15-9d6f-238b5a884a3a">
+        <span class="stamp">壱</span>
+        前号「農業プラットフォーム台帳」を読む
+      </a>
+      <dl class="cover-meta">
+        <div><dt>調査時点</dt><dd>2026年8月</dd></div>
+        <div><dt>対象</dt><dd>国内上場・準上場企業のIR資料を中心に、海外アグリテックの財務報道を含む</dd></div>
+        <div><dt>方式</dt><dd>決算短信・有価証券報告書・IR資料を優先。非公開のものは「非公開」「不明」と明記</dd></div>
+      </dl>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="目次">
+      <ul class="toc-list">
+        <li><a href="#prologue"><span class="tag">序</span>要約</a></li>
+        <li><a href="#ch8"><span class="tag">八</span>儲かる型</a></li>
+        <li><a href="#ch9"><span class="tag">九</span>稼ぎ頭マップ</a></li>
+        <li><a href="#ch10"><span class="tag">十</span>JAの内訳</a></li>
+        <li><a href="#ch11"><span class="tag">十一</span>空白市場</a></li>
+        <li><a href="#ch12"><span class="tag">終</span>総合示唆</a></li>
+        <li><a href="#sources"><span class="tag">附</span>出典</a></li>
+      </ul>
+      <p class="toc-foot">章番号は前号（一〜七・終）から継続。同じ台帳の続きとして読める構成。</p>
+    </nav>
+
+    <main>
+
+      <section id="prologue">
+        <div class="chapter-head">
+          <span class="chapter-num">序</span>
+          <h2>要約 —— 三つの問いへの回答</h2>
+        </div>
+        <p class="lead">結論を先に置く。純粋な「プラットフォーム」で儲かっている例は、今回の調査では一つも見つからなかった。儲かっているのは、その手前や外側にある事業だ。</p>
+
+        <div class="answer">
+          <h4>問1. プラットフォームで儲かっているところは？</h4>
+          <p>黒字化は<strong>3パターンに収斂する</strong> —— ①中古農機を自社在庫として持ち商流の差益で稼ぐ型（UMM運営元のマーケットエンタープライズ）、②農家には課金せずJA・自治体・農機本体販売に課金する型（daywork、クボタKSAS）、③非農業事業が農業事業の赤字を吸収する型（オプティム、シンクロ・フード）。<strong>農家個人へのSaaS課金や手数料だけで黒字化した純粋モデルは確認できなかった</strong>（第八章）。</p>
+        </div>
+
+        <div class="answer">
+          <h4>問2. 農業全体で儲かっている事業体は？</h4>
+          <p>「作る」側ではなく「支える」側 —— <strong>知財で守られた種苗（サカタのタネ 営業利益率13.2%）や農薬</strong>、<strong>規模の経済を効かせた農機トップ（クボタ8.6%、対する井関農機は1.1%）</strong>、そして<strong>JAの金融・共済事業</strong>にお金が集まっている。農業経営体の平均農業所得は98.2万円（前年比▲21.7%）にとどまる（第九章・第十章）。</p>
+        </div>
+
+        <div class="answer">
+          <h4>問3. 空いている市場は？</h4>
+          <p>3つに絞った —— <strong>①中古農機の相場データ無料公開</strong>（農地・卸売・労働賃金の相場はすでにオープンデータ化されているのに農機だけ取り残されている）、<strong>②規格外品のB2B直接卸</strong>、<strong>③農家向け金融の細分化</strong>（天候インデックス保険・資材BNPL）。ただし埋まらない理由はそれぞれ違う（第十一章）。</p>
+        </div>
+      </section>
+
+      <section id="ch8">
+        <div class="chapter-head">
+          <span class="chapter-num">八</span>
+          <h2>儲かっているプラットフォーム —— 三つの型</h2>
+        </div>
+        <p class="lead">「農業版◯◯」を掲げたプラットフォームのうち、単体で黒字と確認できたものはほとんどない。黒字化している企業は例外なく、農業マッチング以外の何かで稼いでいる。</p>
+
+        <div class="pattern-grid">
+          <div class="pattern-card">
+            <span class="kind">型 一</span>
+            <h4>自社在庫保有型の商流差益</h4>
+            <ul>
+              <li><b>マーケットエンタープライズ</b>（UMM運営元・東証グロース）：全社営業利益6.26億円（+109.4%）。手数料ではなく<b>仕入・在庫・販売益</b>で稼ぐ「リユース商社」。UMM単体は非開示</li>
+            </ul>
+          </div>
+          <div class="pattern-card">
+            <span class="kind">型 二</span>
+            <h4>農家非課金・組織/本体課金</h4>
+            <ul>
+              <li><b>daywork</b>：農家・求職者は完全無料。JA・自治体向け有償システムが本丸と推測（200以上のJAで活用）。自社決算は非公開</li>
+              <li><b>クボタKSAS／John Deere Operations Center／Climate FieldView</b>：データサービス単体の売上は非開示。<b>高額ハードウェア販売のロックインツール</b>という位置づけで独立採算を求められない</li>
+            </ul>
+          </div>
+          <div class="pattern-card">
+            <span class="kind">型 三</span>
+            <h4>非農業事業が農業赤字を吸収</h4>
+            <ul>
+              <li><b>オプティム</b>：全社営業利益19.69億円で黒字だが、<b>アグリテック事業単体は営業損失4.60億円</b>。黒字を牽引するのは非農業のAX事業（営業利益49.95億円）</li>
+              <li><b>シンクロ・フード</b>：全社純利益7.05億円だが主因はM&amp;A仲介事業。農業ジョブ単体は非開示</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="twrap">
+          <table class="ledger-table">
+            <caption>薄氷の黒字化と、見せかけの黒字化</caption>
+            <thead><tr><th>企業</th><th>状態</th><th>数字（決算期）</th><th>要注意点</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="name">雨風太陽（ポケットマルシェ）</td>
+                <td><span class="tag on">初黒字予想</span></td>
+                <td class="num">2025年12月期 純利益+2,500万円予想<br><span class="cell-src">1-6月期はまだ▲4,500万円</span></td>
+                <td>下期（年末需要期）に利益が集中する季節性が強く、達成はまだ薄氷</td>
+              </tr>
+              <tr>
+                <td class="name">DeHaat（インド）</td>
+                <td><span class="tag off">見せかけ</span></td>
+                <td class="num">FY25 純利益370億ルピー黒字<br><span class="cell-src">除く：営業損失207億ルピー</span></td>
+                <td>黒字の主因は<b>優先株の公正価値評価変動という非現金の会計上の利得</b>。事業実態は赤字継続</td>
+              </tr>
+              <tr>
+                <td class="name">Ninjacart（インド）</td>
+                <td><span class="tag off">見せかけ</span></td>
+                <td class="num">FY24 EBITDA黒字化を発表</td>
+                <td><b>EBITDAと当期純利益は別物</b>。最終損益は依然赤字</td>
+              </tr>
+              <tr>
+                <td class="name">AgroStar／Tractor Junction（インド）</td>
+                <td><span class="tag off">赤字継続</span></td>
+                <td class="num">Tractor Junction：純損失 3.7億→9.1億ルピーへ拡大</td>
+                <td>売上は急拡大するが赤字も拡大。資金調達で埋め続けている</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="note caution">
+          <strong>読み方の注意。</strong> 海外アグリテックの「黒字化」報道は、EBITDA（減価償却・金利・税金控除前利益）や非現金の会計上の評価益を指していることが多い。<strong>営業損益・当期純利益・非現金項目の有無を必ず区別して読む必要がある。</strong>
+        </div>
+      </section>
+
+      <section id="ch9">
+        <div class="chapter-head">
+          <span class="chapter-num">九</span>
+          <h2>農業の稼ぎ頭マップ —— 「作る」より「支える」が儲かる</h2>
+        </div>
+        <p class="lead">農業機械・農薬・種苗の各社の営業利益率を並べると、儲けの所在がはっきり見える。研究開発と知財で守られた領域ほど利益率が高く、規模の経済がものを言う機械は差が激しい。</p>
+
+        <div class="barchart">
+          <p class="caption">営業利益率の比較（直近決算期）</p>
+          <div class="bar-row">
+            <div class="label">サカタのタネ<small>種苗・2025年5月期</small></div>
+            <div class="bar-track"><div class="bar-fill hi" style="width:94%"></div></div>
+            <div class="value">13.2%</div>
+          </div>
+          <div class="bar-row">
+            <div class="label">住友化学アグロ<small>農薬・2025年3月期</small></div>
+            <div class="bar-track"><div class="bar-fill" style="width:66%"></div></div>
+            <div class="value">9.2%</div>
+          </div>
+          <div class="bar-row">
+            <div class="label">クボタ（機械）<small>2025年12月期</small></div>
+            <div class="bar-track"><div class="bar-fill" style="width:61%"></div></div>
+            <div class="value">8.6%</div>
+          </div>
+          <div class="bar-row">
+            <div class="label">日本農薬<small>2024年3月期</small></div>
+            <div class="bar-track"><div class="bar-fill" style="width:51%"></div></div>
+            <div class="value">7.2%</div>
+          </div>
+          <div class="bar-row">
+            <div class="label">クミアイ化学<small>2024年10月期</small></div>
+            <div class="bar-track"><div class="bar-fill" style="width:51%"></div></div>
+            <div class="value">7.1%</div>
+          </div>
+          <div class="bar-row">
+            <div class="label">井関農機（機械）<small>2024年12月期</small></div>
+            <div class="bar-track"><div class="bar-fill lo" style="width:8%"></div></div>
+            <div class="value">1.1%</div>
+          </div>
+          <p class="ja-note">井関農機はクボタと同じ国内農機市場にいながら利益率は約8分の1。<strong>北米比率と規模の経済の差がそのまま利益率差になっている</strong>。クボタは売上の約3割を北米が占め、コンパクトトラクターで同市場シェア約4割を握る。</p>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat">
+            <span class="n">98.2万円</span>
+            <span class="l">農業経営体の平均農業所得（令和4年、前年比▲21.7%）</span>
+            <span class="src">農水省 農業経営統計調査</span>
+          </div>
+          <div class="stat">
+            <span class="n">約1,200億円</span>
+            <span class="l">丸紅の食料・アグリ事業利益（2022年3月期、全社利益の約3割）</span>
+            <span class="src">丸紅IR</span>
+          </div>
+          <div class="stat">
+            <span class="n">16.8%</span>
+            <span class="l">食品PB比率（2023年10月時点、2012年以降最高）。NBよりマージン5〜10pt高い</span>
+            <span class="src">報道</span>
+          </div>
+          <div class="stat">
+            <span class="n">59%</span>
+            <span class="l">植物工場432施設中、黒字・収支均衡の割合（令和5年度末）。完全人工光型は43%</span>
+            <span class="src">先端農業マガジン</span>
+          </div>
+        </div>
+
+        <p>植物工場最大手の一角だった<strong>スプレッド</strong>は7期連続経常赤字となり、2024年に民事再生法を申請した。「作る」側の新興プレイヤーは、投資回収前の段階にあるものが依然として多い。</p>
+      </section>
+
+      <section id="ch10">
+        <div class="chapter-head">
+          <span class="chapter-num">十</span>
+          <h2>JAの内訳 —— 農業は赤字、金融と共済が支える</h2>
+        </div>
+        <p class="lead">農協が「儲かっているのか」という問いには、事業ごとに全く違う答えが返ってくる。2022年度の事業別収支を並べると、構造が一目で分かる。</p>
+
+        <div class="barchart">
+          <p class="caption">JAグループ 事業別収支（2022年度・億円）</p>
+          <div class="bar-row">
+            <div class="label">信用事業<small>金融</small></div>
+            <div class="bar-track"><div class="bar-fill hi" style="width:100%"></div></div>
+            <div class="value">+2,546</div>
+          </div>
+          <div class="bar-row">
+            <div class="label">共済事業<small>保険</small></div>
+            <div class="bar-track"><div class="bar-fill" style="width:48%"></div></div>
+            <div class="value">+1,229</div>
+          </div>
+          <div class="bar-row">
+            <div class="label">経済事業<small>営農指導・資材・出荷</small></div>
+            <div class="bar-track"><div class="bar-fill neg" style="width:3%"></div></div>
+            <div class="value">▲79</div>
+          </div>
+          <p class="ja-note"><strong>農業そのものに関わる経済事業は赤字。</strong>JAは信用・共済という金融・保険事業で稼ぎ、農業関連事業の赤字を実質的に補填する構造になっている。系統の頂点にある農林中央金庫は2023年度、外債等の含み損処理で最大約1.5兆円規模の赤字を計上し、傘下JAから1.2兆円の資本増強を受け入れた —— JAグループの経営基盤が、いかに金融事業に依存しているかがそのリスクの裏返しとして表面化した事例。</p>
+        </div>
+      </section>
+
+      <section id="ch11">
+        <div class="chapter-head">
+          <span class="chapter-num">十一</span>
+          <h2>空いている市場 —— 埋まらない理由はそれぞれ違う</h2>
+        </div>
+        <p class="lead">「まだ誰もやっていない」ように見える市場でも、埋まらない理由は技術・オペレーション・需要のどれかに分かれる。理由を取り違えると、間違った解き方をしてしまう。</p>
+
+        <div class="gap-card">
+          <span class="num">01</span>
+          <h4>中古農機の相場データ無料公開</h4>
+          <p>農地相場は国交省データを基に「農地相場ドットコム」が34万件超を無料公開、卸売相場は農水省・alic「ベジ探」、労働賃金相場も全国農業会議所が毎年公表 —— <strong>周辺の相場データはすでにオープン化されている</strong>のに、中古農機だけが取り残されている。</p>
+          <div class="why"><b>埋まらない理由：</b>技術的障壁ではない。オークション会社やUMMのような既存プレイヤーが取引データを競争優位として抱え込む<strong>インセンティブ構造の問題</strong>。米Machinery Peteは相場データを無料公開してトラフィックを400%伸ばしたが、日本ではまだ誰もこの手を打っていない。</div>
+        </div>
+
+        <div class="gap-card">
+          <span class="num">02</span>
+          <h4>規格外品のB2B直接卸（Full Harvest型）</h4>
+          <p>消費者向け・自治体主導のフードロスサービス（タベスケ、ロスゼロ）はあるが、<strong>農家から食品メーカーへの規格外原料の直接B2B流通</strong>は日本に明確な相当サービスが見当たらない。潜在量は大きいと見られる。</p>
+          <div class="why"><b>埋まらない理由：</b>零細・分散した産地からの小口集荷、コールドチェーン、品質規格の標準化という<strong>オペレーション（ロジスティクス）の壁</strong>。米Full Harvestも物流網構築に多額を投じている。技術ではなく実行力の勝負であり、参入者がまだ本格的に取り組んでいないだけとも言える。</div>
+        </div>
+
+        <div class="gap-card">
+          <span class="num">03</span>
+          <h4>農家向け金融の細分化（天候保険・資材BNPL）</h4>
+          <p>損保各社は新興国向けの天候インデックス保険のノウハウを既に持っているが、国内農家向けには展開していない。資材購入のBNPLも、消費者向けは急成長する一方で農業資材の掛け払いはJAの伝統的信用事業のまま。</p>
+          <div class="why"><b>埋まらない理由：</b>日本にはNOSAI（農業共済）・収入保険制度という手厚い政府補助付きセーフティネットが既にあり、<strong>民間の小口保険への支払意欲が新興国ほど強くない</strong>と推測される需要側の制約。技術は実現可能でも、経済合理性の観点で後回しにされている。</div>
+        </div>
+      </section>
+
+      <section id="ch12">
+        <div class="chapter-head">
+          <span class="chapter-num">終</span>
+          <h2>総合示唆</h2>
+        </div>
+        <div class="coda">
+          <h3>お金は「農業を作ること」の外側に集まっている</h3>
+          <p>知財型サプライヤー（種苗・農薬）、規模の経済を効かせた農機トップ、JAの金融・保険事業、そしてハードウェア販売のロックインツールとしてのデータサービス —— 儲けの所在はこの4つにほぼ収斂する。プラットフォーム単体で農家個人課金だけで黒字化した純粋モデルは、今回の調査では一つも確認できなかった。</p>
+          <p>これは<a href="https://claude.ai/code/artifact/e3e693d3-aca7-4d15-9d6f-238b5a884a3a">前号「農業プラットフォーム台帳」</a>で見た「農家個人への直接課金が極めて難しい」という結論と、完全に整合する。生存しているプレイヤーは全員、課金主体を農家個人からずらしていた —— 今号の決算数字が、それを裏付ける形になった。</p>
+        </div>
+      </section>
+
+      <section id="sources">
+        <div class="chapter-head">
+          <span class="chapter-num">附</span>
+          <h2>出典・注記</h2>
+        </div>
+        <div class="note">
+          本稿の数字は、決算短信・有価証券報告書・IR資料を優先して調査したもの（2026年8月時点）。非上場企業や海外の非開示情報については報道・二次情報を用いており、その旨を本文中に明記している。<strong>事業判断・引用に用いる場合は、リンク先の一次情報で必ず再確認すること。</strong>確認できなかった数字はすべて「非公開」「不明」と明記し、推測値は記載していない。
+        </div>
+
+        <div class="src-group">
+          <h4>プラットフォームの収益性</h4>
+          <ul>
+            <li><a href="https://www.marketenterprise.co.jp/ir/finance/finance_05.html">マーケットエンタープライズ IR</a> ／ <a href="https://ame-kaze-taiyo.jp/ir/performance/">雨風太陽 IR</a></li>
+            <li><a href="https://www.saga-s.co.jp/articles/-/1243835">オプティム決算報道</a> ／ <a href="https://www.synchro-food.co.jp/ir/highlight">シンクロ・フード IR</a></li>
+            <li><a href="https://entrackr.com/fintrackr/dehaat-cuts-losses-by-15-to-rs-207-cr-in-fy25-10504383">DeHaat 決算報道（Entrackr）</a> ／ <a href="https://yourstory.com/2024/10/agritech-startup-ninjacart-revenue-loss-fy24-fulfillment-business">Ninjacart 決算報道（YourStory）</a></li>
+          </ul>
+        </div>
+        <div class="src-group">
+          <h4>農業周辺の収益性</h4>
+          <ul>
+            <li><a href="https://www.kubota.co.jp/ir/financial/presentation/data/financial_results_25q4.pdf">クボタ決算説明資料</a> ／ <a href="https://www.iseki.co.jp/cms/upload/pdf/ir/briefing/setumei_2025_all.pdf">井関農機決算説明資料</a></li>
+            <li><a href="https://finance-frontend-pc-dist.west.edge.storage-yahoo.jp/disclosure/20250723/20250722518060.pdf">サカタのタネ決算説明資料</a> ／ <a href="https://www.sumitomo-chem.co.jp/news/files/docs/20250514_1.pdf">住友化学決算資料</a></li>
+            <li><a href="https://cigs.canon/article/20240712_8208.html">JA事業別収支・農林中金（キヤノングローバル戦略研究所）</a></li>
+            <li><a href="https://www.maff.go.jp/j/tokei/kekka_gaiyou/noukei/einou/r4/einou_syusi/">農水省 令和4年農業経営体の経営収支</a></li>
+          </ul>
+        </div>
+        <div class="src-group">
+          <h4>空白市場</h4>
+          <ul>
+            <li><a href="https://www.tochi-d.com/nouchi/">農地相場ドットコム</a> ／ <a href="https://vegetan.alic.go.jp/vegetan/sch7.do?outPutKbn=1">ベジ探（alic）</a> ／ <a href="https://www.nca.or.jp/upload/nousagyou_r5.pdf">農作業料金・農業労賃調査（全国農業会議所）</a></li>
+            <li><a href="https://foodtech-japan.com/2021/12/29/full-harvest/">Full Harvest 資金調達記事</a> ／ <a href="https://www.nikkei.com/article/DGXZRSP695932_X20C25A8000000/">三井住友海上 天候指数保険</a></li>
+          </ul>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="colophon">
+    <span>農業の決算台帳 続巻 · 2026年8月調査 · farm-app 市場調査メモ</span>
+    <span>数字は出典・決算期つき。事業判断には一次情報の再確認を。</span>
+  </footer>
+
+</div>
