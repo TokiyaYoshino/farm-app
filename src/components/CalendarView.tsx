@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Plus, X,
   CalendarDays, ClipboardList, UserCircle,
   PackageCheck, Clock, Leaf, RefreshCw,
-  FlaskConical,
+  FlaskConical, Trash2, Pencil,
   CloudRain, Droplets,
   ArrowUpDown,
 } from "lucide-react";
@@ -52,7 +52,11 @@ interface Props {
   users: UserRow[];
   pesticides: PesticideRow[];
   currentUserId: number;
+  isAdmin: boolean;
   onAddSchedule: (date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string) => Promise<boolean>;
+  onUpdateSchedule: (id: string, date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string) => Promise<boolean>;
+  onDeleteSchedule: (id: string) => void;
+  onDeleteReport: (id: number) => void;
   onLoadComments: (targetType: string, targetId: string) => Promise<Comment[]>;
   onAddComment: (targetType: string, targetId: string, message: string) => Promise<boolean>;
   onEditComment: (id: string, message: string) => Promise<boolean>;
@@ -66,8 +70,8 @@ const WORK_TYPES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り
 const shortName = (name: string) => name.slice(0, 2);
 
 export default function CalendarView({
-  reports, schedules, crops, users, pesticides, currentUserId,
-  onAddSchedule, onLoadComments, onAddComment, onEditComment,
+  reports, schedules, crops, users, pesticides, currentUserId, isAdmin,
+  onAddSchedule, onUpdateSchedule, onDeleteSchedule, onDeleteReport, onLoadComments, onAddComment, onEditComment,
 }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const [viewYear, setViewYear]   = useState(() => new Date().getFullYear());
@@ -80,6 +84,9 @@ export default function CalendarView({
 
   // 詳細ビュー（コメントUIは CommentThread に集約）
   const [detail, setDetail]             = useState<DetailItem | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [editForm, setEditForm] = useState({ date: "", assignedUserId: 0, workType: "収穫", note: "", crop: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const [currentFilter, setCurrentFilter] = useState<"all"|"reports"|"schedules"|"user">("all");
   const [filterUserId, setFilterUserId]   = useState<number>(0);
@@ -157,11 +164,12 @@ export default function CalendarView({
     resetForm();
     setAddError("");
     setDetail(null);
+    setEditingSchedule(false);
   };
 
   const openDetail = (item: DetailItem) => setDetail(item);
 
-  const backToList = () => setDetail(null);
+  const backToList = () => { setDetail(null); setEditingSchedule(false); };
 
   const handleAdd = async () => {
     if (!selectedDate || !form.workType) return;
@@ -462,6 +470,18 @@ export default function CalendarView({
                       ? `${userName(detail.data.user_id)} の作業報告`
                       : `${userName(detail.data.assigned_user_id ?? detail.data.user_id)} の予定`}
                   </span>
+                  {detail.kind === "schedule" && !editingSchedule && (isAdmin || detail.data.user_id === currentUserId || detail.data.assigned_user_id === currentUserId) && (
+                    <button
+                      onClick={() => {
+                        const s = detail.data;
+                        setEditForm({ date: s.date, assignedUserId: s.assigned_user_id ?? 0, workType: s.work_type || s.title, note: s.note ?? "", crop: s.crop ?? "" });
+                        setEditingSchedule(true);
+                      }}
+                      style={css({ width: 32, height: 32, background: C.well, border: "none", borderRadius: 999, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted })}
+                    >
+                      <Pencil size={14} strokeWidth={2} />
+                    </button>
+                  )}
                   <button onClick={closePopup} style={css({ width: 32, height: 32, background: C.well, border: "none", borderRadius: 999, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted })}>
                     <X size={15} strokeWidth={2} />
                   </button>
@@ -508,11 +528,86 @@ export default function CalendarView({
                       {r.image_url && (
                         <img src={r.image_url} alt="作業写真" style={{ width: "100%", borderRadius: 10, marginTop: 8, maxHeight: 240, objectFit: "cover", display: "block" }} />
                       )}
+                      {(isAdmin || r.user_id === currentUserId) && (
+                        <button
+                          onClick={() => { onDeleteReport(r.id); backToList(); }}
+                          style={css({ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", padding: 0, marginTop: 10, fontSize: 12, fontWeight: 600, color: C.danger, cursor: "pointer" })}
+                        >
+                          <Trash2 size={12} strokeWidth={2} />この記録を削除
+                        </button>
+                      )}
                     </div>
                   );
                 })()}
 
-                {detail.kind === "schedule" && (() => {
+                {detail.kind === "schedule" && editingSchedule && (() => {
+                  const s = detail.data;
+                  return (
+                    <div style={css({ background: C.well, borderRadius: 14, padding: 14, marginBottom: 14 })}>
+                      <input type="date"
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        value={editForm.date}
+                        onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+                      />
+                      <select
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        value={editForm.assignedUserId || ""}
+                        onChange={e => setEditForm(f => ({ ...f, assignedUserId: e.target.value ? Number(e.target.value) : 0 }))}
+                      >
+                        <option value="">作業者（任意）</option>
+                        {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                      <select
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        value={editForm.workType}
+                        onChange={e => setEditForm(f => ({ ...f, workType: e.target.value }))}
+                      >
+                        {WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <select
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        value={editForm.crop}
+                        onChange={e => setEditForm(f => ({ ...f, crop: e.target.value }))}
+                      >
+                        <option value="">作物（任意）</option>
+                        {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      </select>
+                      <input
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 10, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        placeholder="メモ（任意）"
+                        value={editForm.note}
+                        onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))}
+                      />
+                      <div style={css({ display: "flex", gap: 8 })}>
+                        <button
+                          onClick={() => setEditingSchedule(false)}
+                          style={css({ flex: 1, padding: "11px 0", borderRadius: 8, border: "none", background: C.card, color: C.textSub, fontSize: 14, fontWeight: 700, cursor: "pointer" })}
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          disabled={savingEdit}
+                          onClick={async () => {
+                            setSavingEdit(true);
+                            const ok = await onUpdateSchedule(s.id, editForm.date, editForm.workType, editForm.note, editForm.crop, editForm.assignedUserId || null, editForm.workType);
+                            setSavingEdit(false);
+                            if (ok) setEditingSchedule(false);
+                          }}
+                          style={css({
+                            flex: 1, padding: "11px 0", borderRadius: 8, border: "none",
+                            background: savingEdit ? C.border : C.info,
+                            color: savingEdit ? C.textMuted : "#fff",
+                            fontSize: 14, fontWeight: 700, cursor: savingEdit ? "default" : "pointer",
+                          })}
+                        >
+                          {savingEdit ? "保存中..." : "保存"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {detail.kind === "schedule" && !editingSchedule && (() => {
                   const s = detail.data;
                   return (
                     <div style={css({ background: C.well, borderRadius: 14, padding: 14, marginBottom: 14 })}>
@@ -530,6 +625,14 @@ export default function CalendarView({
                         <div style={css({ fontSize: 12, color: C.textSub, marginTop: 8, padding: "8px 12px", background: C.card, borderRadius: 10 })}>
                           {s.note}
                         </div>
+                      )}
+                      {(isAdmin || s.user_id === currentUserId || s.assigned_user_id === currentUserId) && (
+                        <button
+                          onClick={() => { onDeleteSchedule(s.id); backToList(); }}
+                          style={css({ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", padding: 0, marginTop: 10, fontSize: 12, fontWeight: 600, color: C.danger, cursor: "pointer" })}
+                        >
+                          <Trash2 size={12} strokeWidth={2} />この予定を削除
+                        </button>
                       )}
                     </div>
                   );

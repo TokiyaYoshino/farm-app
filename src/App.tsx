@@ -13,7 +13,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
-  Download, FileText, FileSpreadsheet, Sparkles, BookOpen,
+  Download, FileText, FileSpreadsheet, Sparkles, BookOpen, Pencil,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -238,7 +238,7 @@ interface WeatherInfo {
 }
 interface DiagnosisResult {
   inconclusive: boolean;
-  possibilities: { name: string; confidence: "高" | "中" | "低"; reason: string }[];
+  possibilities: { name: string; category: "病害" | "虫害" | "生理障害" | "ウイルス病"; confidence: number; reason: string }[];
   note: string;
 }
 interface Project {
@@ -385,6 +385,9 @@ export default function App() {
   const [submitting, setSubmitting]       = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [scheduleEditForm, setScheduleEditForm] = useState({ date:"", workType:"", crop:"", assignedUserId:0, note:"" });
+  const [savingSchedule, setSavingSchedule] = useState(false);
   // 記録タブ：カレンダー/一覧の表示切替＋検索/フィルタ
   const [reportView, setReportView]         = useState<"calendar"|"list">("calendar");
   const [reportQuery, setReportQuery]       = useState("");
@@ -1021,6 +1024,15 @@ export default function App() {
       showToast("報告を削除しました");
     });
 
+  const deleteSchedule = (id: string) =>
+    confirmDelete("この予定を削除しますか？", async () => {
+      const { error } = await supabase.from("schedules").delete().eq("id", id);
+      if (error) return showToast(error.message, "err");
+      setSchedules(p => p.filter(s => s.id !== id));
+      setSelectedSchedule(null);
+      showToast("予定を削除しました");
+    });
+
   const deleteUser = (id: number) =>
     confirmDelete("このユーザーを削除しますか？", async () => {
       const { error } = await supabase.from("users").delete().eq("id", id).eq("organization_id", currentOrganizationId);
@@ -1338,6 +1350,27 @@ export default function App() {
       return true;
     } catch (e) {
       console.error("addSchedule error:", e);
+      return false;
+    }
+  };
+
+  const updateSchedule = async (id: string, date: string, title: string, note: string, crop: string, assignedUserId: number | null, workType: string, field?: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.from("schedules").update({
+        title,
+        date,
+        note: note || null,
+        crop: crop || null,
+        field: field || null,
+        assigned_user_id: assignedUserId || null,
+        work_type: workType || null,
+      }).eq("id", id).select().single();
+      if (error) throw error;
+      setSchedules(p => p.map(s => s.id === id ? (data as Schedule) : s));
+      setSelectedSchedule(prev => prev && prev.id === id ? (data as Schedule) : prev);
+      return true;
+    } catch (e) {
+      console.error("updateSchedule error:", e);
       return false;
     }
   };
@@ -1715,8 +1748,8 @@ export default function App() {
     }
   };
 
-  const confidenceColor = (c: "高" | "中" | "低") =>
-    c === "高" ? { fg: C.danger, bg: C.dangerBg } : c === "中" ? { fg: C.warning, bg: C.warningBg } : { fg: C.textMuted, bg: C.well };
+  const confidenceColor = (c: number) =>
+    c >= 70 ? { fg: C.danger, bg: C.dangerBg } : c >= 40 ? { fg: C.warning, bg: C.warningBg } : { fg: C.textMuted, bg: C.well };
 
   const renderDiagnosis = (result: DiagnosisResult) => (
     <>
@@ -1729,9 +1762,10 @@ export default function App() {
             const cc = confidenceColor(p.confidence);
             return (
               <div key={i} style={{ borderBottom: i < result.possibilities.length - 1 ? `1px solid ${C.hairline}` : "none", paddingBottom:8 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" as const }}>
                   <span style={{ fontSize:14, fontWeight:700, color:C.text }}>{p.name}</span>
-                  <span style={{ fontSize:11, fontWeight:700, color:cc.fg, background:cc.bg, borderRadius:999, padding:"2px 8px" }}>可能性: {p.confidence}</span>
+                  <span style={{ fontSize:11, fontWeight:600, color:C.textMuted, background:C.well, borderRadius:999, padding:"2px 8px" }}>{p.category}</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:cc.fg, background:cc.bg, borderRadius:999, padding:"2px 8px" }}>確信度: {p.confidence}%</span>
                 </div>
                 <div style={{ fontSize:13, color:C.textSub, lineHeight:1.6 }}>{p.reason}</div>
               </div>
@@ -1864,17 +1898,18 @@ export default function App() {
   };
 
   // 予定と実績のマッチング
+  // work_typeの完全一致までは求めない（同じ日に担当者が何かしら報告していれば、
+  // 作業種別の選び方の違いだけで「未報告」に残り続けるのを避ける）
   const matchReportToSchedule = (schedule: Schedule): Report | null =>
     reports.find(r =>
       r.user_id === (schedule.assigned_user_id ?? schedule.user_id) &&
-      r.date === schedule.date &&
-      r.work_type === schedule.work_type
+      r.date === schedule.date
     ) ?? null;
 
 
   // ─── スタイル ─────────────────────────────────────────
   const S = {
-    wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:"calc(88px + env(safe-area-inset-bottom))" }),
+    wrap:    css({ minHeight:"100vh", background:C.bg, paddingBottom:"calc(150px + env(safe-area-inset-bottom))" }),
     header:  css({ background:"#fff", color:C.text, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${C.border}`, position:"sticky" as const, top:0, zIndex:90 }),
     headerTitle: css({ fontSize:16, fontWeight:700, color:C.text, letterSpacing:-0.3, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" as const, flex:1, minWidth:0 }),
     headerSub: css({ background:"#fff", borderBottom:`1px solid ${C.border}`, display:"flex", paddingLeft:4, paddingRight:4, gap:0 }),
@@ -2284,7 +2319,11 @@ export default function App() {
             users={users}
             pesticides={pesticides}
             currentUserId={currentUser?.id ?? 0}
+            isAdmin={isAdmin}
             onAddSchedule={addSchedule}
+            onUpdateSchedule={updateSchedule}
+            onDeleteSchedule={deleteSchedule}
+            onDeleteReport={deleteReport}
             onLoadComments={loadComments}
             onAddComment={addComment}
             onEditComment={editComment}
@@ -2401,25 +2440,25 @@ export default function App() {
 
               {/* 件数＋クリア＋帳票出力 */}
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, minHeight:28, gap:8 }}>
-                <span style={{ fontSize:12, color:C.textMuted }}>{filteredReports.length}件の記録</span>
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:12, color:C.textMuted, flexShrink:0, whiteSpace:"nowrap" as const }}>{filteredReports.length}件の記録</span>
+                <div style={{ display:"flex", alignItems:"center", gap:8, overflowX:"auto", minWidth:0 }}>
                   {reportFilterActive && (
-                    <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={btn("tertiary", "sm")}>条件をクリア</button>
+                    <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={{ ...btn("tertiary", "sm"), flexShrink:0 }}>条件をクリア</button>
                   )}
-                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={btn("secondary", "sm")}>
+                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Sparkles size={13} strokeWidth={2} />AI日報
                   </button>
                   {canUseAiFeature("recordSearchChat") && (
-                    <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={btn("secondary", "sm")}>
+                    <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                       <MessageSquare size={13} strokeWidth={2} />AI検索
                     </button>
                   )}
                   {canUseAiFeature("pestDiagnosis") && (
-                    <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={btn("secondary", "sm")}>
+                    <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                       <FlaskConical size={13} strokeWidth={2} />AI画像診断
                     </button>
                   )}
-                  <button onClick={() => setShowExportSheet(true)} style={btn("secondary", "sm")}>
+                  <button onClick={() => setShowExportSheet(true)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Download size={13} strokeWidth={2} />帳票出力
                   </button>
                 </div>
@@ -3079,11 +3118,12 @@ export default function App() {
       </BottomSheet>
 
       {/* ───── 予定詳細（未報告） ───── */}
-      <BottomSheet open={!!selectedSchedule} onClose={() => setSelectedSchedule(null)}>
+      <BottomSheet open={!!selectedSchedule} onClose={() => { setSelectedSchedule(null); setEditingSchedule(false); }}>
         {selectedSchedule && (() => {
         const s = selectedSchedule;
         const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
         const cropObj = crops.find(c => c.name === s.crop);
+        const canEdit = isAdmin || s.user_id === currentUser?.id || (!!s.assigned_user_id && s.assigned_user_id === currentUser?.id);
         return (
           <>
               {/* ヘッダー */}
@@ -3094,12 +3134,85 @@ export default function App() {
                     {s.date}{s.crop && ` · ${s.crop}`}
                   </div>
                 </div>
-                <button onClick={() => setSelectedSchedule(null)} style={S.circleBtn}>
-                  <X size={16} strokeWidth={2} />
-                </button>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  {canEdit && !editingSchedule && (
+                    <button
+                      onClick={() => {
+                        setScheduleEditForm({ date:s.date, workType:s.work_type ?? "", crop:s.crop ?? "", assignedUserId:s.assigned_user_id ?? 0, note:s.note ?? "" });
+                        setEditingSchedule(true);
+                      }}
+                      style={S.circleBtn}
+                    >
+                      <Pencil size={15} strokeWidth={2} />
+                    </button>
+                  )}
+                  <button onClick={() => { setSelectedSchedule(null); setEditingSchedule(false); }} style={S.circleBtn}>
+                    <X size={16} strokeWidth={2} />
+                  </button>
+                </div>
               </div>
 
               <div style={{ padding:"0 16px" }}>
+                {editingSchedule ? (
+                  <>
+                    {/* 編集フォーム */}
+                    <div style={S.wellBox}>
+                      <div style={S.wrow}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl2}>日付</div>
+                          <input type="date" style={{ ...S.fieldInput, maxWidth:"100%" }} value={scheduleEditForm.date} onChange={e => setScheduleEditForm(f => ({ ...f, date:e.target.value }))} />
+                        </div>
+                      </div>
+                      <div style={{ ...S.wrow, marginTop:6 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl2}>作業種別</div>
+                          <select style={S.fieldSelect} value={scheduleEditForm.workType} onChange={e => setScheduleEditForm(f => ({ ...f, workType:e.target.value }))}>
+                            {WORK_TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ ...S.wrow, marginTop:6 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl2}>担当者</div>
+                          <select style={S.fieldSelect} value={scheduleEditForm.assignedUserId} onChange={e => setScheduleEditForm(f => ({ ...f, assignedUserId:Number(e.target.value) }))}>
+                            <option value={0}>未設定</option>
+                            {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ flex:1, minWidth:0, borderLeft:`1px solid ${C.hairline}`, paddingLeft:16 }}>
+                          <div style={S.lbl2}>作物</div>
+                          <select style={S.fieldSelect} value={scheduleEditForm.crop} onChange={e => setScheduleEditForm(f => ({ ...f, crop:e.target.value }))}>
+                            <option value="">未設定</option>
+                            {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ ...S.wrow, marginTop:6 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={S.lbl2}>メモ</div>
+                          <input style={S.fieldInput} value={scheduleEditForm.note} onChange={e => setScheduleEditForm(f => ({ ...f, note:e.target.value }))} placeholder="メモ（任意）" />
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button onClick={() => setEditingSchedule(false)} style={{ ...btn("secondary", "lg"), flex:1 }}>キャンセル</button>
+                      <button
+                        disabled={savingSchedule}
+                        onClick={async () => {
+                          setSavingSchedule(true);
+                          const ok = await updateSchedule(s.id, scheduleEditForm.date, scheduleEditForm.workType, scheduleEditForm.note, scheduleEditForm.crop, scheduleEditForm.assignedUserId || null, scheduleEditForm.workType, s.field);
+                          setSavingSchedule(false);
+                          if (ok) { setEditingSchedule(false); showToast("予定を更新しました"); }
+                          else showToast("更新に失敗しました", "err");
+                        }}
+                        style={{ ...btn("primary", "lg"), flex:1 }}
+                      >
+                        {savingSchedule ? "保存中..." : "保存"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
                 {/* 基本情報 */}
                 <div style={{ background:C.well, borderRadius:14, padding:"12px 14px", marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   {s.work_type && scheduleTitle(s) && (
@@ -3142,6 +3255,16 @@ export default function App() {
                 >
                   <ClipboardList size={16} strokeWidth={2} />この予定の報告を入力
                 </button>
+                {canEdit && (
+                  <button
+                    onClick={() => deleteSchedule(s.id)}
+                    style={{ ...btn("tertiary", "sm"), color:C.danger, marginTop:8 }}
+                  >
+                    <Trash2 size={13} strokeWidth={2} />この予定を削除
+                  </button>
+                )}
+                  </>
+                )}
 
                 {/* コメント */}
                 <div style={{ marginTop:16 }}>
