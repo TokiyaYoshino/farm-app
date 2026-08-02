@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
-  LineChart, Line, ScatterChart, Scatter, BarChart, Bar,
+  LineChart, Line, ScatterChart, Scatter, BarChart, Bar, ComposedChart,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend,
 } from "recharts";
-import { BarChart2, Leaf, Thermometer, CloudRain, Clock, FlaskConical, Bug, Sparkles } from "lucide-react";
+import { BarChart2, Leaf, Thermometer, CloudRain, Clock, FlaskConical, Bug, Sparkles, ChevronDown, Target } from "lucide-react";
 import { C, SHADOW, RADIUS } from "../ui/tokens";
+import type { MetricReport } from "../lib/metrics";
+import { harvestQty, isCountableHarvest, excludedHarvestCount, workMinutes, toHours, pctDiff } from "../lib/metrics";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
@@ -15,39 +17,19 @@ const supabase = createClient(
 
 const CHART_COLORS = [C.ink,"#1976d2","#e07020","#9c27b0","#00838f","#c62828","#558b2f","#4527a0"];
 
-interface HarvestRow {
-  date: string;
+/**
+ * 分析に必要なぶんだけを要求する構造的な型。App.tsx の Report がそのまま渡る。
+ * 収穫量・作業時間の算出ルールは lib/metrics に集約してあり、ここでは再実装しない。
+ */
+export interface AnalyticsReport extends MetricReport {
+  id: number;
+  user_id: number;
+  crop_id: number;
   field: string;
-  quantity: string;
+  date: string;
   temp: string;
   rain: string;
-  humidity: string;
-  crop_id: number;
-}
-
-interface PesticideRow {
-  date: string;
-  field: string;
-  pesticide_id: string;
-}
-
-interface WorkTimeRow {
-  date: string;
-  work_type: string;
-  work_start: string;
-  work_end: string;
-  quantity: string;
-  field: string;
-}
-
-interface PesticideMaster {
-  id: string;
-  name: string;
-}
-
-interface Crop {
-  id: number;
-  name: string;
+  pesticide_id?: string;
 }
 
 interface DiagnosisJson {
@@ -72,13 +54,17 @@ interface DailyWeatherRow {
 }
 
 interface Props {
-  currentOrg: string;
-  // ai_outputs / daily_weather は organization_id 基準。
-  // 既存5クエリはレガシーの org 文字列基準のままで、このコンポーネント内では2系統が混在する
-  // （org → organization_id の移行はRLS作業側の責務）。
+  // ai_outputs / daily_weather は organization_id 基準。作業記録などレガシーの org 文字列
+  // 基準のデータは App.tsx 側で取得済みのものを props で受け取るため、ここでは扱わない。
   organizationId: string | null;
   lat: number | null;
   lng: number | null;
+  reports: AnalyticsReport[];
+  crops: { id: number; name: string; target_yield?: number }[];
+  pesticides: { id: string; name: string }[];
+  users: { id: number; name: string }[];
+  cropId: number | "all";
+  onCropChange: (id: number | "all") => void;
 }
 
 // 有効積算温度(GDD)の基準温度。暫定で10℃固定。
@@ -163,7 +149,7 @@ const selectStyle = {
   padding: "8px 14px",
   borderRadius: 999,
   border: "none",
-  fontSize: 13,
+  fontSize: 16,
   background: C.well,
   color: C.text,
   marginRight: 8,
@@ -177,60 +163,50 @@ const emptyStyle = {
   padding: "24px 0",
 };
 
-function calcWorkHours(start: string, end: string): number | null {
-  if (!start || !end) return null;
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  const diff = (eh * 60 + em) - (sh * 60 + sm);
-  if (diff <= 0) return null;
-  return Math.round((diff / 60) * 10) / 10;
+const noteStyle = {
+  fontSize: 11,
+  color: C.textMuted,
+  marginTop: 6,
+};
+
+/** 年をまたいだ日付の前後を月日だけで比べるための通日。うるう年で最大1日ずれる。 */
+const dayOfYear = (date: string): number =>
+  Math.round((Date.parse(date) - Date.parse(`${date.slice(0, 4)}-01-01`)) / 86400000);
+
+/** ラベル小・値大のKPIタイル。CLAUDE.md のデザイントークンに従い白 row を灰 well に積む。 */
+function KpiTile({ label, value, unit, sub, subTone }: {
+  label: string;
+  value: string;
+  unit?: string;
+  sub?: string;
+  subTone?: "up" | "down" | "flat";
+}) {
+  const subColor = subTone === "up" ? C.ink : subTone === "down" ? C.danger : C.textMuted;
+  return (
+    <div style={{ background: C.card, borderRadius: RADIUS.row, padding: "12px 14px" }}>
+      <div style={{ fontSize: 11, color: C.textSub, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: C.text, lineHeight: 1.1 }}>
+        {value}
+        {unit && <span style={{ fontSize: 12, fontWeight: 400, marginLeft: 2, color: C.textMuted }}>{unit}</span>}
+      </div>
+      <div style={{ fontSize: 11, color: subColor, marginTop: 4, minHeight: 14 }}>{sub ?? ""}</div>
+    </div>
+  );
 }
 
-export default function AnalyticsView({ currentOrg, organizationId, lat, lng }: Props) {
-  const [harvestReports, setHarvestReports] = useState<HarvestRow[]>([]);
-  const [pesticideReports, setPesticideReports] = useState<PesticideRow[]>([]);
-  const [allReports, setAllReports] = useState<WorkTimeRow[]>([]);
-  const [pesticides, setPesticides] = useState<PesticideMaster[]>([]);
-  const [crops, setCrops] = useState<Crop[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Section 1 filters
-  const [s1Field, setS1Field] = useState("all");
-  const [s1Crop, setS1Crop] = useState("all");
-
-  // Section 2 axis
-  const [s2Axis, setS2Axis] = useState<"temp" | "rain">("temp");
-
-  // Section 3 filter
-  const [s3WorkType, setS3WorkType] = useState("all");
-
-  // Section 5〜7（AI出力・気象）
+export default function AnalyticsView({
+  organizationId, lat, lng, reports, crops, pesticides, users, cropId, onCropChange,
+}: Props) {
   const [aiOutputs, setAiOutputs] = useState<AiOutputRow[]>([]);
   const [dailyWeather, setDailyWeather] = useState<DailyWeatherRow[]>([]);
   const [s5Field, setS5Field] = useState("all");
   const [s7Kind, setS7Kind] = useState<"all" | AiOutputRow["kind"]>("all");
+  const [showDeep, setShowDeep] = useState(false);
 
-  useEffect(() => {
-    async function fetchAll() {
-      setLoading(true);
-      const [h, p, a, ps, cr] = await Promise.all([
-        supabase.from("reports").select("date,field,quantity,temp,rain,humidity,crop_id").eq("work_type","収穫").eq("org", currentOrg).order("date"),
-        supabase.from("reports").select("date,field,pesticide_id").eq("work_type","防除").eq("org", currentOrg).order("date"),
-        supabase.from("reports").select("date,work_type,work_start,work_end,quantity,field").not("work_start","is",null).eq("org", currentOrg).order("date"),
-        supabase.from("pesticides").select("id,name").eq("org", currentOrg),
-        supabase.from("crops").select("id,name").eq("org", currentOrg),
-      ]);
-      setHarvestReports(h.data ?? []);
-      setPesticideReports(p.data ?? []);
-      setAllReports(a.data ?? []);
-      setPesticides(ps.data ?? []);
-      setCrops(cr.data ?? []);
-      setLoading(false);
-    }
-    fetchAll();
-  }, [currentOrg]);
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
 
-  // AI出力と日次気象は organization_id 基準で別途取得する。
+  // AI出力と日次気象は organization_id 基準で取得する。
   // 気象は未取得ぶんを Open-Meteo から埋めてから読み直す。
   useEffect(() => {
     if (!organizationId) return;
@@ -258,67 +234,88 @@ export default function AnalyticsView({ currentOrg, organizationId, lat, lng }: 
     return () => { cancelled = true; };
   }, [organizationId, lat, lng]);
 
-  // ── Section 1: 圃場×作物別収穫量推移 ──────────────────────────
-  const allFields = Array.from(new Set(harvestReports.map(r => r.field).filter(Boolean)));
-  const allCropIds = Array.from(new Set(harvestReports.map(r => r.crop_id)));
+  const userName = (id: number) => users.find(u => u.id === id)?.name ?? "未設定";
 
-  const s1Filtered = harvestReports.filter(r => {
-    if (s1Field !== "all" && r.field !== s1Field) return false;
-    if (s1Crop !== "all" && String(r.crop_id) !== s1Crop) return false;
-    return true;
-  });
+  // ── 対象年と比較期間 ────────────────────────────────────────────
+  const dataYears = Array.from(new Set(reports.map(r => Number(r.date.slice(0, 4)))))
+    .filter(y => Number.isFinite(y))
+    .sort((a, b) => b - a);
+  const yearOptions = dataYears.includes(currentYear) ? dataYears : [currentYear, ...dataYears];
+  const safeYear = yearOptions.includes(year) ? year : yearOptions[0];
 
-  // group by month → by field
-  const s1MonthField: Record<string, Record<string, number>> = {};
-  s1Filtered.forEach(r => {
-    const month = r.date.slice(0, 7);
-    const q = parseFloat(r.quantity);
-    if (isNaN(q)) return;
-    if (!s1MonthField[month]) s1MonthField[month] = {};
-    s1MonthField[month][r.field || "不明"] = (s1MonthField[month][r.field || "不明"] ?? 0) + q;
-  });
-  const s1Months = Object.keys(s1MonthField).sort();
-  const s1Lines = Array.from(new Set(s1Filtered.map(r => r.field || "不明")));
-  const s1Data = s1Months.map(m => {
-    const row: Record<string, string | number> = { month: m };
-    s1Lines.forEach(f => { row[f] = s1MonthField[m]?.[f] ?? 0; });
-    return row;
-  });
+  // 今年を見ているときは前年も「同じ月日まで」で切る。年の途中に開いても比較が成り立つ。
+  const todayMmdd = new Date().toISOString().slice(5, 10);
+  const truncate = safeYear === currentYear;
+  const inCrop = (r: AnalyticsReport) => cropId === "all" || r.crop_id === cropId;
+  const inYear = (r: AnalyticsReport, y: number) =>
+    r.date.startsWith(String(y)) && (!truncate || r.date.slice(5) <= todayMmdd);
 
-  // ── Section 2: 気象×収穫相関 ──────────────────────────────────
-  const s2Data = harvestReports.flatMap(r => {
-    const q = parseFloat(r.quantity);
-    const x = parseFloat(s2Axis === "temp" ? r.temp : r.rain);
-    if (isNaN(q) || isNaN(x)) return [];
-    return [{ x, y: q, date: r.date, field: r.field, crop: crops.find(c => c.id === r.crop_id)?.name ?? "" }];
-  });
+  const cur  = reports.filter(r => inCrop(r) && inYear(r, safeYear));
+  const prev = reports.filter(r => inCrop(r) && inYear(r, safeYear - 1));
 
-  // ── Section 3: 作業時間×収穫量 ────────────────────────────────
-  const s3WorkTypes = Array.from(new Set(allReports.map(r => r.work_type)));
-  const s3Data = allReports.flatMap(r => {
-    if (s3WorkType !== "all" && r.work_type !== s3WorkType) return [];
-    const hours = calcWorkHours(r.work_start, r.work_end);
-    const q = parseFloat(r.quantity);
-    if (hours === null || isNaN(q) || q <= 0) return [];
-    return [{ x: hours, y: q, date: r.date, field: r.field, work_type: r.work_type }];
-  });
+  // ── KPI ────────────────────────────────────────────────────────
+  const sum = (rs: AnalyticsReport[]) => rs.reduce((s, r) => s + harvestQty(r), 0);
+  const curHarvest  = sum(cur);
+  const prevHarvest = sum(prev);
+  const skipped     = excludedHarvestCount(cur);
 
-  // ── Section 4: 防除〜収穫の相関 ─────────────────────────────────
-  const s4Data: { x: number; y: number; date: string; field: string; pesticide: string }[] = [];
-  pesticideReports.forEach(pr => {
-    const prDate = new Date(pr.date);
-    harvestReports
-      .filter(hr => hr.field === pr.field && new Date(hr.date) > prDate)
-      .forEach(hr => {
-        const days = Math.round((new Date(hr.date).getTime() - prDate.getTime()) / 86400000);
-        const q = parseFloat(hr.quantity);
-        if (isNaN(q) || days <= 0 || days > 365) return;
-        const ps = pesticides.find(p => p.id === pr.pesticide_id);
-        s4Data.push({ x: days, y: q, date: hr.date, field: hr.field, pesticide: ps?.name ?? "不明" });
-      });
-  });
+  const targetCrops = crops.filter(c => cropId === "all" || c.id === cropId);
+  const targetYield = targetCrops.reduce((s, c) => s + (c.target_yield ?? 0), 0);
+  const achieved    = targetYield > 0 ? Math.round((curHarvest / targetYield) * 100) : null;
 
-  // ── Section 5: 病害虫診断の発生傾向 ───────────────────────────
+  const curHours  = toHours(cur.reduce((s, r) => s + workMinutes(r), 0));
+  const prevHours = toHours(prev.reduce((s, r) => s + workMinutes(r), 0));
+
+  const curSpray  = cur.filter(r => r.work_type === "防除").length;
+  const prevSpray = prev.filter(r => r.work_type === "防除").length;
+
+  const pctLabel = (v: number | null) =>
+    v === null ? "前年データなし" : `前年${truncate ? "同時期" : ""}比 ${v >= 0 ? "+" : ""}${v}%`;
+  const tone = (v: number | null): "up" | "down" | "flat" =>
+    v === null ? "flat" : v > 0 ? "up" : v < 0 ? "down" : "flat";
+
+  // ── 収穫量：今年 vs 前年 vs 目標（月別）────────────────────────
+  const monthlySum = (y: number) => {
+    const m = Array<number>(12).fill(0);
+    reports
+      .filter(r => inCrop(r) && r.date.startsWith(String(y)))
+      .forEach(r => { m[Number(r.date.slice(5, 7)) - 1] += harvestQty(r); });
+    return m;
+  };
+  const curMonths  = monthlySum(safeYear);
+  const prevMonths = monthlySum(safeYear - 1);
+  const monthTarget = targetYield > 0 ? Math.round((targetYield / 12) * 10) / 10 : null;
+  const harvestChart = curMonths.map((v, i) => ({
+    month: `${i + 1}月`,
+    cy: v,
+    py: prevMonths[i],
+    ...(monthTarget != null ? { tg: monthTarget } : {}),
+  }));
+  const hasHarvestData = curMonths.some(v => v > 0) || prevMonths.some(v => v > 0);
+
+  // ── 作業時間の内訳 ─────────────────────────────────────────────
+  const groupHours = (rs: AnalyticsReport[], key: (r: AnalyticsReport) => string) => {
+    const m: Record<string, number> = {};
+    rs.forEach(r => {
+      const min = workMinutes(r);
+      if (min <= 0) return;
+      const k = key(r);
+      m[k] = (m[k] ?? 0) + min;
+    });
+    return m;
+  };
+  const buildBars = (key: (r: AnalyticsReport) => string) => {
+    const c = groupHours(cur, key);
+    const p = groupHours(prev, key);
+    return Object.keys(c)
+      .sort((a, b) => c[b] - c[a])
+      .slice(0, 8)
+      .map(name => ({ name, cy: toHours(c[name]), py: toHours(p[name] ?? 0) }));
+  };
+  const hoursByType = buildBars(r => r.work_type || "未設定");
+  const hoursByUser = buildBars(r => userName(r.user_id));
+
+  // ── 病害虫診断の発生傾向 ───────────────────────────────────────
   // AIの推定であって確定診断ではないため、確信度「高」かつ inconclusive でないものだけ数える。
   // 「中」「低」まで数えると発生傾向が実態より大きく出て、防除判断を誤らせる。
   const s5Rows = aiOutputs.flatMap(o => {
@@ -343,34 +340,58 @@ export default function AnalyticsView({ currentOrg, organizationId, lat, lng }: 
     return row;
   });
 
-  // ── Section 6: 積算温度(GDD)の推移 ────────────────────────────
+  // ── 積算温度(GDD) ──────────────────────────────────────────────
   // 年初からの累積を月末時点で見る。年ごとに線を引くと「今年は暖かく進んでいる」が読める。
   // 果樹は多年生で作付けの入れ替わりが少ないぶん、年次比較の価値が高い。
-  const s6YearMonth: Record<string, Record<string, number>> = {};
+  const gddYearMonth: Record<string, Record<string, number>> = {};
   dailyWeather.forEach(w => {
     if (w.gdd == null) return;
-    const year = w.date.slice(0, 4);
-    const month = w.date.slice(5, 7);
-    if (!s6YearMonth[year]) s6YearMonth[year] = {};
-    s6YearMonth[year][month] = (s6YearMonth[year][month] ?? 0) + w.gdd;
+    const y = w.date.slice(0, 4);
+    const mo = w.date.slice(5, 7);
+    if (!gddYearMonth[y]) gddYearMonth[y] = {};
+    gddYearMonth[y][mo] = (gddYearMonth[y][mo] ?? 0) + w.gdd;
   });
-  const s6Years = Object.keys(s6YearMonth).sort();
-  const s6Data = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map(month => {
-    const row: Record<string, string | number> = { month: `${Number(month)}月` };
-    s6Years.forEach(y => {
-      // その年の1月からこの月までの累積
-      let sum = 0;
-      let hasData = false;
-      for (let m = 1; m <= Number(month); m++) {
-        const v = s6YearMonth[y][String(m).padStart(2, "0")];
-        if (v != null) { sum += v; hasData = true; }
+  const gddYears = Object.keys(gddYearMonth).sort();
+  const gddChart = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map(mo => {
+    const row: Record<string, string | number> = { month: `${Number(mo)}月` };
+    gddYears.forEach(y => {
+      let s = 0;
+      let has = false;
+      for (let m = 1; m <= Number(mo); m++) {
+        const v = gddYearMonth[y][String(m).padStart(2, "0")];
+        if (v != null) { s += v; has = true; }
       }
-      if (hasData) row[y] = Math.round(sum);
+      if (has) row[y] = Math.round(s);
     });
     return row;
   });
 
-  // ── Section 7: AI出力の履歴 ───────────────────────────────────
+  // 日ごとの累積を作り、今年の現在値に前年が到達した日と比べて「◯日早い/遅い」を出す。
+  // グラフを読まなくても進み具合が一文でわかるようにする。
+  const gddLead = (() => {
+    const byYear: Record<string, { date: string; cum: number }[]> = {};
+    dailyWeather.forEach(w => {
+      if (w.gdd == null) return;
+      const y = w.date.slice(0, 4);
+      if (!byYear[y]) byYear[y] = [];
+      const arr = byYear[y];
+      arr.push({ date: w.date, cum: (arr.length ? arr[arr.length - 1].cum : 0) + w.gdd });
+    });
+    const curSeries  = byYear[String(safeYear)] ?? [];
+    const prevSeries = byYear[String(safeYear - 1)] ?? [];
+    const latest = curSeries[curSeries.length - 1];
+    if (!latest || prevSeries.length === 0) return null;
+    const hit = prevSeries.find(p => p.cum >= latest.cum);
+    return {
+      date: latest.date,
+      cum: Math.round(latest.cum),
+      prevYear: safeYear - 1,
+      hitDate: hit?.date ?? null,
+      diffDays: hit ? dayOfYear(hit.date) - dayOfYear(latest.date) : null,
+    };
+  })();
+
+  // ── AI出力の履歴 ───────────────────────────────────────────────
   const s7Rows = aiOutputs.filter(o => s7Kind === "all" || o.kind === s7Kind).slice(0, 50);
   const summarize = (o: AiOutputRow): string => {
     if (o.kind === "diagnosis" && o.output_json) {
@@ -384,176 +405,181 @@ export default function AnalyticsView({ currentOrg, organizationId, lat, lng }: 
     return "—";
   };
 
-  if (loading) {
-    return (
-      <div style={{ display:"flex", justifyContent:"center", alignItems:"center", padding:48, color: C.textMuted, fontSize:14 }}>
-        データを読み込み中...
-      </div>
-    );
-  }
-
   return (
     <div style={{ padding:"16px 16px 0" }}>
-      {/* ── セクション①：収穫量推移 ── */}
+      {/* ── 対象年・作物の切り替え（以下すべてがこれに従う） ── */}
+      <div style={{ display:"flex", flexWrap:"wrap" as const, marginBottom:4 }}>
+        <select style={selectStyle} value={safeYear} onChange={e => setYear(Number(e.target.value))}>
+          {yearOptions.map(y => <option key={y} value={y}>{y}年</option>)}
+        </select>
+        <select
+          style={selectStyle}
+          value={cropId === "all" ? "all" : String(cropId)}
+          onChange={e => onCropChange(e.target.value === "all" ? "all" : Number(e.target.value))}
+        >
+          <option value="all">すべての作物</option>
+          {crops.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+        </select>
+      </div>
+
+      {/* ── KPI ── */}
+      <div style={{ background:C.well, borderRadius:RADIUS.well, padding:8, marginBottom:12 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+          <KpiTile
+            label={`${safeYear}年の収穫量`}
+            value={curHarvest > 0 ? String(Math.round(curHarvest * 10) / 10) : "—"}
+            unit={curHarvest > 0 ? "kg" : undefined}
+            sub={pctLabel(pctDiff(curHarvest, prevHarvest))}
+            subTone={tone(pctDiff(curHarvest, prevHarvest))}
+          />
+          <KpiTile
+            label="目標達成率"
+            value={achieved != null ? String(achieved) : "—"}
+            unit={achieved != null ? "%" : undefined}
+            sub={targetYield > 0 ? `年間目標 ${targetYield}kg` : "目標が未設定です"}
+          />
+          <KpiTile
+            label="総作業時間"
+            value={curHours > 0 ? String(curHours) : "—"}
+            unit={curHours > 0 ? "h" : undefined}
+            sub={pctLabel(pctDiff(curHours, prevHours))}
+            subTone={tone(pctDiff(curHours, prevHours))}
+          />
+          <KpiTile
+            label="防除回数"
+            value={String(curSpray)}
+            unit="回"
+            sub={prevSpray > 0 ? `前年${truncate ? "同時期" : ""} ${prevSpray}回` : "前年データなし"}
+          />
+        </div>
+        {skipped > 0 && (
+          <div style={{ ...noteStyle, padding:"0 6px" }}>
+            単位がkg以外の収穫記録{skipped}件を収穫量から除外しています
+          </div>
+        )}
+      </div>
+
+      {/* ── 収穫量：今年 vs 前年 vs 目標 ── */}
       <div style={secStyle}>
-        <BarChart2 size={14} strokeWidth={2} />圃場×作物別 収穫量推移
+        <Target size={14} strokeWidth={2} />収穫量 {safeYear}年 vs {safeYear - 1}年
       </div>
       <div style={cardStyle}>
-        <div style={{ display:"flex", flexWrap:"wrap" as const, marginBottom:8 }}>
-          <select style={selectStyle} value={s1Field} onChange={e => setS1Field(e.target.value)}>
-            <option value="all">すべての圃場</option>
-            {allFields.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
-          <select style={selectStyle} value={s1Crop} onChange={e => setS1Crop(e.target.value)}>
-            <option value="all">すべての作物</option>
-            {allCropIds.map(id => {
-              const c = crops.find(c => c.id === id);
-              return <option key={id} value={String(id)}>{c?.name ?? `作物${id}`}</option>;
-            })}
-          </select>
-        </div>
-        {s1Data.length === 0 ? (
-          <div style={emptyStyle}><Leaf size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />データがまだありません</div>
+        {!hasHarvestData ? (
+          <div style={emptyStyle}><Leaf size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />収穫の記録がまだありません</div>
         ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={s1Data} margin={{ top:4, right:8, left:-16, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+          <ResponsiveContainer width="100%" height={230}>
+            <ComposedChart data={harvestChart} margin={{ top:4, right:8, left:-16, bottom:0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} />
               <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} />
               <YAxis tick={{ fontSize:11, fill:C.textMuted }} unit="kg" />
-              <Tooltip formatter={(v) => [`${v}kg`, ""]} />
+              <Tooltip formatter={(v, n) => [`${v}kg`, n]} />
               <Legend wrapperStyle={{ fontSize:11 }} />
-              {s1Lines.map((f, i) => (
-                <Line key={f} type="monotone" dataKey={f} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r:3 }} />
+              <Bar dataKey="cy" name={`${safeYear}年`} fill={C.ink} radius={[4,4,0,0]} />
+              <Line type="monotone" dataKey="py" name={`${safeYear - 1}年`} stroke={C.info} strokeWidth={2} dot={{ r:2 }} />
+              {monthTarget != null && (
+                <Line type="monotone" dataKey="tg" name="月別目標" stroke={C.textMuted} strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* ── 作業時間の内訳 ── */}
+      <div style={secStyle}>
+        <Clock size={14} strokeWidth={2} />作業時間の内訳
+      </div>
+      <div style={cardStyle}>
+        {hoursByType.length === 0 ? (
+          <div style={emptyStyle}><Clock size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />作業時間の記録がまだありません</div>
+        ) : (
+          <>
+            <div style={{ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:6 }}>作業種別ごと</div>
+            <ResponsiveContainer width="100%" height={Math.max(120, hoursByType.length * 34 + 40)}>
+              <BarChart data={hoursByType} layout="vertical" margin={{ top:0, right:12, left:0, bottom:0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize:11, fill:C.textMuted }} unit="h" />
+                <YAxis type="category" dataKey="name" width={72} tick={{ fontSize:11, fill:C.textSub }} />
+                <Tooltip formatter={(v, n) => [`${v}h`, n]} />
+                <Legend wrapperStyle={{ fontSize:11 }} />
+                <Bar dataKey="cy" name={`${safeYear}年`} fill={C.ink} radius={[0,4,4,0]} />
+                <Bar dataKey="py" name={`${safeYear - 1}年`} fill={C.inkSoft} radius={[0,4,4,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+
+            {hoursByUser.length > 1 && (
+              <>
+                <div style={{ fontSize:12, fontWeight:600, color:C.textSub, margin:"14px 0 6px" }}>担当者ごと</div>
+                <ResponsiveContainer width="100%" height={Math.max(120, hoursByUser.length * 34 + 40)}>
+                  <BarChart data={hoursByUser} layout="vertical" margin={{ top:0, right:12, left:0, bottom:0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize:11, fill:C.textMuted }} unit="h" />
+                    <YAxis type="category" dataKey="name" width={72} tick={{ fontSize:11, fill:C.textSub }} />
+                    <Tooltip formatter={(v, n) => [`${v}h`, n]} />
+                    <Legend wrapperStyle={{ fontSize:11 }} />
+                    <Bar dataKey="cy" name={`${safeYear}年`} fill={C.ink} radius={[0,4,4,0]} />
+                    <Bar dataKey="py" name={`${safeYear - 1}年`} fill={C.inkSoft} radius={[0,4,4,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </>
+            )}
+            <div style={noteStyle}>
+              作業時間は、記録した開始・終了時刻（無い場合は手入力の作業時間）から算出しています。
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── 積算温度 ── */}
+      <div style={secStyle}>
+        <Thermometer size={14} strokeWidth={2} />積算温度（GDD）の年次比較
+      </div>
+      <div style={cardStyle}>
+        {gddLead && (
+          <div style={{ background:C.well, borderRadius:RADIUS.row, padding:"10px 12px", marginBottom:10, fontSize:13, color:C.textSub, lineHeight:1.6 }}>
+            {gddLead.diffDays == null ? (
+              <>
+                {gddLead.date.slice(5).replace("-", "/")} 時点の積算温度は <strong style={{ color:C.text }}>{gddLead.cum.toLocaleString()}℃・日</strong>。
+                {gddLead.prevYear}年はこの値に達していないため、<strong style={{ color:C.ink }}>今年のほうが進んでいます</strong>。
+              </>
+            ) : (
+              <>
+                {gddLead.date.slice(5).replace("-", "/")} 時点の積算温度は <strong style={{ color:C.text }}>{gddLead.cum.toLocaleString()}℃・日</strong>。
+                {gddLead.prevYear}年が同じ値に達したのは {gddLead.hitDate?.slice(5).replace("-", "/")} で、
+                {gddLead.diffDays === 0 ? (
+                  <strong style={{ color:C.text }}>ほぼ同じ進み方</strong>
+                ) : (
+                  <strong style={{ color: gddLead.diffDays > 0 ? C.ink : C.info }}>
+                    今年は{Math.abs(gddLead.diffDays)}日{gddLead.diffDays > 0 ? "早い" : "遅い"}
+                  </strong>
+                )}
+                ペースです。
+              </>
+            )}
+          </div>
+        )}
+        <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.6, marginBottom:10 }}>
+          日平均気温から基準温度{GDD_BASE_TEMP}℃を引いた有効積算温度の、年初からの累積です。
+          年ごとに比べると生育の進み方の早い・遅いが読めます（基準温度は暫定値）。
+        </div>
+        {gddYears.length === 0 ? (
+          <div style={emptyStyle}><Thermometer size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />気象データを取得中です</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={gddChart} margin={{ top:4, right:8, left:-8, bottom:0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} />
+              <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} />
+              <YAxis tick={{ fontSize:11, fill:C.textMuted }} unit="℃" />
+              <Tooltip formatter={(v, n) => [`${v}℃・日`, `${n}年`]} />
+              <Legend wrapperStyle={{ fontSize:11 }} />
+              {gddYears.map((y, i) => (
+                <Line key={y} type="monotone" dataKey={y} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} connectNulls />
               ))}
             </LineChart>
           </ResponsiveContainer>
         )}
       </div>
 
-      {/* ── セクション②：気象×収穫相関 ── */}
-      <div style={secStyle}>
-        <Thermometer size={14} strokeWidth={2} />気象条件と収穫量の相関
-      </div>
-      <div style={cardStyle}>
-        <div style={{ display:"flex", gap:8, marginBottom:12 }}>
-          <button
-            onClick={() => setS2Axis("temp")}
-            style={{ padding:"7px 15px", borderRadius:999, border:"none", background: s2Axis==="temp" ? C.inkSoft : C.well, color: s2Axis==="temp" ? C.ink : C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer" }}
-          >
-            <Thermometer size={12} style={{ verticalAlign:"middle", marginRight:4 }} />気温
-          </button>
-          <button
-            onClick={() => setS2Axis("rain")}
-            style={{ padding:"7px 15px", borderRadius:999, border:"none", background: s2Axis==="rain" ? C.inkSoft : C.well, color: s2Axis==="rain" ? C.ink : C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer" }}
-          >
-            <CloudRain size={12} style={{ verticalAlign:"middle", marginRight:4 }} />雨量
-          </button>
-        </div>
-        {s2Data.length === 0 ? (
-          <div style={emptyStyle}><CloudRain size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />データがまだありません</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <ScatterChart margin={{ top:4, right:8, left:-16, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="x" type="number" name={s2Axis === "temp" ? "気温" : "雨量"} unit={s2Axis === "temp" ? "°C" : "mm"} tick={{ fontSize:11, fill:C.textMuted }} />
-              <YAxis dataKey="y" type="number" name="収穫量" unit="kg" tick={{ fontSize:11, fill:C.textMuted }} />
-              <Tooltip
-                cursor={{ strokeDasharray:"3 3" }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0]?.payload;
-                  return (
-                    <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:12 }}>
-                      <div style={{ fontWeight:700, color:C.text }}>{d.date}</div>
-                      <div style={{ color:C.textSub }}>{d.field} · {d.crop}</div>
-                      <div>{s2Axis === "temp" ? "気温" : "雨量"}：{d.x}{s2Axis === "temp" ? "°C" : "mm"}</div>
-                      <div>収穫量：{d.y}kg</div>
-                    </div>
-                  );
-                }}
-              />
-              <Scatter data={s2Data} fill={C.primary} opacity={0.7} />
-            </ScatterChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* ── セクション③：作業時間×収穫量 ── */}
-      <div style={secStyle}>
-        <Clock size={14} strokeWidth={2} />作業時間と収穫量の関係
-      </div>
-      <div style={cardStyle}>
-        <div style={{ marginBottom:12 }}>
-          <select style={selectStyle} value={s3WorkType} onChange={e => setS3WorkType(e.target.value)}>
-            <option value="all">すべての作業種別</option>
-            {s3WorkTypes.map(wt => <option key={wt} value={wt}>{wt}</option>)}
-          </select>
-        </div>
-        {s3Data.length === 0 ? (
-          <div style={emptyStyle}><Clock size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />データがまだありません</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <ScatterChart margin={{ top:4, right:8, left:-16, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="x" type="number" name="作業時間" unit="h" tick={{ fontSize:11, fill:C.textMuted }} />
-              <YAxis dataKey="y" type="number" name="収穫量" unit="kg" tick={{ fontSize:11, fill:C.textMuted }} />
-              <Tooltip
-                cursor={{ strokeDasharray:"3 3" }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0]?.payload;
-                  return (
-                    <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:12 }}>
-                      <div style={{ fontWeight:700, color:C.text }}>{d.date}</div>
-                      <div style={{ color:C.textSub }}>{d.field} · {d.work_type}</div>
-                      <div>作業時間：{d.x}h</div>
-                      <div>収穫量：{d.y}kg</div>
-                    </div>
-                  );
-                }}
-              />
-              <Scatter data={s3Data} fill={C.info} opacity={0.7} />
-            </ScatterChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* ── セクション④：防除〜収穫の相関 ── */}
-      <div style={secStyle}>
-        <FlaskConical size={14} strokeWidth={2} />農薬散布から収穫までの日数と収量
-      </div>
-      <div style={{ ...cardStyle, marginBottom: 32 }}>
-        {s4Data.length === 0 ? (
-          <div style={emptyStyle}><FlaskConical size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />データがまだありません</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <ScatterChart margin={{ top:4, right:8, left:-16, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="x" type="number" name="防除〜収穫" unit="日" tick={{ fontSize:11, fill:C.textMuted }} />
-              <YAxis dataKey="y" type="number" name="収穫量" unit="kg" tick={{ fontSize:11, fill:C.textMuted }} />
-              <Tooltip
-                cursor={{ strokeDasharray:"3 3" }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0]?.payload;
-                  return (
-                    <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:12 }}>
-                      <div style={{ fontWeight:700, color:C.text }}>{d.date}</div>
-                      <div style={{ color:C.textSub }}>{d.field}</div>
-                      <div>農薬：{d.pesticide}</div>
-                      <div>散布〜収穫：{d.x}日</div>
-                      <div>収穫量：{d.y}kg</div>
-                    </div>
-                  );
-                }}
-              />
-              <Scatter data={s4Data} fill={C.temp} opacity={0.7} />
-            </ScatterChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* ── セクション⑤：病害虫診断の発生傾向 ── */}
+      {/* ── 病害虫診断の発生傾向 ── */}
       <div style={secStyle}>
         <Bug size={14} strokeWidth={2} />病害虫診断の発生傾向
       </div>
@@ -576,7 +602,7 @@ export default function AnalyticsView({ currentOrg, organizationId, lat, lng }: 
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={s5Data} margin={{ top:4, right:8, left:-16, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+              <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} />
               <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} />
               <YAxis allowDecimals={false} tick={{ fontSize:11, fill:C.textMuted }} unit="件" />
               <Tooltip formatter={(v, n) => [`${v}件`, n]} />
@@ -589,34 +615,28 @@ export default function AnalyticsView({ currentOrg, organizationId, lat, lng }: 
         )}
       </div>
 
-      {/* ── セクション⑥：積算温度の推移 ── */}
+      {/* ── さらに掘る（探索用。相関を探す図なので既定では畳んでおく） ── */}
       <div style={secStyle}>
-        <Thermometer size={14} strokeWidth={2} />積算温度（GDD）の年次比較
+        <BarChart2 size={14} strokeWidth={2} />さらに掘る
       </div>
-      <div style={cardStyle}>
-        <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.6, marginBottom:10 }}>
-          日平均気温から基準温度{GDD_BASE_TEMP}℃を引いた有効積算温度の、年初からの累積です。
-          年ごとに比べると生育の進み方の早い・遅いが読めます（基準温度は暫定値）。
-        </div>
-        {s6Years.length === 0 ? (
-          <div style={emptyStyle}><Thermometer size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />気象データを取得中です</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={s6Data} margin={{ top:4, right:8, left:-8, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} />
-              <YAxis tick={{ fontSize:11, fill:C.textMuted }} unit="℃" />
-              <Tooltip formatter={(v, n) => [`${v}℃・日`, `${n}年`]} />
-              <Legend wrapperStyle={{ fontSize:11 }} />
-              {s6Years.map((y, i) => (
-                <Line key={y} type="monotone" dataKey={y} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} connectNulls />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+      <div style={{ ...cardStyle, padding: showDeep ? 16 : "4px 16px" }}>
+        <button
+          onClick={() => setShowDeep(v => !v)}
+          style={{
+            display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%",
+            background:"none", border:"none", padding:"12px 0", cursor:"pointer",
+            fontSize:13, fontWeight:600, color:C.textSub,
+          }}
+        >
+          <span>相関を探す（気象・作業時間・防除タイミング）</span>
+          <ChevronDown size={16} strokeWidth={2.5} style={{ transform: showDeep ? "rotate(180deg)" : "none", transition:"transform .15s" }} />
+        </button>
+        {showDeep && (
+          <DeepDive reports={reports} crops={crops} pesticides={pesticides} />
         )}
       </div>
 
-      {/* ── セクション⑦：AI出力の履歴 ── */}
+      {/* ── AI出力の履歴 ── */}
       <div style={secStyle}>
         <Sparkles size={14} strokeWidth={2} />AIの出力履歴
       </div>
@@ -658,6 +678,234 @@ export default function AnalyticsView({ currentOrg, organizationId, lat, lng }: 
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * 探索用の散布図群。相関の有無を「探す」ための図であって答えを出す図ではないため、
+ * 既定では畳んでおき、開いたときだけ計算する（④は防除×収穫の総当たりで重い）。
+ */
+function DeepDive({ reports, crops, pesticides }: {
+  reports: AnalyticsReport[];
+  crops: { id: number; name: string }[];
+  pesticides: { id: string; name: string }[];
+}) {
+  const [d1Field, setD1Field] = useState("all");
+  const [d1Crop, setD1Crop] = useState("all");
+  const [d2Axis, setD2Axis] = useState<"temp" | "rain">("temp");
+  const [d3WorkType, setD3WorkType] = useState("all");
+
+  const harvestRows = reports.filter(isCountableHarvest);
+  const sprayRows   = reports.filter(r => r.work_type === "防除");
+
+  // ① 圃場×作物別 収穫量推移
+  const allFields  = Array.from(new Set(harvestRows.map(r => r.field).filter(Boolean)));
+  const allCropIds = Array.from(new Set(harvestRows.map(r => r.crop_id)));
+  const d1Filtered = harvestRows.filter(r => {
+    if (d1Field !== "all" && r.field !== d1Field) return false;
+    if (d1Crop !== "all" && String(r.crop_id) !== d1Crop) return false;
+    return true;
+  });
+  const d1MonthField: Record<string, Record<string, number>> = {};
+  d1Filtered.forEach(r => {
+    const month = r.date.slice(0, 7);
+    const q = harvestQty(r);
+    if (q <= 0) return;
+    if (!d1MonthField[month]) d1MonthField[month] = {};
+    const f = r.field || "不明";
+    d1MonthField[month][f] = (d1MonthField[month][f] ?? 0) + q;
+  });
+  const d1Lines = Array.from(new Set(d1Filtered.map(r => r.field || "不明")));
+  const d1Data = Object.keys(d1MonthField).sort().map(m => {
+    const row: Record<string, string | number> = { month: m };
+    d1Lines.forEach(f => { row[f] = d1MonthField[m]?.[f] ?? 0; });
+    return row;
+  });
+
+  // ② 気象×収穫
+  const d2Data = harvestRows.flatMap(r => {
+    const q = harvestQty(r);
+    const x = parseFloat(d2Axis === "temp" ? r.temp : r.rain);
+    if (q <= 0 || isNaN(x)) return [];
+    return [{ x, y: q, date: r.date, field: r.field, crop: crops.find(c => c.id === r.crop_id)?.name ?? "" }];
+  });
+
+  // ③ 作業時間×収穫量
+  const d3WorkTypes = Array.from(new Set(reports.map(r => r.work_type).filter(Boolean)));
+  const d3Data = reports.flatMap(r => {
+    if (d3WorkType !== "all" && r.work_type !== d3WorkType) return [];
+    const min = workMinutes(r);
+    const q = harvestQty(r);
+    if (min <= 0 || q <= 0) return [];
+    return [{ x: toHours(min), y: q, date: r.date, field: r.field, work_type: r.work_type }];
+  });
+
+  // ④ 防除〜収穫
+  // 同一圃場の防除1件に対して以降の収穫を総当たりで組むため、点数は記録数の積で増える。
+  // 統計的な厳密さは無いので、傾向を眺める用途にとどめる。
+  const d4Data: { x: number; y: number; date: string; field: string; pesticide: string }[] = [];
+  sprayRows.forEach(pr => {
+    const prTime = Date.parse(pr.date);
+    harvestRows
+      .filter(hr => hr.field === pr.field && Date.parse(hr.date) > prTime)
+      .forEach(hr => {
+        const days = Math.round((Date.parse(hr.date) - prTime) / 86400000);
+        const q = harvestQty(hr);
+        if (q <= 0 || days <= 0 || days > 365) return;
+        const ps = pesticides.find(p => p.id === pr.pesticide_id);
+        d4Data.push({ x: days, y: q, date: hr.date, field: hr.field, pesticide: ps?.name ?? "不明" });
+      });
+  });
+
+  const subStyle = { fontSize:12, fontWeight:600, color:C.textSub, margin:"16px 0 8px" };
+
+  return (
+    <div style={{ borderTop:`1px solid ${C.hairline}`, paddingTop:4 }}>
+      {/* ① */}
+      <div style={subStyle}>圃場×作物別 収穫量推移</div>
+      <div style={{ display:"flex", flexWrap:"wrap" as const, marginBottom:8 }}>
+        <select style={selectStyle} value={d1Field} onChange={e => setD1Field(e.target.value)}>
+          <option value="all">すべての圃場</option>
+          {allFields.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <select style={selectStyle} value={d1Crop} onChange={e => setD1Crop(e.target.value)}>
+          <option value="all">すべての作物</option>
+          {allCropIds.map(id => (
+            <option key={id} value={String(id)}>{crops.find(c => c.id === id)?.name ?? `作物${id}`}</option>
+          ))}
+        </select>
+      </div>
+      {d1Data.length === 0 ? (
+        <div style={emptyStyle}><Leaf size={24} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />データがまだありません</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={d1Data} margin={{ top:4, right:8, left:-16, bottom:0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} />
+            <XAxis dataKey="month" tick={{ fontSize:11, fill:C.textMuted }} />
+            <YAxis tick={{ fontSize:11, fill:C.textMuted }} unit="kg" />
+            <Tooltip formatter={(v) => [`${v}kg`, ""]} />
+            <Legend wrapperStyle={{ fontSize:11 }} />
+            {d1Lines.map((f, i) => (
+              <Line key={f} type="monotone" dataKey={f} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r:3 }} />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+
+      {/* ② */}
+      <div style={subStyle}><Thermometer size={12} strokeWidth={2} style={{ verticalAlign:"middle", marginRight:4 }} />気象条件と収穫量の相関</div>
+      <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+        <button
+          onClick={() => setD2Axis("temp")}
+          style={{ padding:"7px 15px", borderRadius:999, border:"none", background: d2Axis==="temp" ? C.inkSoft : C.well, color: d2Axis==="temp" ? C.ink : C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer" }}
+        >
+          <Thermometer size={12} style={{ verticalAlign:"middle", marginRight:4 }} />気温
+        </button>
+        <button
+          onClick={() => setD2Axis("rain")}
+          style={{ padding:"7px 15px", borderRadius:999, border:"none", background: d2Axis==="rain" ? C.inkSoft : C.well, color: d2Axis==="rain" ? C.ink : C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer" }}
+        >
+          <CloudRain size={12} style={{ verticalAlign:"middle", marginRight:4 }} />雨量
+        </button>
+      </div>
+      {d2Data.length === 0 ? (
+        <div style={emptyStyle}><CloudRain size={24} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />データがまだありません</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <ScatterChart margin={{ top:4, right:8, left:-16, bottom:0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} />
+            <XAxis dataKey="x" type="number" name={d2Axis === "temp" ? "気温" : "雨量"} unit={d2Axis === "temp" ? "°C" : "mm"} tick={{ fontSize:11, fill:C.textMuted }} />
+            <YAxis dataKey="y" type="number" name="収穫量" unit="kg" tick={{ fontSize:11, fill:C.textMuted }} />
+            <Tooltip
+              cursor={{ strokeDasharray:"3 3" }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0]?.payload;
+                return (
+                  <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:8, padding:"8px 12px", fontSize:12 }}>
+                    <div style={{ fontWeight:700, color:C.text }}>{d.date}</div>
+                    <div style={{ color:C.textSub }}>{d.field} · {d.crop}</div>
+                    <div>{d2Axis === "temp" ? "気温" : "雨量"}：{d.x}{d2Axis === "temp" ? "°C" : "mm"}</div>
+                    <div>収穫量：{d.y}kg</div>
+                  </div>
+                );
+              }}
+            />
+            <Scatter data={d2Data} fill={C.ink} opacity={0.7} />
+          </ScatterChart>
+        </ResponsiveContainer>
+      )}
+
+      {/* ③ */}
+      <div style={subStyle}><Clock size={12} strokeWidth={2} style={{ verticalAlign:"middle", marginRight:4 }} />作業時間と収穫量の関係</div>
+      <div style={{ marginBottom:12 }}>
+        <select style={selectStyle} value={d3WorkType} onChange={e => setD3WorkType(e.target.value)}>
+          <option value="all">すべての作業種別</option>
+          {d3WorkTypes.map(wt => <option key={wt} value={wt}>{wt}</option>)}
+        </select>
+      </div>
+      {d3Data.length === 0 ? (
+        <div style={emptyStyle}><Clock size={24} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />データがまだありません</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <ScatterChart margin={{ top:4, right:8, left:-16, bottom:0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} />
+            <XAxis dataKey="x" type="number" name="作業時間" unit="h" tick={{ fontSize:11, fill:C.textMuted }} />
+            <YAxis dataKey="y" type="number" name="収穫量" unit="kg" tick={{ fontSize:11, fill:C.textMuted }} />
+            <Tooltip
+              cursor={{ strokeDasharray:"3 3" }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0]?.payload;
+                return (
+                  <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:8, padding:"8px 12px", fontSize:12 }}>
+                    <div style={{ fontWeight:700, color:C.text }}>{d.date}</div>
+                    <div style={{ color:C.textSub }}>{d.field} · {d.work_type}</div>
+                    <div>作業時間：{d.x}h</div>
+                    <div>収穫量：{d.y}kg</div>
+                  </div>
+                );
+              }}
+            />
+            <Scatter data={d3Data} fill={C.info} opacity={0.7} />
+          </ScatterChart>
+        </ResponsiveContainer>
+      )}
+
+      {/* ④ */}
+      <div style={subStyle}><FlaskConical size={12} strokeWidth={2} style={{ verticalAlign:"middle", marginRight:4 }} />農薬散布から収穫までの日数と収量</div>
+      <div style={{ ...noteStyle, marginTop:0, marginBottom:8 }}>
+        同じ圃場の防除1件に対し、それ以降の収穫すべてを組み合わせて点にしています。統計的な因果関係を示すものではありません。
+      </div>
+      {d4Data.length === 0 ? (
+        <div style={emptyStyle}><FlaskConical size={24} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />データがまだありません</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <ScatterChart margin={{ top:4, right:8, left:-16, bottom:0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.hairline} />
+            <XAxis dataKey="x" type="number" name="防除〜収穫" unit="日" tick={{ fontSize:11, fill:C.textMuted }} />
+            <YAxis dataKey="y" type="number" name="収穫量" unit="kg" tick={{ fontSize:11, fill:C.textMuted }} />
+            <Tooltip
+              cursor={{ strokeDasharray:"3 3" }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0]?.payload;
+                return (
+                  <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:8, padding:"8px 12px", fontSize:12 }}>
+                    <div style={{ fontWeight:700, color:C.text }}>{d.date}</div>
+                    <div style={{ color:C.textSub }}>{d.field}</div>
+                    <div>農薬：{d.pesticide}</div>
+                    <div>散布〜収穫：{d.x}日</div>
+                    <div>収穫量：{d.y}kg</div>
+                  </div>
+                );
+              }}
+            />
+            <Scatter data={d4Data} fill={C.temp} opacity={0.7} />
+          </ScatterChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

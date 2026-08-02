@@ -23,6 +23,7 @@ import AnalyticsView from "./components/AnalyticsView";
 import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
+import { harvestQty, excludedHarvestCount } from "./lib/metrics";
 import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
@@ -370,6 +371,8 @@ export default function App() {
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
   const [showCropAddForm, setShowCropAddForm] = useState(false);
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"report"|"backlog">("report");
+  // 管理タブの作物カード「分析で見る →」から作物を指定して分析画面へ着地させる
+  const [analyticsCropId, setAnalyticsCropId] = useState<number | "all">("all");
   const [showMapModal, setShowMapModal]       = useState(false);
   const cropExpandedInit                       = useRef(false);
   const [deleteModal, setDeleteModal]     = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -419,10 +422,12 @@ export default function App() {
   const [searchChatLoading, setSearchChatLoading] = useState(false);
   const [searchChatError, setSearchChatError]     = useState("");
 
-  // 天気×防除タイミング助言
+  // 天気×防除タイミング助言（1日1回。開くたびに生成すると ai_outputs に重複が溜まるため、
+  // 当日ぶんが無いときだけ生成し、あれば保存済みの結果を読み込んで表示する）
   const [showPestAdviceSheet, setShowPestAdviceSheet] = useState(false);
   const [pestAdviceForecast, setPestAdviceForecast] = useState("");
   const [pestAdviceResult, setPestAdviceResult]     = useState("");
+  const [pestAdviceDate, setPestAdviceDate]         = useState("");
   const [pestAdvicePesticideId, setPestAdvicePesticideId] = useState("");
   const [pestAdviceLoading, setPestAdviceLoading]   = useState(false);
   const [pestAdviceError, setPestAdviceError]       = useState("");
@@ -1461,7 +1466,7 @@ export default function App() {
 
   const cropStats = crops.map(c => {
     const rs   = reports.filter(r => r.crop_id === c.id);
-    const tot  = rs.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+    const tot  = rs.reduce((s, r) => s + harvestQty(r), 0);
     const last = [...rs].sort((a, b) => b.date.localeCompare(a.date))[0];
     const growDays = c.start_date
       ? Math.floor((Date.now() - new Date(c.start_date).getTime()) / 86400000)
@@ -1607,6 +1612,7 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.advice) {
         setPestAdviceResult(d.advice);
+        setPestAdviceDate(new Date().toISOString().slice(0, 10));
         void saveAiOutput("pest_advice", {
           inputSummary: forecast,
           outputText: d.advice, usage: d.usage, costUsd: d.costUsd,
@@ -1621,10 +1627,95 @@ export default function App() {
     }
   };
 
+  // シートを開いたときの入り口。当日ぶんが state に無ければ ai_outputs から先に探し、
+  // それも無いときだけ新規生成する（開くたびに生成すると履歴が無意味に増えるため）。
+  const openPestAdviceSheet = async () => {
+    setShowPestAdviceSheet(true);
+    const today = new Date().toISOString().slice(0, 10);
+    if (pestAdviceResult && pestAdviceDate === today) return;
+    if (pestAdviceLoading) return;
+    if (!currentOrganizationId) { void generatePestControlAdvice(); return; }
+    setPestAdviceLoading(true);
+    const { data } = await supabase
+      .from("ai_outputs")
+      .select("output_text,input_summary")
+      .eq("organization_id", currentOrganizationId)
+      .eq("kind", "pest_advice")
+      .eq("target_date", today)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const saved = data?.[0];
+    if (saved?.output_text) {
+      setPestAdviceResult(saved.output_text);
+      setPestAdviceForecast(saved.input_summary ?? "");
+      setPestAdviceDate(today);
+      setPestAdviceLoading(false);
+    } else {
+      setPestAdviceLoading(false);
+      void generatePestControlAdvice();
+    }
+  };
+
   // ─── 記録検索チャット ─────────────────────────────────────
+  // 農薬の登録情報（総使用回数など）は通常、農薬管理画面でパネルを開いたときに遅延ロードされる。
+  // 検索チャットで「あと何回使えるか」に答えるには全農薬ぶんが要るので、まとめて先読みする。
+  const prefetchAllRegistrations = async (): Promise<Record<string, PesticideRegistration[]>> => {
+    const missing = pesticides.filter(p => !pRegs[p.id]).map(p => p.id);
+    if (missing.length === 0) return pRegs;
+    const { data } = await supabase
+      .from("pesticide_registrations")
+      .select("pesticide_id,registration_no,product_name,crop_name,pest_name,dilution,usage_timing,usage_count,total_count,application")
+      .in("pesticide_id", missing);
+    const grouped: Record<string, PesticideRegistration[]> = { ...pRegs };
+    (data ?? []).forEach(row => {
+      const key = (row as PesticideRegistration).pesticide_id;
+      if (!key) return;
+      (grouped[key] ??= []).push(row as PesticideRegistration);
+    });
+    setPRegs(grouped);
+    return grouped;
+  };
+
+  /**
+   * 農薬ごとの「登録上限」と「今年の散布実績」を1ブロックにまとめる。
+   * total_count は FAMIC 原文に範囲や条件（「14回以内(土壌灌注は2回以内…)」）を含むため、
+   * 数値に正規化せず原文のまま渡す（docs/db-schema.md の方針）。
+   */
+  const formatPesticideLimits = (regs: Record<string, PesticideRegistration[]>): string => {
+    const yearPrefix = new Date().toISOString().slice(0, 4);
+    const lines: string[] = [];
+    pesticides.forEach(p => {
+      const rows = regs[p.id] ?? [];
+      const sprays = reports
+        .filter(r => r.date.startsWith(yearPrefix))
+        .filter(r => (r.pesticides_used?.some(u => u.id === p.id)) || r.pesticide_id === p.id)
+        .map(r => r.date)
+        .sort();
+      if (rows.length === 0 && sprays.length === 0) return;
+      const used = sprays.length > 0
+        ? `今年の散布 ${sprays.length}回（${sprays.map(d => d.slice(5).replace("-", "/")).join("、")}）`
+        : "今年の散布 0回";
+      if (rows.length === 0) {
+        lines.push(`- ${p.name}: 登録情報なし / ${used}`);
+        return;
+      }
+      rows.forEach(rg => {
+        const limit = rg.total_count?.trim() || "総使用回数の記載なし";
+        const timing = rg.usage_timing?.trim() ? ` / 使用時期 ${rg.usage_timing.trim()}` : "";
+        lines.push(`- ${p.name}（${rg.crop_name || "作物不明"}・${rg.pest_name || "対象不明"}）: 総使用回数 ${limit}${timing} / ${used}`);
+      });
+    });
+    if (lines.length === 0) return "";
+    return [
+      "",
+      `## 農薬の登録上限と${yearPrefix}年の散布実績（FAMIC登録情報・原文のまま）`,
+      ...lines,
+    ].join("\n");
+  };
+
   // 検索対象の記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）。
   // 一覧フィルタが有効ならその絞り込み結果を優先し、無効なら直近180日・最新200件にフォールバックする。
-  const formatRecordsForChat = (): { text: string; count: number } => {
+  const formatRecordsForChat = (regs: Record<string, PesticideRegistration[]>): { text: string; count: number } => {
     const base = reportFilterActive ? filteredReports : reports;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 180);
@@ -1633,7 +1724,7 @@ export default function App() {
       .slice()
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 200);
-    const text = target.map(r => {
+    const lines = target.map(r => {
       const parts = [`${r.date} 【${cropName(r.crop_id)}${r.field ? "・" + r.field : ""}】`];
       if (r.work_type) parts.push(`作業:${r.work_type}`);
       if (r.quantity) parts.push(`数量:${r.quantity}`);
@@ -1651,23 +1742,36 @@ export default function App() {
       if (r.note) parts.push(`メモ:${r.note}`);
       parts.push(`担当:${userName(r.user_id)}`);
       return parts.join(" / ");
-    }).join("\n");
-    return { text, count: target.length };
+    });
+    // API側が records 20000文字までしか受け付けないため、農薬の登録上限ブロックを先に確保し、
+    // 残りの予算に収まるぶんだけ記録を新しい順に詰める（超過して 400 で弾かれるのを防ぐ）。
+    const limits = formatPesticideLimits(regs);
+    const budget = 19000 - limits.length;
+    const kept: string[] = [];
+    let used = 0;
+    for (const line of lines) {
+      if (used + line.length + 1 > budget) break;
+      kept.push(line);
+      used += line.length + 1;
+    }
+    return { text: kept.join("\n") + limits, count: kept.length };
   };
 
   const sendSearchChatMessage = async () => {
     const question = searchChatInput.trim();
     if (!question || searchChatLoading) return;
-    const { text: records, count } = formatRecordsForChat();
-    if (!records) {
-      setSearchChatError("対象の作業記録がありません。");
-      return;
-    }
     setSearchChatMessages(m => [...m, { role: "user", content: question }]);
     setSearchChatInput("");
     setSearchChatLoading(true);
     setSearchChatError("");
     try {
+      // 農薬の登録上限も一緒に渡すため、未取得ぶんをここで先読みする
+      const regs = await prefetchAllRegistrations();
+      const { text: records, count } = formatRecordsForChat(regs);
+      if (!records) {
+        setSearchChatError("対象の作業記録がありません。");
+        return;
+      }
       const res = await fetch("/api/search-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1856,26 +1960,30 @@ export default function App() {
   const sevenAgo      = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
   const weekStart     = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return d.toISOString().slice(0,10); })();
   const workCount7d        = reports.filter(r => r.date >= sevenAgo).length;
-  const weekHarvest        = reports.filter(r => r.date >= weekStart).reduce((s,r) => s+(Number(r.quantity)||0), 0);
+  const weekReports        = reports.filter(r => r.date >= weekStart);
+  const weekHarvest        = weekReports.reduce((s,r) => s + harvestQty(r), 0);
+  const weekHarvestSkipped = excludedHarvestCount(weekReports);
   const todayStr           = new Date().toISOString().slice(0,10);
 
-  // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）
-  const monthlyHarvest = (cropId: number, year: number) => {
+  // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）。cropId "all" で全作物合算。
+  const monthlyHarvest = (cropId: number | "all", year: number) => {
     const prefix = String(year);
     const m: Record<string,number> = {};
-    reports.filter(r => r.crop_id === cropId && r.quantity && r.date.startsWith(prefix)).forEach(r => {
-      const mo = r.date.slice(5,7);
-      m[mo] = (m[mo]||0) + (Number(r.quantity)||0);
-    });
+    reports
+      .filter(r => (cropId === "all" || r.crop_id === cropId) && r.date.startsWith(prefix))
+      .forEach(r => {
+        const mo = r.date.slice(5,7);
+        m[mo] = (m[mo]||0) + harvestQty(r);
+      });
     return Array.from({ length:12 }, (_, i) => {
       const mo = String(i+1).padStart(2,"0");
       return { month:`${i+1}月`, total: m[mo] || 0 };
     });
   };
 
-  // 作物のデータがある年一覧
+  // 作物の収穫データがある年一覧
   const cropDataYears = (cropId: number) =>
-    [...new Set(reports.filter(r => r.crop_id === cropId && r.quantity).map(r => Number(r.date.slice(0,4))))].sort();
+    [...new Set(reports.filter(r => r.crop_id === cropId && harvestQty(r) > 0).map(r => Number(r.date.slice(0,4))))].sort();
 
   // 圃場ごとの作付け履歴集計
   const getFieldCropHistory = (fieldName: string) => {
@@ -1918,8 +2026,8 @@ export default function App() {
     sec:     css({ fontSize:12, fontWeight:600, color:C.textMuted, marginBottom:8, marginTop:20, letterSpacing:0.4, textTransform:"uppercase" as const }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
     card:    css({ background:C.card, borderRadius:RADIUS.card, padding:"14px 16px", marginBottom:8, boxShadow:SHADOW.card }),
-    input:   css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
-    select:  css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text }),
+    input:   css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:16, marginBottom:16, background:"transparent", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
+    select:  css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:16, marginBottom:16, background:"transparent", color:C.text }),
     btn:     btn("primary", "lg"),
     btnSm:   { ...btn("dangerOutline", "sm"), minWidth:48, flexShrink:0 },
     row:     css({ display:"flex", justifyContent:"space-between", alignItems:"center" }),
@@ -2011,7 +2119,7 @@ export default function App() {
         <div style={{ marginBottom:24 }}>
           <label style={{ fontSize:12, fontWeight:600, color:C.textMuted, display:"block", marginBottom:8 }}>ユーザーID</label>
           <input
-            style={{ width:"100%", padding:"10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:15, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
+            style={{ width:"100%", padding:"10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:16, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
             placeholder="例: kishu-001"
             value={loginId}
             onChange={e => { setLoginId(e.target.value); setLoginError(""); }}
@@ -2024,7 +2132,7 @@ export default function App() {
           <div style={{ position:"relative" }}>
             <input
               type={showPass ? "text" : "password"}
-              style={{ width:"100%", padding:"10px 40px 10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:15, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
+              style={{ width:"100%", padding:"10px 40px 10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:16, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
               placeholder="パスワード"
               value={loginPass}
               onChange={e => { setLoginPass(e.target.value); setLoginError(""); }}
@@ -2154,7 +2262,7 @@ export default function App() {
               </div>
               {canUseAiFeature("pestControlAdvice") && (
                 <button
-                  onClick={() => { setShowPestAdviceSheet(true); if (!pestAdviceResult && !pestAdviceLoading) generatePestControlAdvice(); }}
+                  onClick={openPestAdviceSheet}
                   style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:10 }}
                 >
                   <Wind size={13} strokeWidth={2} />防除タイミング助言
@@ -2178,6 +2286,11 @@ export default function App() {
                 </div>
               ) : (
                 <div style={{ fontSize:13, color:C.textMuted, paddingTop:6 }}>記録なし</div>
+              )}
+              {weekHarvestSkipped > 0 && (
+                <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>
+                  単位がkg以外の記録{weekHarvestSkipped}件を除外
+                </div>
               )}
             </div>
           </div>
@@ -2411,7 +2524,7 @@ export default function App() {
                   value={reportQuery}
                   onChange={e => setReportQuery(e.target.value)}
                   placeholder="メモ・作物・圃場・作業で検索"
-                  style={{ flex:1, minWidth:0, border:"none", outline:"none", background:"transparent", fontSize:14, color:C.text }}
+                  style={{ flex:1, minWidth:0, border:"none", outline:"none", background:"transparent", fontSize:16, color:C.text }}
                 />
                 {reportQuery && (
                   <button onClick={() => setReportQuery("")} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex", flexShrink:0 }}><X size={15} strokeWidth={2} /></button>
@@ -2605,7 +2718,7 @@ export default function App() {
                         </div>
                       </div>
                       <button
-                        onClick={e => { e.stopPropagation(); setTab("analytics"); }}
+                        onClick={e => { e.stopPropagation(); setAnalyticsCropId(c.id); setAnalyticsSubTab("report"); setTab("analytics"); }}
                         style={{ background:"none", border:"none", cursor:"pointer", color:C.ink, fontSize:13, fontWeight:600, padding:0 }}
                       >
                         分析で見る →
@@ -3370,7 +3483,7 @@ export default function App() {
                         value={targetYieldInput}
                         onChange={e => setTargetYieldInput(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && updateTargetYield(crop.id, targetYieldInput)}
-                        style={{ width:100, padding:"6px 11px", borderRadius:999, border:`1px solid ${C.hairline}`, fontSize:13, background:C.card, color:C.text, boxSizing:"border-box" as const }}
+                        style={{ width:100, padding:"6px 11px", borderRadius:999, border:`1px solid ${C.hairline}`, fontSize:16, background:C.card, color:C.text, boxSizing:"border-box" as const }}
                       />
                       <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={btn("primary", "sm")}>保存</button>
                       <button onClick={() => setEditingTargetYield(false)} style={btn("secondary", "sm")}>×</button>
@@ -3495,10 +3608,15 @@ export default function App() {
       {tab === "analytics" && (
         analyticsSubTab === "report" ? (
           <AnalyticsView
-            currentOrg={currentOrg}
             organizationId={currentOrganizationId}
             lat={weatherCoords?.lat ?? null}
             lng={weatherCoords?.lng ?? null}
+            reports={reports}
+            crops={crops}
+            pesticides={pesticides}
+            users={users}
+            cropId={analyticsCropId}
+            onCropChange={setAnalyticsCropId}
           />
         ) : (
           <GanttChart
@@ -3558,11 +3676,11 @@ export default function App() {
                       ? <WxBadges wx={wxAuto} />
                       : (
                         <div style={{ display:"flex", gap:8, marginTop:4 }}>
-                          <select style={{ ...S.select, marginBottom:0, flex:2, fontSize:14, padding:"6px 8px" }} value={wxManual.label}
+                          <select style={{ ...S.select, marginBottom:0, flex:2, fontSize:16, padding:"6px 8px" }} value={wxManual.label}
                             onChange={e => { const o = WEATHER_OPTIONS.find(x => x.label === e.target.value) || WEATHER_OPTIONS[0]; setWxManual(f => ({ ...f, label:o.label, Icon:o.icon })); }}>
                             {WEATHER_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.label}</option>)}
                           </select>
-                          <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1, fontSize:14, padding:"6px 8px" }}
+                          <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1, fontSize:16, padding:"6px 8px" }}
                             value={wxManual.temp} onChange={e => setWxManual(f => ({ ...f, temp:e.target.value }))} />
                         </div>
                       )}
@@ -3687,7 +3805,7 @@ export default function App() {
                       <div style={S.lbl}>実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
                       <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
                         <input type="number" style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: 20" value={rForm.quantity_value} onChange={e => setRForm(f => ({ ...f, quantity_value:e.target.value, quantity:e.target.value }))} />
-                        <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:13, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
+                        <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:16, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
                       </div>
                     </>
                   )}
@@ -3741,7 +3859,7 @@ export default function App() {
                                   placeholder="散布量（例: 100ml、1L）"
                                   value={pesticideAmounts[p.id] || ""}
                                   onChange={e => setPesticideAmounts(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                  style={{ ...S.input, marginLeft:24, marginBottom:0, width:"calc(100% - 24px)", boxSizing:"border-box" as const, fontSize:13, padding:"8px 12px" }}
+                                  style={{ ...S.input, marginLeft:24, marginBottom:0, width:"calc(100% - 24px)", boxSizing:"border-box" as const, fontSize:16, padding:"8px 12px" }}
                                 />
                               )}
                             </div>
@@ -3806,7 +3924,9 @@ export default function App() {
       {setAuthTarget && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end" }} onClick={() => setSetAuthTarget(null)}>
           <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", padding:"20px 16px 36px" }} onClick={e => e.stopPropagation()}>
-            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"0 auto 16px" }} />
+            <button onClick={() => setSetAuthTarget(null)} aria-label="閉じる" style={{ display:"flex", justifyContent:"center", width:"100%", padding:"0 0 16px", border:"none", background:"none", cursor:"pointer" }}>
+              <div style={{ width:36, height:4, background:C.border, borderRadius:4 }} />
+            </button>
             <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:16, display:"flex", alignItems:"center", gap:6 }}>
               <KeyRound size={15} color={C.primary} strokeWidth={2} />
               {setAuthTarget.name} のログイン設定
@@ -4073,9 +4193,18 @@ export default function App() {
             </div>
           )}
 
-          <button onClick={generatePestControlAdvice} disabled={pestAdviceLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:pestAdviceLoading ? 0.6 : 1 }}>
-            <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : pestAdviceResult ? "もう一度確認" : "助言を確認"}
-          </button>
+          {(() => {
+            const advisedToday = !!pestAdviceResult && pestAdviceDate === new Date().toISOString().slice(0, 10);
+            return advisedToday ? (
+              <div style={{ fontSize:12, color:C.textMuted, textAlign:"center" as const }}>
+                本日の助言は確認済みです。更新は翌日以降になります。
+              </div>
+            ) : (
+              <button onClick={generatePestControlAdvice} disabled={pestAdviceLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:pestAdviceLoading ? 0.6 : 1 }}>
+                <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : "助言を確認"}
+              </button>
+            );
+          })()}
         </div>
       </BottomSheet>
 
