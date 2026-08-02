@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "農作業レポート（試作）",
+    "slug": "farm-app-expo-prototype",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F5F5F6",
+    "splash": {
+      "backgroundColor": "#F5F5F6"
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "edgeToEdgeEnabled": true
+    }
+  }
+}
