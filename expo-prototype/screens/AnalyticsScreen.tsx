@@ -1,16 +1,50 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C, RADIUS, SHADOW } from "../ui/tokens";
 import { harvestQty, isCountableHarvest, excludedHarvestCount, workMinutes, toHours, pctDiff } from "../lib/metrics";
 import { ComboChart, HBarChart, ScatterPlot, Legend } from "../ui/charts";
 import { useStore } from "../lib/store";
+import { supabase } from "../lib/supabase";
 import type { Report } from "../lib/types";
 
 // ─── 分析（src/components/AnalyticsView.tsx の移植・実データ）───────────
-// 年/作物切替 → KPI → 収穫グラフ → 作業時間内訳 → さらに掘る（散布図）。
-// GDD・病害虫傾向・AI出力履歴は daily_weather / ai_outputs テーブル由来 —
-// 本実装フェーズ2（AI機能連携）で接続予定のためプレースホルダ。
+// 年/作物切替 → KPI → 収穫グラフ → 作業時間内訳 → さらに掘る（散布図）
+// → AI出力履歴（ai_outputs・種類フィルタ付き）。
+// GDD・病害虫傾向は daily_weather 連携が必要なためフェーズ2。
+
+// ── AI出力履歴（Web版 AiOutputRow / KIND_LABEL / summarize と同一） ──
+interface DiagnosisJson {
+  inconclusive: boolean;
+  possibilities: { name: string; confidence: string | number; reason: string }[];
+  note: string;
+}
+interface AiOutputRow {
+  id: string;
+  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure";
+  created_at: string;
+  target_date: string | null;
+  field: string | null;
+  output_json: DiagnosisJson | null;
+  output_text: string | null;
+}
+const KIND_LABEL: Record<AiOutputRow["kind"], string> = {
+  diagnosis: "画像診断",
+  pest_advice: "防除助言",
+  daily_report: "日報",
+  voice_structure: "音声整理",
+};
+const summarize = (o: AiOutputRow): string => {
+  if (o.kind === "diagnosis" && o.output_json) {
+    const j = o.output_json;
+    if (j.inconclusive) return "判断できず";
+    const names = (j.possibilities ?? []).map(p => `${p.name}(${p.confidence})`).join("、");
+    return names || j.note || "—";
+  }
+  if (o.output_text) return o.output_text;
+  if (o.output_json) return JSON.stringify(o.output_json);
+  return "—";
+};
 function KpiTile({ label, value, unit, sub, subTone }: {
   label: string;
   value: string;
@@ -58,13 +92,32 @@ const chipText = (active: boolean) => ({
 });
 
 export default function AnalyticsScreen() {
-  const { reports, crops, userName } = useStore();
+  const { reports, crops, userName, currentUser } = useStore();
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [cropId, setCropId] = useState<number | "all">("all");
   const [showDeep, setShowDeep] = useState(false);
   const [d2Axis, setD2Axis] = useState<"temp" | "rain">("temp");
+
+  // ── AI出力履歴（Web版と同一: organization_id 基準で ai_outputs を取得） ──
+  const [aiOutputs, setAiOutputs] = useState<AiOutputRow[]>([]);
+  const [aiKind, setAiKind] = useState<"all" | AiOutputRow["kind"]>("all");
+  const organizationId = currentUser?.organization_id ?? null;
+  useEffect(() => {
+    if (!organizationId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("ai_outputs")
+        .select("id,kind,created_at,target_date,field,output_json,output_text")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (!cancelled) setAiOutputs((data ?? []) as AiOutputRow[]);
+    })();
+    return () => { cancelled = true; };
+  }, [organizationId]);
+  const aiRows = aiOutputs.filter(o => aiKind === "all" || o.kind === aiKind).slice(0, 50);
 
   const dataYears = Array.from(new Set(reports.map(r => Number(r.date.slice(0, 4)))))
     .filter(y => Number.isFinite(y))
@@ -297,10 +350,46 @@ export default function AnalyticsScreen() {
         )}
       </View>
 
-      {/* ── GDD・AI関連はフェーズ2で接続 ── */}
+      {/* ── AI出力の履歴（Web版と同一: 種類フィルタ+一覧） ── */}
+      <SecTitle icon="star">AIの出力履歴</SecTitle>
+      <View style={[cardStyle, { paddingHorizontal: 0, paddingBottom: 4 }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+          <Pressable onPress={() => setAiKind("all")} style={chip(aiKind === "all")}>
+            <Text style={chipText(aiKind === "all")}>すべての種類</Text>
+          </Pressable>
+          {(Object.keys(KIND_LABEL) as AiOutputRow["kind"][]).map(k => (
+            <Pressable key={k} onPress={() => setAiKind(k)} style={chip(aiKind === k)}>
+              <Text style={chipText(aiKind === k)}>{KIND_LABEL[k]}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {aiRows.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 24, gap: 8 }}>
+            <Feather name="star" size={28} color={C.textMuted} />
+            <Text style={{ color: C.textMuted, fontSize: 13 }}>AIの出力がまだありません</Text>
+          </View>
+        ) : (
+          aiRows.map((o, i) => (
+            <View key={o.id} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.hairline }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <View style={{ backgroundColor: C.inkSoft, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: C.ink }}>{KIND_LABEL[o.kind]}</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: C.textMuted }}>{(o.target_date ?? o.created_at).slice(0, 10)}</Text>
+                {!!o.field && <Text style={{ fontSize: 12, color: C.textMuted }}>· {o.field}</Text>}
+              </View>
+              <Text numberOfLines={6} style={{ fontSize: 13, color: C.textSub, lineHeight: 22 }}>
+                {summarize(o)}
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      {/* ── GDDはフェーズ2で接続 ── */}
       <SecTitle icon="thermometer">積算温度（GDD）の年次比較</SecTitle>
       <View style={[cardStyle, { marginBottom: 32 }]}>
-        {emptyBox("thermometer", "気象データ連携はAI機能フェーズで対応予定です")}
+        {emptyBox("thermometer", "気象データ連携は次フェーズで対応予定です")}
       </View>
     </ScrollView>
   );
