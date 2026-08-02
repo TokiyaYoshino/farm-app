@@ -3,11 +3,12 @@
 // projects/work_categories/comments/settings を organization_id / org で取得。
 // CRUD は Web 版のハンドラと同一のクエリ・楽観更新。
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { fetchCurrentWeather, type CurrentWeather } from "./weather";
 import type {
-  User, Crop, Field, Report, Schedule, Comment, Pesticide, Project,
+  User, Crop, Field, Report, Schedule, Comment, Pesticide, PesticideMaster, Project,
   WorkCategory, AppSettings,
 } from "./types";
 
@@ -33,6 +34,11 @@ interface Store {
   weatherCoords: { lat: number; lng: number; name: string } | null;
   wxAuto: CurrentWeather | null;
   wxLoading: boolean;
+  // 通知（自分宛コメント・メンション）
+  myNotifs: Comment[];
+  unreadNotifCount: number;
+  notifSeenAt: string;
+  markNotifsSeen: () => void;
   // helpers
   cropName: (id: number) => string;
   userName: (id: number) => string;
@@ -48,8 +54,9 @@ interface Store {
   addField: (name: string) => Promise<string | null>;
   deleteField: (id: number) => Promise<string | null>;
   setFieldLocation: (fieldId: number, lat: number, lng: number) => Promise<string | null>;
-  addPesticide: (name: string, type: string, dilutionRate: string) => Promise<string | null>;
+  addPesticide: (name: string, type: string, dilutionRate: string, master?: PesticideMaster | null) => Promise<string | null>;
   deletePesticide: (id: string) => Promise<string | null>;
+  searchPesticideMaster: (q: string) => Promise<PesticideMaster[]>;
   loadComments: (targetType: string, targetId: string) => Promise<Comment[]>;
   addComment: (targetType: string, targetId: string, message: string) => Promise<boolean>;
   editComment: (id: string, message: string) => Promise<boolean>;
@@ -318,15 +325,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return null;
   }, []);
 
-  const addPesticide = useCallback(async (name: string, type: string, dilutionRate: string): Promise<string | null> => {
+  const addPesticide = useCallback(async (name: string, type: string, dilutionRate: string, master?: PesticideMaster | null): Promise<string | null> => {
     const { data, error } = await supabase.from("pesticides").insert([{
       name: name.trim(), type: type.trim() || "その他", dilution_rate: dilutionRate.trim() || null,
       org: currentOrg, organization_id: currentOrganizationId,
+      // マスタ経由で選んだ場合は登録番号を引き継ぐ（Web版と同一。適用情報の取得に使う）
+      master_id: master?.id || null,
+      registration_no: master?.reg_no || null,
     }]).select();
     if (error) return error.message;
     if (data) setPesticides(p => [...p, data[0] as Pesticide].sort((a, b) => a.name.localeCompare(b.name)));
     return null;
   }, [currentOrg, currentOrganizationId]);
+
+  // 農薬マスタ検索（Web版 searchPesticideMaster と同一: pesticides_master を ilike）
+  const searchPesticideMaster = useCallback(async (q: string): Promise<PesticideMaster[]> => {
+    if (!q.trim()) return [];
+    const { data } = await supabase.from("pesticides_master")
+      .select("*").eq("is_active", true).ilike("name", `%${q}%`).limit(10);
+    return (data ?? []) as PesticideMaster[];
+  }, []);
 
   const deletePesticide = useCallback(async (id: string): Promise<string | null> => {
     const { error } = await supabase.from("pesticides").delete().eq("id", id);
@@ -359,6 +377,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return !error;
   }, [currentOrganizationId]);
 
+  // ── 通知（Web版 myNotifs / notifSeenAt と同一。既読時刻は AsyncStorage に保持） ──
+  const [notifSeenAt, setNotifSeenAt] = useState("");
+  useEffect(() => {
+    if (!currentUser) return;
+    AsyncStorage.getItem(`notifSeen_${currentUser.id}`).then(v => setNotifSeenAt(v ?? ""));
+  }, [currentUser]);
+
+  // 自分宛 = @自分名のメンション / 自分の記録・予定へのコメント（自分の投稿は除外）
+  const myNotifs = comments.filter(cm => {
+    if (!currentUser || cm.user_id === currentUser.id) return false;
+    if (cm.message.includes(`@${currentUser.name}`)) return true;
+    if (cm.target_type === "report") {
+      const r = reports.find(x => String(x.id) === cm.target_id);
+      return r?.user_id === currentUser.id;
+    }
+    const sc = schedules.find(x => x.id === cm.target_id);
+    return sc ? (sc.assigned_user_id ?? sc.user_id) === currentUser.id : false;
+  });
+  const unreadNotifCount = notifSeenAt ? myNotifs.filter(cm => cm.created_at > notifSeenAt).length : myNotifs.length;
+  const markNotifsSeen = useCallback(() => {
+    const now = new Date().toISOString();
+    setNotifSeenAt(now);
+    if (currentUser) AsyncStorage.setItem(`notifSeen_${currentUser.id}`, now);
+  }, [currentUser]);
+
   // ── ヘルパー ──
   const cropName = useCallback((id: number) => crops.find(c => c.id === id)?.name ?? "未設定", [crops]);
   const userName = useCallback((id: number) => users.find(u => u.id === id)?.name ?? "未設定", [users]);
@@ -370,11 +413,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     currentUser, isAdmin: (currentUser?.role ?? "worker") === "admin",
     users, crops, fields, reports, schedules, pesticides, projects, workCategories, comments,
     weatherCoords, wxAuto, wxLoading,
+    myNotifs, unreadNotifCount, notifSeenAt, markNotifsSeen,
     cropName, userName, commentCountOf,
     addReport, deleteReport,
     addSchedule, updateSchedule, deleteSchedule,
     addCrop, deleteCrop, addField, deleteField, setFieldLocation,
-    addPesticide, deletePesticide,
+    addPesticide, deletePesticide, searchPesticideMaster,
     loadComments, addComment, editComment,
   };
 

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, Alert, Platform } from "react-native";
+import { useRef, useState } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Platform, ActivityIndicator } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Location from "expo-location";
@@ -7,6 +7,7 @@ import { C, SHADOW, RADIUS, cropColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import RowMenu from "../ui/RowMenu";
 import { useStore } from "../lib/store";
+import type { PesticideMaster } from "../lib/types";
 
 // ─── 管理（src/App.tsx tab==="manage" ブロックの移植・実データ）──────────
 // 作物: 追加+展開式統計 / 圃場: 追加+GPS位置設定+作付け履歴 / 農薬: 追加+リスト。
@@ -32,7 +33,7 @@ export default function ManageScreen({ subTab }: Props) {
   const {
     isAdmin, crops, fields, pesticides, reports, cropName,
     addCrop, deleteCrop, addField, deleteField, setFieldLocation,
-    addPesticide, deletePesticide,
+    addPesticide, deletePesticide, searchPesticideMaster,
   } = useStore();
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -40,6 +41,13 @@ export default function ManageScreen({ subTab }: Props) {
   const [cForm, setCForm] = useState({ name: "", start_date: todayStr, target_yield: "" });
   const [fForm, setFForm] = useState({ name: "" });
   const [pForm, setPForm] = useState({ name: "", type: "", dilution_rate: "" });
+  // 農薬マスタ検索（Web版と同一: 300msデバウンス→ilike検索→候補選択で自動入力）
+  const [masterSearch, setMasterSearch] = useState("");
+  const [masterResults, setMasterResults] = useState<PesticideMaster[]>([]);
+  const [masterSearching, setMasterSearching] = useState(false);
+  const [selectedMaster, setSelectedMaster] = useState<PesticideMaster | null>(null);
+  const [pManualMode, setPManualMode] = useState(false);
+  const masterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandedCrops, setExpandedCrops] = useState<Set<number>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -91,13 +99,36 @@ export default function ManageScreen({ subTab }: Props) {
     setFForm({ name: "" });
   };
 
+  const handleMasterSearchChange = (q: string) => {
+    setMasterSearch(q);
+    setSelectedMaster(null);
+    if (masterTimerRef.current) clearTimeout(masterTimerRef.current);
+    if (!q.trim()) { setMasterResults([]); setMasterSearching(false); return; }
+    setMasterSearching(true);
+    masterTimerRef.current = setTimeout(async () => {
+      const results = await searchPesticideMaster(q);
+      setMasterResults(results);
+      setMasterSearching(false);
+    }, 300);
+  };
+
+  const selectMaster = (m: PesticideMaster) => {
+    setSelectedMaster(m);
+    setPForm({ name: m.name, type: m.type || "その他", dilution_rate: m.dilution_rate || "" });
+    setMasterSearch(m.name);
+    setMasterResults([]);
+  };
+
   const handleAddPesticide = async () => {
     if (!pForm.name.trim() || submitting) return;
     setSubmitting(true);
-    const err = await addPesticide(pForm.name, pForm.type, pForm.dilution_rate);
+    const err = await addPesticide(pForm.name, pForm.type, pForm.dilution_rate, selectedMaster);
     setSubmitting(false);
     if (err) { Alert.alert("追加に失敗しました", err); return; }
     setPForm({ name: "", type: "", dilution_rate: "" });
+    setMasterSearch("");
+    setMasterResults([]);
+    setSelectedMaster(null);
   };
 
   // GPS現在地を圃場位置に設定（Web版 setFieldLocation の RN 版: expo-location）
@@ -307,18 +338,85 @@ export default function ManageScreen({ subTab }: Props) {
             <>
               <Text style={secStyle}>農薬を追加</Text>
               <View style={cardStyle}>
-                <Text style={lblStyle}>農薬名 *</Text>
-                <TextInput style={underlineInput} placeholder="例: マシン油乳剤" placeholderTextColor={C.textMuted}
-                  value={pForm.name} onChangeText={v => setPForm(f => ({ ...f, name: v }))} />
-                <Text style={lblStyle}>種別（任意）</Text>
-                <TextInput style={underlineInput} placeholder="例: 殺虫剤" placeholderTextColor={C.textMuted}
-                  value={pForm.type} onChangeText={v => setPForm(f => ({ ...f, type: v }))} />
-                <Text style={lblStyle}>希釈倍数（任意）</Text>
-                <TextInput style={underlineInput} placeholder="例: 1000倍" placeholderTextColor={C.textMuted}
-                  value={pForm.dilution_rate} onChangeText={v => setPForm(f => ({ ...f, dilution_rate: v }))} />
-                <Btn variant="primary" size="lg" onPress={handleAddPesticide} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
-                  {submitting ? "追加中..." : "農薬を追加"}
-                </Btn>
+                {!pManualMode ? (
+                  <>
+                    {/* マスタ検索（Web版と同一: 農薬登録情報から名前で検索して選ぶ） */}
+                    <Text style={lblStyle}>農薬名で検索</Text>
+                    <View style={{ position: "relative", marginBottom: 12 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.well, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 }}>
+                        <Feather name="search" size={15} color={C.textMuted} />
+                        <TextInput
+                          value={masterSearch}
+                          onChangeText={handleMasterSearchChange}
+                          placeholder="例: マシン油、ボルドー"
+                          placeholderTextColor={C.textMuted}
+                          style={{ flex: 1, fontSize: 15, color: C.text, padding: 0 }}
+                        />
+                        {masterSearching && <ActivityIndicator size="small" color={C.textMuted} />}
+                        {!!masterSearch && !masterSearching && (
+                          <Pressable onPress={() => { setMasterSearch(""); setMasterResults([]); setSelectedMaster(null); setPForm({ name: "", type: "", dilution_rate: "" }); }}>
+                            <Feather name="x" size={14} color={C.textMuted} />
+                          </Pressable>
+                        )}
+                      </View>
+                      {masterResults.length > 0 && (
+                        <View style={{ backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.hairline, marginTop: 4, overflow: "hidden" }}>
+                          {masterResults.map((m, i) => (
+                            <Pressable
+                              key={m.id}
+                              onPress={() => selectMaster(m)}
+                              style={{ paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.hairline }}
+                            >
+                              <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>{m.name}</Text>
+                              <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+                                {[m.type, m.company, m.dilution_rate].filter(Boolean).join(" · ")}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+                      {!!masterSearch.trim() && !masterSearching && masterResults.length === 0 && !selectedMaster && (
+                        <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>
+                          見つかりません。下の「手入力に切り替え」から直接登録できます
+                        </Text>
+                      )}
+                    </View>
+                    {selectedMaster && (
+                      <View style={{ backgroundColor: C.inkSoft, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Feather name="check-circle" size={14} color={C.ink} />
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: C.ink }}>{selectedMaster.name}</Text>
+                        </View>
+                        <Text style={{ fontSize: 12, color: C.textSub, marginTop: 4 }}>
+                          {[selectedMaster.type, selectedMaster.dilution_rate && `希釈 ${selectedMaster.dilution_rate}`, selectedMaster.reg_no && `登録 ${selectedMaster.reg_no}`].filter(Boolean).join(" · ")}
+                        </Text>
+                      </View>
+                    )}
+                    <Pressable onPress={() => setPManualMode(true)} style={{ marginBottom: 12 }}>
+                      <Text style={{ fontSize: 12, color: C.info, fontWeight: "600" }}>手入力に切り替え</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Text style={lblStyle}>農薬名 *</Text>
+                    <TextInput style={underlineInput} placeholder="例: マシン油乳剤" placeholderTextColor={C.textMuted}
+                      value={pForm.name} onChangeText={v => setPForm(f => ({ ...f, name: v }))} />
+                    <Text style={lblStyle}>種別（任意）</Text>
+                    <TextInput style={underlineInput} placeholder="例: 殺虫剤" placeholderTextColor={C.textMuted}
+                      value={pForm.type} onChangeText={v => setPForm(f => ({ ...f, type: v }))} />
+                    <Text style={lblStyle}>希釈倍数（任意）</Text>
+                    <TextInput style={underlineInput} placeholder="例: 1000倍" placeholderTextColor={C.textMuted}
+                      value={pForm.dilution_rate} onChangeText={v => setPForm(f => ({ ...f, dilution_rate: v }))} />
+                    <Pressable onPress={() => setPManualMode(false)} style={{ marginBottom: 12 }}>
+                      <Text style={{ fontSize: 12, color: C.info, fontWeight: "600" }}>マスタ検索に戻る</Text>
+                    </Pressable>
+                  </>
+                )}
+                {(selectedMaster || (pManualMode && pForm.name.trim())) && (
+                  <Btn variant="primary" size="lg" onPress={handleAddPesticide} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
+                    {submitting ? "追加中..." : "農薬を追加"}
+                  </Btn>
+                )}
               </View>
             </>
           )}

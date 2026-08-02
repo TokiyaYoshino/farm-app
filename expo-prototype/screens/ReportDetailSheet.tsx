@@ -1,9 +1,12 @@
-import { View, Text, Pressable, Image, Alert } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, Pressable, Image, Alert, ActivityIndicator } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { C, workTypeColor } from "../ui/tokens";
+import { C, RADIUS, workTypeColor } from "../ui/tokens";
 import BottomSheet from "../ui/BottomSheet";
 import CommentThread from "../ui/CommentThread";
 import { useStore } from "../lib/store";
+import { supabase } from "../lib/supabase";
+import { canUseAiFeature, diagnoseImageApi, saveAiOutput, type DiagnosisResult } from "../lib/ai";
 import type { Report } from "../lib/types";
 
 // ─── 記録詳細シート（src/App.tsx selectedReport ボトムシートの移植・実データ）─
@@ -15,6 +18,47 @@ interface Props {
 export default function ReportDetailSheet({ report, onClose }: Props) {
   const { currentUser, isAdmin, pesticides, cropName, userName, deleteReport } = useStore();
   const r = report;
+
+  // ── AI画像診断（Web版と同一: 保存済み結果を ai_outputs から復元） ──
+  const [diagResult, setDiagResult] = useState<DiagnosisResult | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagError, setDiagError] = useState("");
+
+  useEffect(() => {
+    setDiagResult(null); setDiagError(""); setDiagLoading(false);
+    const reportId = report?.id;
+    if (!reportId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("ai_outputs")
+        .select("output_json")
+        .eq("kind", "diagnosis")
+        .eq("report_id", reportId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const saved = data?.[0]?.output_json as DiagnosisResult | undefined;
+      if (!cancelled && saved) setDiagResult(saved);
+    })();
+    return () => { cancelled = true; };
+  }, [report?.id]);
+
+  const runDiagnosis = async () => {
+    if (!r?.image_url || diagLoading) return;
+    setDiagLoading(true); setDiagError("");
+    const res = await diagnoseImageApi(r.image_url, cropName(r.crop_id));
+    if (res.ok) {
+      setDiagResult(res.data.diagnosis);
+      void saveAiOutput(currentUser?.organization_id ?? null, currentUser?.id ?? null, "diagnosis", {
+        reportId: r.id, targetDate: r.date, field: r.field, cropId: r.crop_id,
+        inputSummary: `写真:${r.image_url} / 作物:${cropName(r.crop_id)}`,
+        outputJson: res.data.diagnosis, usage: res.data.usage, costUsd: res.data.costUsd,
+      });
+    } else {
+      setDiagError(res.error);
+    }
+    setDiagLoading(false);
+  };
 
   const confirmDelete = (id: number) => {
     Alert.alert("確認", "この作業報告を削除しますか？", [
@@ -126,7 +170,44 @@ export default function ReportDetailSheet({ report, onClose }: Props) {
             )}
 
             {!!r.image_url && (
-              <Image source={{ uri: r.image_url }} style={{ width: "100%", height: 240, borderRadius: 10, marginTop: 8 }} resizeMode="cover" />
+              <>
+                <Image source={{ uri: r.image_url }} style={{ width: "100%", height: 240, borderRadius: 10, marginTop: 8 }} resizeMode="cover" />
+                {canUseAiFeature("pestDiagnosis") && (
+                  <Pressable
+                    onPress={runDiagnosis}
+                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, paddingVertical: 9, borderRadius: 999, backgroundColor: C.card }}
+                  >
+                    {diagLoading
+                      ? <ActivityIndicator size="small" color={C.ink} />
+                      : <Feather name="search" size={13} color={C.ink} />}
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: C.ink }}>
+                      {diagLoading ? "診断中..." : diagResult ? "もう一度AI診断" : "この写真をAI診断"}
+                    </Text>
+                  </Pressable>
+                )}
+                {!!diagError && <Text style={{ color: C.danger, fontSize: 12, marginTop: 6 }}>{diagError}</Text>}
+                {diagResult && (
+                  <View style={{ backgroundColor: C.card, borderRadius: RADIUS.row, padding: 12, marginTop: 8, gap: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: C.textSub }}>AI画像診断（推定・確定診断ではありません）</Text>
+                    {diagResult.inconclusive ? (
+                      <Text style={{ fontSize: 12, color: C.textSub }}>この写真からは判断できませんでした。{diagResult.note}</Text>
+                    ) : (
+                      diagResult.possibilities.map((p, i) => (
+                        <View key={i}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: C.text }}>{p.name}</Text>
+                            <View style={{ backgroundColor: C.pesticideBg, borderRadius: 999, paddingVertical: 1, paddingHorizontal: 7 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: C.pesticide }}>{p.category}</Text>
+                            </View>
+                            <Text style={{ fontSize: 11, color: C.textMuted, marginLeft: "auto" }}>確信度 {p.confidence}%</Text>
+                          </View>
+                          <Text style={{ fontSize: 12, color: C.textSub, lineHeight: 17, marginTop: 2 }}>{p.reason}</Text>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                )}
+              </>
             )}
 
             {(isAdmin || r.user_id === currentUser?.id) && (

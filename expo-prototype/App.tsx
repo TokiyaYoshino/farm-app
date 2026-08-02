@@ -12,6 +12,7 @@ import AnalyticsScreen from "./screens/AnalyticsScreen";
 import GanttScreen from "./screens/GanttScreen";
 import ManageScreen from "./screens/ManageScreen";
 import QuickReportSheet from "./screens/QuickReportSheet";
+import NotificationsSheet from "./screens/NotificationsSheet";
 import BottomSheet from "./ui/BottomSheet";
 import Btn from "./ui/Btn";
 
@@ -59,12 +60,13 @@ function SubTabBar<T extends string>({ tabs, value, onChange }: {
 
 function Root() {
   const insets = useSafeAreaInsets();
-  const { authSession, authLoading, loading, currentUser, logout } = useStore();
+  const { authSession, authLoading, loading, currentUser, logout, unreadNotifCount, markNotifsSeen } = useStore();
   const [tab, setTab] = useState<Tab>("home");
   const [analyticsSubTab, setAnalyticsSubTab] = useState<AnalyticsSubTab>("report");
   const [manageSubTab, setManageSubTab] = useState<ManageSubTab>("crops");
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [showUserSheet, setShowUserSheet] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
 
   // ── Auth ゲート（Web版と同一の3段階） ──
   if (authLoading) {
@@ -95,6 +97,20 @@ function Root() {
             {TITLES[tab]}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {/* 通知ベル（Web版 openNotifs と同一: 開いた時点で既読化） */}
+            <Pressable
+              onPress={() => { setShowNotifs(true); markNotifsSeen(); }}
+              style={{ width: 36, height: 36, backgroundColor: C.well, borderRadius: 999, alignItems: "center", justifyContent: "center" }}
+            >
+              <Feather name="bell" size={17} color={C.textSub} />
+              {unreadNotifCount > 0 && (
+                <View style={{ position: "absolute", top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 999, backgroundColor: C.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }}>
+                  <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700", lineHeight: 12 }}>
+                    {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
             <Pressable onPress={() => setShowUserSheet(true)} style={{ width: 36, height: 36, backgroundColor: C.well, borderRadius: 999, alignItems: "center", justifyContent: "center" }}>
               <Feather name="user" size={18} color={C.textSub} />
             </Pressable>
@@ -157,6 +173,15 @@ function Root() {
       </View>
 
       <QuickReportSheet open={showQuickReport} onClose={() => setShowQuickReport(false)} />
+      <NotificationsSheet
+        open={showNotifs}
+        onClose={() => setShowNotifs(false)}
+        onOpenTarget={cm => {
+          // 通知タップで対象の画面へ（記録=記録タブ / 予定=カレンダー）
+          setTab("report");
+          void cm;
+        }}
+      />
 
       {/* ユーザーシート（ログアウト） */}
       <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.4}>

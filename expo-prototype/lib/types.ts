@@ -17,6 +17,11 @@ export interface Pesticide {
   id: string; name: string; type: string | null;
   dilution_rate?: string | null; notes?: string | null;
 }
+export interface PesticideMaster {
+  id: string; reg_no: string; name: string; type: string | null;
+  company: string | null; dilution_rate: string | null;
+  target_crop: string | null; target_pest: string | null; is_active: boolean;
+}
 export interface Report {
   id: number; user_id: number; crop_id: number; field: string; date: string;
   work_type: string; quantity: string; work_time: string; note: string;

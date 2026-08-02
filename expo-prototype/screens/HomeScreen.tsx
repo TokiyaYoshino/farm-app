@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C, SHADOW, RADIUS, workTypeColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import { useStore } from "../lib/store";
+import { canUseAiFeature } from "../lib/ai";
+import FieldMapSheet from "./FieldMapSheet";
+import { PestAdviceSheet } from "./AiSheets";
 
 // ─── ダッシュボード（src/App.tsx tab==="home" ブロックの移植・実データ）───
 interface Props {
@@ -12,6 +16,8 @@ interface Props {
 
 export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
   const { reports, schedules, comments, wxAuto, wxLoading, weatherCoords, cropName, userName } = useStore();
+  const [showMap, setShowMap] = useState(false);
+  const [showPestAdvice, setShowPestAdvice] = useState(false);
 
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
@@ -63,6 +69,13 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
               )}
             </View>
           </View>
+          {canUseAiFeature("pestControlAdvice") && (
+            <Btn variant="tertiary" size="sm" style={{ alignSelf: "stretch", marginTop: 10 }}
+              onPress={() => setShowPestAdvice(true)}
+              icon={<Feather name="wind" size={13} color={C.textSub} />}>
+              防除タイミング助言
+            </Btn>
+          )}
         </View>
       )}
 
@@ -155,6 +168,18 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
         </View>
         <Feather name="chevron-right" size={16} color={C.textMuted} />
       </Pressable>
+
+      {/* マップカード */}
+      <Pressable onPress={() => setShowMap(true)} style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginTop: 4, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Feather name="map-pin" size={16} color={C.textMuted} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>圃場マップ</Text>
+        </View>
+        <Feather name="chevron-right" size={16} color={C.textMuted} />
+      </Pressable>
+
+      <FieldMapSheet open={showMap} onClose={() => setShowMap(false)} />
+      <PestAdviceSheet open={showPestAdvice} onClose={() => setShowPestAdvice(false)} />
     </ScrollView>
   );
 }

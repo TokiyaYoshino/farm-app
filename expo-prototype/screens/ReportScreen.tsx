@@ -7,6 +7,8 @@ import CalendarView from "./CalendarView";
 import ReportDetailSheet from "./ReportDetailSheet";
 import Picker from "../ui/Picker";
 import { useStore } from "../lib/store";
+import { canUseAiFeature } from "../lib/ai";
+import { DailyReportSheet, SearchChatSheet, PhotoDiagnosisSheet } from "./AiSheets";
 import { WORK_TEMPLATES, type Report } from "../lib/types";
 
 // ─── 作業記録（src/App.tsx tab==="report" ブロックの移植・実データ）──────
@@ -22,6 +24,7 @@ export default function ReportScreen() {
   const [filterWorkType, setFilterWorkType] = useState("");
   const [filterUser, setFilterUser] = useState(0);
   const [pickerFor, setPickerFor] = useState<"crop" | "field" | "work" | "user" | null>(null);
+  const [aiSheet, setAiSheet] = useState<"report" | "chat" | "diag" | null>(null);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -185,12 +188,21 @@ export default function ReportScreen() {
             </Pressable>
           </ScrollView>
 
-          {/* 件数＋クリア */}
+          {/* 件数＋クリア＋AI機能ボタン群（Web版と同一の並び） */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8, minHeight: 28, gap: 8 }}>
             <Text style={{ fontSize: 12, color: C.textMuted }}>{filtered.length}件の記録</Text>
-            {filterActive && (
-              <Btn variant="tertiary" size="sm" onPress={() => { setQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }}>条件をクリア</Btn>
-            )}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: "center" }}>
+              {filterActive && (
+                <Btn variant="tertiary" size="sm" onPress={() => { setQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }}>条件をクリア</Btn>
+              )}
+              <Btn variant="secondary" size="sm" onPress={() => setAiSheet("report")} icon={<Feather name="star" size={13} color={C.text} />}>AI日報</Btn>
+              {canUseAiFeature("recordSearchChat") && (
+                <Btn variant="secondary" size="sm" onPress={() => setAiSheet("chat")} icon={<Feather name="message-square" size={13} color={C.text} />}>AI検索</Btn>
+              )}
+              {canUseAiFeature("pestDiagnosis") && (
+                <Btn variant="secondary" size="sm" onPress={() => setAiSheet("diag")} icon={<Feather name="camera" size={13} color={C.text} />}>AI画像診断</Btn>
+              )}
+            </ScrollView>
           </View>
 
           {/* 結果 */}
@@ -249,6 +261,9 @@ export default function ReportScreen() {
       )}
 
       <ReportDetailSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
+      <DailyReportSheet open={aiSheet === "report"} onClose={() => setAiSheet(null)} />
+      <SearchChatSheet open={aiSheet === "chat"} onClose={() => setAiSheet(null)} />
+      <PhotoDiagnosisSheet open={aiSheet === "diag"} onClose={() => setAiSheet(null)} />
 
       {/* フィルタピッカー */}
       <Picker
