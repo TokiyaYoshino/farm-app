@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "農作業レポート（試作）",
-    "slug": "farm-app-expo-prototype",
+    "name": "農作業レポート",
+    "slug": "farm-app-mobile",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -10,10 +10,23 @@
       "backgroundColor": "#F5F5F6"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "作業記録に添付する写真を選択するために使用します",
+        "NSLocationWhenInUseUsageDescription": "圃場の位置を現在地から設定するために使用します"
+      }
     },
     "android": {
-      "edgeToEdgeEnabled": true
-    }
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      "expo-image-picker",
+      "expo-location"
+    ]
   }
 }

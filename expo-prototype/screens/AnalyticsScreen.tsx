@@ -1,18 +1,16 @@
 import { useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { C, SHADOW, RADIUS } from "../ui/tokens";
+import { C, RADIUS, SHADOW } from "../ui/tokens";
 import { harvestQty, isCountableHarvest, excludedHarvestCount, workMinutes, toHours, pctDiff } from "../lib/metrics";
-import { ComboChart, HBarChart, MultiLineChart, ScatterPlot, Legend, CHART_COLORS } from "../ui/charts";
-import { reports, crops, users, gddMonthly, TODAY, userName, type Report } from "../mock";
+import { ComboChart, HBarChart, ScatterPlot, Legend } from "../ui/charts";
+import { useStore } from "../lib/store";
+import type { Report } from "../lib/types";
 
-// ─── 分析（src/components/AnalyticsView.tsx の移植）────────────────────
-// 年/作物切替 → KPI(well+KpiTile) → 収穫グラフ → 作業時間内訳 → GDD → さらに掘る。
-// AI出力履歴・病害虫傾向はSupabase由来のためプレースホルダ表示。
-// recharts は ui/charts.tsx の軽量SVGチャートで代替(見た目の要点は同一)。
-
-const GDD_BASE_TEMP = 10;
-
+// ─── 分析（src/components/AnalyticsView.tsx の移植・実データ）───────────
+// 年/作物切替 → KPI → 収穫グラフ → 作業時間内訳 → さらに掘る（散布図）。
+// GDD・病害虫傾向・AI出力履歴は daily_weather / ai_outputs テーブル由来 —
+// 本実装フェーズ2（AI機能連携）で接続予定のためプレースホルダ。
 function KpiTile({ label, value, unit, sub, subTone }: {
   label: string;
   value: string;
@@ -60,17 +58,21 @@ const chipText = (active: boolean) => ({
 });
 
 export default function AnalyticsScreen() {
-  const currentYear = 2026;
+  const { reports, crops, userName } = useStore();
+
+  const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [cropId, setCropId] = useState<number | "all">("all");
   const [showDeep, setShowDeep] = useState(false);
   const [d2Axis, setD2Axis] = useState<"temp" | "rain">("temp");
 
-  const dataYears = Array.from(new Set(reports.map(r => Number(r.date.slice(0, 4))))).sort((a, b) => b - a);
+  const dataYears = Array.from(new Set(reports.map(r => Number(r.date.slice(0, 4)))))
+    .filter(y => Number.isFinite(y))
+    .sort((a, b) => b - a);
   const yearOptions = dataYears.includes(currentYear) ? dataYears : [currentYear, ...dataYears];
   const safeYear = yearOptions.includes(year) ? year : yearOptions[0];
 
-  const todayMmdd = TODAY.slice(5);
+  const todayMmdd = new Date().toISOString().slice(5, 10);
   const truncate = safeYear === currentYear;
   const inCrop = (r: Report) => cropId === "all" || r.crop_id === cropId;
   const inYear = (r: Report, y: number) =>
@@ -136,19 +138,7 @@ export default function AnalyticsScreen() {
   const hoursByType = buildBars(r => r.work_type || "未設定");
   const hoursByUser = buildBars(r => userName(r.user_id));
 
-  // ── 積算温度(GDD) ── モックの月次データから累積を組む
-  const gddYears = Object.keys(gddMonthly).sort();
-  const gddSeries = gddYears.map((y, i) => {
-    let cum = 0;
-    const values = gddMonthly[y].map(v => {
-      if (v <= 0 && cum > 0) return null; // データ未到達月
-      cum += v;
-      return Math.round(cum);
-    });
-    return { name: y, color: CHART_COLORS[i % CHART_COLORS.length], values };
-  });
-
-  // ── さらに掘る ──
+  // ── さらに掘る（散布図） ──
   const harvestRows = reports.filter(isCountableHarvest);
   const d2Points = harvestRows.flatMap(r => {
     const q = harvestQty(r);
@@ -274,33 +264,6 @@ export default function AnalyticsScreen() {
         )}
       </View>
 
-      {/* ── 積算温度(GDD) ── */}
-      <SecTitle icon="thermometer">積算温度（GDD）の年次比較</SecTitle>
-      <View style={cardStyle}>
-        <View style={{ backgroundColor: C.well, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 10 }}>
-          <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 21 }}>
-            8/1 時点の積算温度は <Text style={{ fontWeight: "700", color: C.text }}>1,300℃・日</Text>。
-            2025年が同じ値に達したのは 8/10 で、<Text style={{ fontWeight: "700", color: C.ink }}>今年は9日早い</Text>ペースです。
-          </Text>
-        </View>
-        <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 19, marginBottom: 10 }}>
-          日平均気温から基準温度{GDD_BASE_TEMP}℃を引いた有効積算温度の、年初からの累積です。
-          年ごとに比べると生育の進み方の早い・遅いが読めます（基準温度は暫定値）。
-        </Text>
-        <MultiLineChart labels={monthLabels} series={gddSeries} />
-        <Legend items={gddSeries.map(s => ({ label: `${s.name}年`, color: s.color, line: true }))} />
-      </View>
-
-      {/* ── 病害虫診断の発生傾向(Supabase由来のためプレースホルダ) ── */}
-      <SecTitle icon="alert-circle">病害虫診断の発生傾向</SecTitle>
-      <View style={cardStyle}>
-        <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 19, marginBottom: 10 }}>
-          AI画像診断の結果のうち、確信度が「高」のものだけを集計しています。
-          <Text style={{ fontWeight: "700", color: C.textSub }}>AIの推定であり確定診断ではありません。</Text>
-        </Text>
-        {emptyBox("alert-circle", "確信度「高」の診断結果がまだありません")}
-      </View>
-
       {/* ── さらに掘る ── */}
       <SecTitle icon="bar-chart-2">さらに掘る</SecTitle>
       <View style={[cardStyle, !showDeep && { paddingVertical: 4 }]}>
@@ -308,12 +271,11 @@ export default function AnalyticsScreen() {
           onPress={() => setShowDeep(v => !v)}
           style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: C.textSub }}>相関を探す（気象・作業時間・防除タイミング）</Text>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: C.textSub }}>相関を探す（気象・作業時間）</Text>
           <Feather name={showDeep ? "chevron-up" : "chevron-down"} size={16} color={C.textSub} />
         </Pressable>
         {showDeep && (
           <View style={{ borderTopWidth: 1, borderTopColor: C.hairline, paddingTop: 4 }}>
-            {/* 気象×収穫 */}
             <Text style={{ fontSize: 12, fontWeight: "600", color: C.textSub, marginTop: 16, marginBottom: 8 }}>気象条件と収穫量の相関</Text>
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
               <Pressable onPress={() => setD2Axis("temp")} style={chip(d2Axis === "temp")}>
@@ -327,7 +289,6 @@ export default function AnalyticsScreen() {
               <ScatterPlot points={d2Points} color={C.ink} xUnit={d2Axis === "temp" ? "°C" : "mm"} yUnit="" />
             )}
 
-            {/* 作業時間×収穫 */}
             <Text style={{ fontSize: 12, fontWeight: "600", color: C.textSub, marginTop: 16, marginBottom: 8 }}>作業時間と収穫量の関係</Text>
             {d3Points.length === 0 ? emptyBox("clock", "データがまだありません") : (
               <ScatterPlot points={d3Points} color={C.info} xUnit="h" yUnit="" />
@@ -336,10 +297,10 @@ export default function AnalyticsScreen() {
         )}
       </View>
 
-      {/* ── AI出力の履歴(Supabase由来のためプレースホルダ) ── */}
-      <SecTitle icon="star">AIの出力履歴</SecTitle>
+      {/* ── GDD・AI関連はフェーズ2で接続 ── */}
+      <SecTitle icon="thermometer">積算温度（GDD）の年次比較</SecTitle>
       <View style={[cardStyle, { marginBottom: 32 }]}>
-        {emptyBox("star", "AIの出力がまだありません")}
+        {emptyBox("thermometer", "気象データ連携はAI機能フェーズで対応予定です")}
       </View>
     </ScrollView>
   );

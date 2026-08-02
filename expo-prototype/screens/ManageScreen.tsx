@@ -1,22 +1,18 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Platform } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Location from "expo-location";
 import { C, SHADOW, RADIUS, cropColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import RowMenu from "../ui/RowMenu";
-import {
-  reports, crops as mockCrops, fields as mockFields, pesticides as mockPesticides,
-  TODAY, cropName, type Crop, type Field, type Pesticide,
-} from "../mock";
+import { useStore } from "../lib/store";
 
-// ─── 管理（src/App.tsx tab==="manage" ブロックの移植）──────────────────
-// 作物: 追加アコーディオン+カード(展開で3分割統計well) / 圃場: 追加+作付け履歴テーブル /
-// 農薬: 追加+リスト。追加・削除はローカルstateのみ(モック動作)。
+// ─── 管理（src/App.tsx tab==="manage" ブロックの移植・実データ）──────────
+// 作物: 追加+展開式統計 / 圃場: 追加+GPS位置設定+作付け履歴 / 農薬: 追加+リスト。
 interface Props {
   subTab: "crops" | "fields" | "pesticides";
 }
-
-const IS_ADMIN = true;
 
 const secStyle = {
   fontSize: 12, fontWeight: "600" as const, color: C.textMuted,
@@ -33,26 +29,32 @@ const underlineInput = {
 };
 
 export default function ManageScreen({ subTab }: Props) {
-  const [crops, setCrops] = useState<Crop[]>(mockCrops);
-  const [fields, setFields] = useState<Field[]>(mockFields);
-  const [pesticides, setPesticides] = useState<Pesticide[]>(mockPesticides);
+  const {
+    isAdmin, crops, fields, pesticides, reports, cropName,
+    addCrop, deleteCrop, addField, deleteField, setFieldLocation,
+    addPesticide, deletePesticide,
+  } = useStore();
 
+  const todayStr = new Date().toISOString().slice(0, 10);
   const [showCropAddForm, setShowCropAddForm] = useState(false);
-  const [cForm, setCForm] = useState({ name: "", start_date: TODAY, target_yield: "" });
+  const [cForm, setCForm] = useState({ name: "", start_date: todayStr, target_yield: "" });
   const [fForm, setFForm] = useState({ name: "" });
   const [pForm, setPForm] = useState({ name: "", type: "", dilution_rate: "" });
   const [expandedCrops, setExpandedCrops] = useState<Set<number>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [locatingId, setLocatingId] = useState<number | null>(null);
 
-  // 作物ごとの統計(Web版 cropStats 相当)
+  // 作物ごとの統計（Web版 cropStats 相当: kg換算できる収穫のみ合算）
   const cropStats = crops.map(c => {
     const rs = reports.filter(r => r.crop_id === c.id);
     const tot = rs.reduce((s, r) => s + ((r.quantity_unit ?? "") === "" || r.quantity_unit === "kg" ? Number(r.quantity) || 0 : 0), 0);
-    const growDays = Math.max(0, Math.round((Date.parse(TODAY) - Date.parse(c.start_date)) / 86400000));
+    const growDays = c.start_date ? Math.max(0, Math.round((Date.parse(todayStr) - Date.parse(c.start_date)) / 86400000)) : null;
     return { id: c.id, count: rs.length, tot: Math.round(tot), growDays };
   });
 
-  // 圃場ごとの作付け履歴(Web版 getFieldCropHistory 相当)
+  // 圃場ごとの作付け履歴（Web版 getFieldCropHistory と同一）
   const getFieldCropHistory = (fieldName: string) => {
     const grouped = reports
       .filter(r => r.field === fieldName)
@@ -70,30 +72,55 @@ export default function ManageScreen({ subTab }: Props) {
     })).sort((a, b) => b.lastDate.localeCompare(a.lastDate));
   };
 
-  const addCrop = () => {
-    if (!cForm.name.trim()) return;
-    setCrops(prev => [...prev, {
-      id: Math.max(...prev.map(c => c.id)) + 1,
-      name: cForm.name.trim(), start_date: cForm.start_date,
-      target_yield: cForm.target_yield ? Number(cForm.target_yield) : undefined,
-    }]);
-    setCForm({ name: "", start_date: TODAY, target_yield: "" });
+  const handleAddCrop = async () => {
+    if (!cForm.name.trim() || submitting) return;
+    setSubmitting(true);
+    const err = await addCrop(cForm.name, cForm.start_date, cForm.target_yield);
+    setSubmitting(false);
+    if (err) { Alert.alert("追加に失敗しました", err); return; }
+    setCForm({ name: "", start_date: todayStr, target_yield: "" });
     setShowCropAddForm(false);
   };
 
-  const addField = () => {
-    if (!fForm.name.trim()) return;
-    setFields(prev => [...prev, { id: Math.max(...prev.map(f => f.id)) + 1, name: fForm.name.trim(), lat: null, lng: null }]);
+  const handleAddField = async () => {
+    if (!fForm.name.trim() || submitting) return;
+    setSubmitting(true);
+    const err = await addField(fForm.name);
+    setSubmitting(false);
+    if (err) { Alert.alert("追加に失敗しました", err); return; }
     setFForm({ name: "" });
   };
 
-  const addPesticide = () => {
-    if (!pForm.name.trim()) return;
-    setPesticides(prev => [...prev, {
-      id: `local-p${prev.length}`, name: pForm.name.trim(),
-      type: pForm.type.trim() || null, dilution_rate: pForm.dilution_rate.trim() || null,
-    }]);
+  const handleAddPesticide = async () => {
+    if (!pForm.name.trim() || submitting) return;
+    setSubmitting(true);
+    const err = await addPesticide(pForm.name, pForm.type, pForm.dilution_rate);
+    setSubmitting(false);
+    if (err) { Alert.alert("追加に失敗しました", err); return; }
     setPForm({ name: "", type: "", dilution_rate: "" });
+  };
+
+  // GPS現在地を圃場位置に設定（Web版 setFieldLocation の RN 版: expo-location）
+  const handleSetLocation = async (fieldId: number) => {
+    setLocatingId(fieldId);
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) { Alert.alert("位置情報の使用が許可されていません"); return; }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const err = await setFieldLocation(fieldId, pos.coords.latitude, pos.coords.longitude);
+      if (err) Alert.alert("設定に失敗しました", err);
+    } catch {
+      Alert.alert("GPS位置を取得できませんでした");
+    } finally {
+      setLocatingId(null);
+    }
+  };
+
+  const confirmDelete = (message: string, onConfirm: () => void) => {
+    Alert.alert("確認", message, [
+      { text: "キャンセル", style: "cancel" },
+      { text: "削除", style: "destructive", onPress: onConfirm },
+    ]);
   };
 
   return (
@@ -105,7 +132,7 @@ export default function ManageScreen({ subTab }: Props) {
       {/* ── 作物 ── */}
       {subTab === "crops" && (
         <>
-          {IS_ADMIN && (
+          {isAdmin && (
             <>
               <Pressable
                 onPress={() => setShowCropAddForm(p => !p)}
@@ -123,17 +150,26 @@ export default function ManageScreen({ subTab }: Props) {
                   <TextInput style={underlineInput} placeholder="例: キャベツ" placeholderTextColor={C.textMuted}
                     value={cForm.name} onChangeText={v => setCForm(f => ({ ...f, name: v }))} />
                   <Text style={lblStyle}>作付け日</Text>
-                  <TextInput style={underlineInput} value={cForm.start_date} onChangeText={v => setCForm(f => ({ ...f, start_date: v }))} />
+                  <Pressable onPress={() => setShowDatePicker(true)} style={[underlineInput, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
+                    <Text style={{ fontSize: 15, color: C.text }}>{cForm.start_date}</Text>
+                    <Feather name="calendar" size={14} color={C.textMuted} />
+                  </Pressable>
                   <Text style={lblStyle}>目標収穫量（kg/年・任意）</Text>
                   <TextInput style={underlineInput} placeholder="例: 500" placeholderTextColor={C.textMuted} keyboardType="numeric"
                     value={cForm.target_yield} onChangeText={v => setCForm(f => ({ ...f, target_yield: v }))} />
-                  <Btn variant="primary" size="lg" onPress={addCrop} icon={<Feather name="plus-circle" size={16} color="#fff" />}>作物を追加</Btn>
+                  <Btn variant="primary" size="lg" onPress={handleAddCrop} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
+                    {submitting ? "追加中..." : "作物を追加"}
+                  </Btn>
                 </View>
               )}
             </>
           )}
           <Text style={secStyle}>登録作物</Text>
-          {crops.map(c => {
+          {crops.length === 0 ? (
+            <View style={cardStyle}>
+              <Text style={{ fontSize: 13, color: C.textMuted }}>作物が登録されていません</Text>
+            </View>
+          ) : crops.map(c => {
             const stat = cropStats.find(cs => cs.id === c.id);
             const expanded = expandedCrops.has(c.id);
             return (
@@ -159,16 +195,19 @@ export default function ManageScreen({ subTab }: Props) {
                     >
                       <Feather name={expanded ? "chevron-down" : "chevron-right"} size={16} color={C.textSub} />
                     </Pressable>
-                    {IS_ADMIN && (
+                    {isAdmin && (
                       <RowMenu menuKey={`mc${c.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
-                        items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => setCrops(prev => prev.filter(x => x.id !== c.id)) }]} />
+                        items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => confirmDelete("この作物を削除しますか？", async () => {
+                          const err = await deleteCrop(c.id);
+                          if (err) Alert.alert("削除に失敗しました", err);
+                        }) }]} />
                     )}
                   </View>
                 </View>
                 {expanded && stat && (
                   <>
                     <View style={{ height: 1, backgroundColor: C.border, marginTop: 8, marginBottom: 12 }} />
-                    <View style={{ flexDirection: "row", backgroundColor: C.hairline, borderRadius: 10, overflow: "hidden", marginBottom: 12, gap: 1 }}>
+                    <View style={{ flexDirection: "row", backgroundColor: C.hairline, borderRadius: 10, overflow: "hidden", gap: 1 }}>
                       {[
                         { v: stat.growDays != null ? String(stat.growDays) : "—", l: "生育日数" },
                         { v: String(stat.count), l: "作業回数" },
@@ -180,7 +219,6 @@ export default function ManageScreen({ subTab }: Props) {
                         </View>
                       ))}
                     </View>
-                    <Text style={{ color: C.ink, fontSize: 13, fontWeight: "600" }}>分析で見る →</Text>
                   </>
                 )}
               </View>
@@ -192,19 +230,25 @@ export default function ManageScreen({ subTab }: Props) {
       {/* ── 圃場 ── */}
       {subTab === "fields" && (
         <>
-          {IS_ADMIN && (
+          {isAdmin && (
             <>
               <Text style={secStyle}>圃場を追加</Text>
               <View style={cardStyle}>
                 <Text style={lblStyle}>圃場名 *</Text>
                 <TextInput style={underlineInput} placeholder="例: A圃場" placeholderTextColor={C.textMuted}
                   value={fForm.name} onChangeText={v => setFForm({ name: v })} />
-                <Btn variant="primary" size="lg" onPress={addField} icon={<Feather name="plus-circle" size={16} color="#fff" />}>圃場を追加</Btn>
+                <Btn variant="primary" size="lg" onPress={handleAddField} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
+                  {submitting ? "追加中..." : "圃場を追加"}
+                </Btn>
               </View>
             </>
           )}
           <Text style={secStyle}>登録圃場</Text>
-          {fields.map(f => {
+          {fields.length === 0 ? (
+            <View style={cardStyle}>
+              <Text style={{ fontSize: 13, color: C.textMuted }}>圃場が登録されていません</Text>
+            </View>
+          ) : fields.map(f => {
             const history = getFieldCropHistory(f.name);
             return (
               <View key={f.id} style={cardStyle}>
@@ -215,11 +259,17 @@ export default function ManageScreen({ subTab }: Props) {
                       {f.lat ? `${f.lat.toFixed(4)}, ${f.lng?.toFixed(4)}` : "位置未設定"}
                     </Text>
                   </View>
-                  {IS_ADMIN && (
+                  {isAdmin && (
                     <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-                      <Btn variant="soft" size="sm" icon={<Feather name="navigation" size={12} color={C.ink} />}>現在地</Btn>
+                      <Btn variant="soft" size="sm" onPress={() => handleSetLocation(f.id)}
+                        icon={<Feather name="navigation" size={12} color={C.ink} />}>
+                        {locatingId === f.id ? "取得中..." : "現在地"}
+                      </Btn>
                       <RowMenu menuKey={`mf${f.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
-                        items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => setFields(prev => prev.filter(x => x.id !== f.id)) }]} />
+                        items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => confirmDelete("この圃場を削除しますか？", async () => {
+                          const err = await deleteField(f.id);
+                          if (err) Alert.alert("削除に失敗しました", err);
+                        }) }]} />
                     </View>
                   )}
                 </View>
@@ -253,7 +303,7 @@ export default function ManageScreen({ subTab }: Props) {
       {/* ── 農薬 ── */}
       {subTab === "pesticides" && (
         <>
-          {IS_ADMIN && (
+          {isAdmin && (
             <>
               <Text style={secStyle}>農薬を追加</Text>
               <View style={cardStyle}>
@@ -266,31 +316,55 @@ export default function ManageScreen({ subTab }: Props) {
                 <Text style={lblStyle}>希釈倍数（任意）</Text>
                 <TextInput style={underlineInput} placeholder="例: 1000倍" placeholderTextColor={C.textMuted}
                   value={pForm.dilution_rate} onChangeText={v => setPForm(f => ({ ...f, dilution_rate: v }))} />
-                <Btn variant="primary" size="lg" onPress={addPesticide} icon={<Feather name="plus-circle" size={16} color="#fff" />}>農薬を追加</Btn>
+                <Btn variant="primary" size="lg" onPress={handleAddPesticide} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
+                  {submitting ? "追加中..." : "農薬を追加"}
+                </Btn>
               </View>
             </>
           )}
           <Text style={secStyle}>登録農薬</Text>
-          <View style={[cardStyle, { paddingVertical: 0 }]}>
-            {pesticides.map((p, i) => (
-              <View key={p.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.hairline }}>
-                <View style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: C.pesticideBg, alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="droplet" size={14} color={C.pesticide} />
+          {pesticides.length === 0 ? (
+            <View style={cardStyle}>
+              <Text style={{ fontSize: 13, color: C.textMuted }}>農薬が登録されていません</Text>
+            </View>
+          ) : (
+            <View style={[cardStyle, { paddingVertical: 0 }]}>
+              {pesticides.map((p, i) => (
+                <View key={p.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.hairline }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: C.pesticideBg, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="droplet" size={14} color={C.pesticide} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontWeight: "700", fontSize: 14, color: C.text }}>{p.name}</Text>
+                    <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                      {[p.type, p.dilution_rate].filter(Boolean).join(" · ") || "詳細未設定"}
+                    </Text>
+                  </View>
+                  {isAdmin && (
+                    <RowMenu menuKey={`mp${p.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                      items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => confirmDelete("この農薬を削除しますか？", async () => {
+                        const err = await deletePesticide(p.id);
+                        if (err) Alert.alert("削除に失敗しました", err);
+                      }) }]} />
+                  )}
                 </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 14, color: C.text }}>{p.name}</Text>
-                  <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                    {[p.type, p.dilution_rate].filter(Boolean).join(" · ") || "詳細未設定"}
-                  </Text>
-                </View>
-                {IS_ADMIN && (
-                  <RowMenu menuKey={`mp${p.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
-                    items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => setPesticides(prev => prev.filter(x => x.id !== p.id)) }]} />
-                )}
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
         </>
+      )}
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={new Date(cForm.start_date + "T00:00:00")}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={(event, selected) => {
+            setShowDatePicker(false);
+            if (event.type === "dismissed" || !selected) return;
+            setCForm(f => ({ ...f, start_date: selected.toISOString().slice(0, 10) }));
+          }}
+        />
       )}
     </ScrollView>
   );

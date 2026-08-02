@@ -1,53 +1,71 @@
-import { useState } from "react";
-import { View, Text, TextInput, Pressable } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C } from "./tokens";
-import { comments as mockComments, userName, users } from "../mock";
+import { useStore } from "../lib/store";
+import type { Comment } from "../lib/types";
 
-// ─── コメントスレッド（src/ui/CommentThread.tsx の移植・モック動作）────────
+// ─── コメントスレッド（src/ui/CommentThread.tsx の移植・実データ）────────
 // 吹き出し（自分=緑塗り右寄せ・他人=灰左寄せ）、@メンション候補、入力ピル。
-// 投稿・編集はローカルstateのみ（Supabase なし）。
+// 読み込み・投稿・自分のコメント編集は Supabase 経由（store の CRUD を使用）。
 interface Props {
   targetType: "report" | "schedule";
   targetId: string;
-  currentUserId: number;
 }
 
 const fmtTime = (iso: string) => {
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
-  if (!m) return iso;
-  return `${Number(m[2])}/${Number(m[3])}${m[4] ? ` ${m[4]}:${m[5]}` : ""}`;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-export default function CommentThread({ targetType, targetId, currentUserId }: Props) {
-  const [comments, setComments] = useState(
-    mockComments.filter(c => c.target_type === targetType && c.target_id === targetId)
-  );
+export default function CommentThread({ targetType, targetId }: Props) {
+  const { currentUser, users, userName, loadComments, addComment, editComment } = useStore();
+  const currentUserId = currentUser?.id ?? 0;
+
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
 
-  const submit = () => {
-    if (!text.trim()) return;
-    setComments(prev => [...prev, {
-      id: `local-${prev.length}`, target_type: targetType, target_id: targetId,
-      user_id: currentUserId, message: text.trim(), created_at: "2026-08-02T12:00",
-    }]);
-    setText("");
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    loadComments(targetType, targetId).then(list => {
+      if (alive) { setComments(list); setLoading(false); }
+    });
+    return () => { alive = false; };
+  }, [targetType, targetId]);
+
+  const submit = async () => {
+    if (!text.trim() || sending) return;
+    setSending(true);
+    const ok = await addComment(targetType, targetId, text.trim());
+    if (ok) {
+      setComments(await loadComments(targetType, targetId));
+      setText("");
+    }
+    setSending(false);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingId || !editingText.trim()) return;
-    setComments(prev => prev.map(cm => cm.id === editingId ? { ...cm, message: editingText.trim() } : cm));
-    setEditingId(null);
-    setEditingText("");
+    const ok = await editComment(editingId, editingText.trim());
+    if (ok) {
+      setComments(prev => prev.map(cm => cm.id === editingId ? { ...cm, message: editingText.trim() } : cm));
+      setEditingId(null);
+      setEditingText("");
+    }
   };
 
   // ── @メンション（入力補完＋吹き出し内ハイライト）──
-  const userNameSet = new Set(users.map(u => u.name));
+  const mentionUsers = users.filter(u => u.role !== "viewer");
+  const userNameSet = new Set(mentionUsers.map(u => u.name));
   const mentionMatch = text.match(/@([^\s@]*)$/);
   const mentionCandidates = mentionMatch
-    ? users.filter(u => u.id !== currentUserId && (mentionMatch[1] === "" || u.name.includes(mentionMatch[1]))).slice(0, 4)
+    ? mentionUsers.filter(u => u.id !== currentUserId && (mentionMatch[1] === "" || u.name.includes(mentionMatch[1]))).slice(0, 4)
     : [];
   const insertMention = (name: string) => setText(t => t.replace(/@[^\s@]*$/, `@${name} `));
 
@@ -69,7 +87,11 @@ export default function CommentThread({ targetType, targetId, currentUserId }: P
         </Text>
       </View>
 
-      {comments.length === 0 ? (
+      {loading ? (
+        <View style={{ paddingVertical: 8, alignItems: "flex-start" }}>
+          <ActivityIndicator size="small" color={C.textMuted} />
+        </View>
+      ) : comments.length === 0 ? (
         <Text style={{ fontSize: 12, color: C.textMuted, paddingTop: 4, paddingBottom: 12 }}>まだコメントはありません</Text>
       ) : (
         <View style={{ gap: 8, marginBottom: 12 }}>
@@ -156,7 +178,9 @@ export default function CommentThread({ targetType, targetId, currentUserId }: P
           onPress={submit}
           style={{ width: 42, height: 42, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: text.trim() ? C.ink : C.well }}
         >
-          <Feather name="send" size={15} color={text.trim() ? "#fff" : C.textMuted} />
+          {sending
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Feather name="send" size={15} color={text.trim() ? "#fff" : C.textMuted} />}
         </Pressable>
       </View>
     </View>

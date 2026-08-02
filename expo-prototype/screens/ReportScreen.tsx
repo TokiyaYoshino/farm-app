@@ -5,23 +5,25 @@ import { C, SHADOW, RADIUS, workTypeColor, cropColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import CalendarView from "./CalendarView";
 import ReportDetailSheet from "./ReportDetailSheet";
-import {
-  reports, schedules, crops, fields, users, pesticides, TODAY,
-  cropName, userName, commentCountOf, scheduleTitle, WORK_TEMPLATES,
-  type Report,
-} from "../mock";
+import Picker from "../ui/Picker";
+import { useStore } from "../lib/store";
+import { WORK_TEMPLATES, type Report } from "../lib/types";
 
-// ─── 作業記録（src/App.tsx tab==="report" ブロックの移植）──────────────
-// 表示モード切替・検索バー・フィルタチップ・記録カードの構成は Web 版と同一。
-// フィルタチップは Web の <select> の代わりにタップでローテーション（試作のため簡略、見た目は同一）
+// ─── 作業記録（src/App.tsx tab==="report" ブロックの移植・実データ）──────
+// 表示モード切替・検索バー・フィルタチップ・記録カード・未報告リスト。
 export default function ReportScreen() {
-  const [reportView, setReportView] = useState<"calendar" | "list">("list");
+  const { reports, schedules, crops, fields, users, pesticides, cropName, userName, commentCountOf } = useStore();
+
+  const [reportView, setReportView] = useState<"calendar" | "list">("calendar");
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [query, setQuery] = useState("");
   const [filterCrop, setFilterCrop] = useState(0);
   const [filterField, setFilterField] = useState("");
   const [filterWorkType, setFilterWorkType] = useState("");
   const [filterUser, setFilterUser] = useState(0);
+  const [pickerFor, setPickerFor] = useState<"crop" | "field" | "work" | "user" | null>(null);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   const filterActive = !!(query || filterCrop || filterField || filterWorkType || filterUser);
   const filtered = reports.filter(r =>
@@ -32,22 +34,14 @@ export default function ReportScreen() {
     (!filterUser || r.user_id === filterUser)
   );
 
-  const cycleCrop = () => setFilterCrop(p => {
-    const ids = [0, ...crops.map(c => c.id)];
-    return ids[(ids.indexOf(p) + 1) % ids.length];
-  });
-  const cycleField = () => setFilterField(p => {
-    const names = ["", ...fields.map(f => f.name)];
-    return names[(names.indexOf(p) + 1) % names.length];
-  });
-  const cycleWorkType = () => setFilterWorkType(p => {
-    const types = ["", ...WORK_TEMPLATES];
-    return types[(types.indexOf(p) + 1) % types.length];
-  });
-  const cycleUser = () => setFilterUser(p => {
-    const ids = [0, ...users.filter(u => u.role !== "viewer").map(u => u.id)];
-    return ids[(ids.indexOf(p) + 1) % ids.length];
-  });
+  const scheduleTitle = (s: typeof schedules[number]) => (s.title && s.title !== s.work_type ? s.title : "");
+
+  // 予定と実績のマッチング（Web版 matchReportToSchedule と同一の緩い判定）
+  const matchReport = (s: typeof schedules[number]) =>
+    reports.find(r => r.user_id === (s.assigned_user_id ?? s.user_id) && r.date === s.date) ?? null;
+
+  const todayScheds = schedules.filter(s => s.date === todayStr);
+  const unreported = schedules.filter(s => s.date < todayStr && !matchReport(s));
 
   const chip = (active: boolean) => ({
     backgroundColor: active ? C.inkSoft : C.well,
@@ -61,10 +55,7 @@ export default function ReportScreen() {
     color: active ? C.ink : C.textSub,
   });
 
-  const todayScheds = schedules.filter(s => s.date === TODAY);
-  const unreported = schedules.filter(s =>
-    s.date < TODAY && !reports.some(r => r.user_id === (s.assigned_user_id ?? s.user_id) && r.date === s.date)
-  );
+  const workers = users.filter(u => u.role !== "viewer");
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 }}>
@@ -91,6 +82,7 @@ export default function ReportScreen() {
         <>
           <CalendarView />
 
+          {/* 今日の予定 */}
           <View style={{ marginTop: 16 }}>
             <Text style={{ fontSize: 12, fontWeight: "600", color: C.textMuted, marginBottom: 8, letterSpacing: 0.4, textTransform: "uppercase" }}>今日の予定</Text>
             {todayScheds.length === 0 ? (
@@ -119,12 +111,12 @@ export default function ReportScreen() {
                       }}>{meta}</Text>
                     )}
                   </View>
-                  <Btn variant="secondary" size="sm" icon={<Feather name="clipboard" size={13} color={C.text} />}>実績にする</Btn>
                 </View>
               );
             })}
           </View>
 
+          {/* 未報告の作業 */}
           {unreported.length > 0 && (
             <View style={{ marginTop: 16 }}>
               <Text style={{ fontSize: 13, fontWeight: "700", color: C.warning, marginBottom: 8 }}>未報告の作業</Text>
@@ -132,7 +124,7 @@ export default function ReportScreen() {
                 {unreported.map((s, i) => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
                   return (
-                    <Pressable key={s.id} style={{ paddingVertical: 14, borderBottomWidth: i === unreported.length - 1 ? 0 : 1, borderBottomColor: C.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View key={s.id} style={{ paddingVertical: 14, borderBottomWidth: i === unreported.length - 1 ? 0 : 1, borderBottomColor: C.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 5 }}>
                           <Text numberOfLines={1} style={{ fontWeight: "700", fontSize: 13, color: C.text, flex: 1 }}>{scheduleTitle(s) || s.work_type}</Text>
@@ -149,7 +141,7 @@ export default function ReportScreen() {
                         </Text>
                       </View>
                       <Feather name="chevron-right" size={16} color={C.textMuted} />
-                    </Pressable>
+                    </View>
                   );
                 })}
               </View>
@@ -177,33 +169,28 @@ export default function ReportScreen() {
             )}
           </View>
 
-          {/* フィルタチップ */}
+          {/* フィルタチップ（タップでピッカー） */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }} contentContainerStyle={{ gap: 8, paddingBottom: 6 }}>
-            <Pressable onPress={cycleCrop} style={chip(!!filterCrop)}>
+            <Pressable onPress={() => setPickerFor("crop")} style={chip(!!filterCrop)}>
               <Text style={chipText(!!filterCrop)}>作物：{filterCrop ? cropName(filterCrop) : "すべて"}</Text>
             </Pressable>
-            <Pressable onPress={cycleField} style={chip(!!filterField)}>
+            <Pressable onPress={() => setPickerFor("field")} style={chip(!!filterField)}>
               <Text style={chipText(!!filterField)}>圃場：{filterField || "すべて"}</Text>
             </Pressable>
-            <Pressable onPress={cycleWorkType} style={chip(!!filterWorkType)}>
+            <Pressable onPress={() => setPickerFor("work")} style={chip(!!filterWorkType)}>
               <Text style={chipText(!!filterWorkType)}>作業：{filterWorkType || "すべて"}</Text>
             </Pressable>
-            <Pressable onPress={cycleUser} style={chip(!!filterUser)}>
+            <Pressable onPress={() => setPickerFor("user")} style={chip(!!filterUser)}>
               <Text style={chipText(!!filterUser)}>担当：{filterUser ? userName(filterUser) : "すべて"}</Text>
             </Pressable>
           </ScrollView>
 
-          {/* 件数＋クリア＋帳票出力 */}
+          {/* 件数＋クリア */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8, minHeight: 28, gap: 8 }}>
             <Text style={{ fontSize: 12, color: C.textMuted }}>{filtered.length}件の記録</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: "center" }}>
-              {filterActive && (
-                <Btn variant="tertiary" size="sm" onPress={() => { setQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }}>条件をクリア</Btn>
-              )}
-              <Btn variant="secondary" size="sm" icon={<Feather name="star" size={13} color={C.text} />}>AI日報</Btn>
-              <Btn variant="secondary" size="sm" icon={<Feather name="message-square" size={13} color={C.text} />}>AI検索</Btn>
-              <Btn variant="secondary" size="sm" icon={<Feather name="download" size={13} color={C.text} />}>帳票出力</Btn>
-            </ScrollView>
+            {filterActive && (
+              <Btn variant="tertiary" size="sm" onPress={() => { setQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }}>条件をクリア</Btn>
+            )}
           </View>
 
           {/* 結果 */}
@@ -213,10 +200,10 @@ export default function ReportScreen() {
                 {filterActive ? "条件に一致する記録がありません" : "まだ作業報告がありません"}
               </Text>
             </View>
-          ) : filtered.map(r => {
+          ) : filtered.slice(0, 100).map(r => {
             const wc = r.work_type ? workTypeColor(r.work_type) : null;
             const meta = [
-              r.quantity ? `${r.quantity}kg` : "",
+              r.quantity ? `${r.quantity}${r.quantity_unit || "kg"}` : "",
               (r.work_start && r.work_end) ? `${r.work_start}〜${r.work_end}` : r.work_time ? `${r.work_time}h` : "",
               r.pesticide_id ? (pesticides.find(p => p.id === r.pesticide_id)?.name ?? "") : "",
               userName(r.user_id),
@@ -254,14 +241,48 @@ export default function ReportScreen() {
                 )}
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                   <Btn variant="secondary" size="sm" style={{ flex: 1 }} onPress={() => setSelectedReport(r)}>詳細を見る</Btn>
-                  <Btn variant="soft" size="sm" style={{ flex: 1 }} icon={<Feather name="copy" size={12} color={C.ink} />}>コピーして作成</Btn>
                 </View>
               </View>
             );
           })}
         </>
       )}
+
       <ReportDetailSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
+
+      {/* フィルタピッカー */}
+      <Picker
+        open={pickerFor === "crop"}
+        title="作物で絞り込み"
+        options={[{ key: "0", label: "すべて" }, ...crops.map(c => ({ key: String(c.id), label: c.name }))]}
+        value={String(filterCrop)}
+        onSelect={v => setFilterCrop(Number(v))}
+        onClose={() => setPickerFor(null)}
+      />
+      <Picker
+        open={pickerFor === "field"}
+        title="圃場で絞り込み"
+        options={[{ key: "", label: "すべて" }, ...fields.map(f => ({ key: f.name, label: f.name }))]}
+        value={filterField}
+        onSelect={setFilterField}
+        onClose={() => setPickerFor(null)}
+      />
+      <Picker
+        open={pickerFor === "work"}
+        title="作業で絞り込み"
+        options={[{ key: "", label: "すべて" }, ...WORK_TEMPLATES.map(t => ({ key: t, label: t }))]}
+        value={filterWorkType}
+        onSelect={setFilterWorkType}
+        onClose={() => setPickerFor(null)}
+      />
+      <Picker
+        open={pickerFor === "user"}
+        title="担当で絞り込み"
+        options={[{ key: "0", label: "すべて" }, ...workers.map(u => ({ key: String(u.id), label: u.name }))]}
+        value={String(filterUser)}
+        onSelect={v => setFilterUser(Number(v))}
+        onClose={() => setPickerFor(null)}
+      />
     </ScrollView>
   );
 }

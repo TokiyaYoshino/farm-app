@@ -1,46 +1,57 @@
 import { useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Image, Platform } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { C, SHADOW, workTypeColor } from "../ui/tokens";
 import BottomSheet from "../ui/BottomSheet";
 import CommentThread from "../ui/CommentThread";
-import {
-  reports as allReports, schedules as allSchedules, users, crops, pesticides,
-  TODAY, cropName, userName, WORK_TEMPLATES,
-  type Report, type Schedule,
-} from "../mock";
+import Picker from "../ui/Picker";
+import { useStore } from "../lib/store";
+import { WORK_TEMPLATES, type Report, type Schedule } from "../lib/types";
 
-// ─── カレンダー（src/components/CalendarView.tsx の移植）───────────────
-// 月/週グリッド・フィルタ/並替・日別ボトムシート・詳細ビュー・予定追加/編集。
-// 予定の追加・編集・削除はローカルstateのみ（モック動作）。
+// ─── カレンダー（src/components/CalendarView.tsx の移植・実データ）───────
+// 月/週グリッド・フィルタ/並替・日別ボトムシート・詳細ビュー・予定CRUD。
 const DOW = ["日", "月", "火", "水", "木", "金", "土"];
 const shortName = (name: string) => name.slice(0, 2);
 
 type DetailItem = { kind: "report"; data: Report } | { kind: "schedule"; data: Schedule };
 
-const CURRENT_USER_ID = 1; // モック: 吉野(admin)
-const IS_ADMIN = true;
-
 export default function CalendarView() {
-  const [schedules, setSchedules] = useState<Schedule[]>(allSchedules);
-  const [reports] = useState<Report[]>(allReports);
+  const {
+    reports, schedules, users, crops, pesticides,
+    currentUser, isAdmin, cropName, userName,
+    addSchedule, updateSchedule, deleteSchedule, deleteReport,
+  } = useStore();
+  const currentUserId = currentUser?.id ?? 0;
 
-  const [viewYear, setViewYear] = useState(2026);
-  const [viewMonth, setViewMonth] = useState(7); // 0-indexed: 8月
+  const today = new Date().toISOString().slice(0, 10);
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ assignedUserId: 0, workType: "収穫", note: "", crop: "" });
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
 
   const [detail, setDetail] = useState<DetailItem | null>(null);
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [editForm, setEditForm] = useState({ date: "", assignedUserId: 0, workType: "収穫", note: "", crop: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
 
   const [currentFilter, setCurrentFilter] = useState<"all" | "reports" | "schedules" | "user">("all");
   const [filterUserId, setFilterUserId] = useState(0);
   const [currentSort, setCurrentSort] = useState<"date-desc" | "date-asc" | "user" | "work_type">("date-desc");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [calView, setCalView] = useState<"week" | "month">("month");
-  const [weekStart, setWeekStart] = useState("2026-07-27"); // 月曜
+  const [weekStart, setWeekStart] = useState<string>(() => {
+    const d = new Date();
+    const dow = d.getDay();
+    const mon = new Date(d);
+    mon.setDate(d.getDate() - ((dow + 6) % 7));
+    return mon.toISOString().slice(0, 10);
+  });
+  const [pickerFor, setPickerFor] = useState<"formWorker" | "formWork" | "formCrop" | "editWorker" | "editWork" | "editCrop" | null>(null);
 
   const goPrev = () => {
     if (calView === "week") {
@@ -93,38 +104,59 @@ export default function CalendarView() {
   }, [schedules]);
 
   const pesticideName = (id?: string) => (id ? pesticides.find(p => p.id === id)?.name ?? "" : "");
+  const scheduleTitle = (s: Schedule) => (s.title && s.title !== s.work_type ? s.title : "");
 
   const closePopup = () => {
     setSelectedDate(null);
     setShowForm(false);
     setForm({ assignedUserId: 0, workType: "収穫", note: "", crop: "" });
+    setAddError("");
     setDetail(null);
     setEditingSchedule(false);
   };
   const backToList = () => { setDetail(null); setEditingSchedule(false); };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!selectedDate || !form.workType) return;
-    setSchedules(prev => [...prev, {
-      id: `local-s${prev.length}`, user_id: CURRENT_USER_ID,
-      assigned_user_id: form.assignedUserId || undefined,
-      work_type: form.workType, title: form.workType, date: selectedDate,
-      note: form.note.trim(), crop: form.crop, created_at: TODAY,
-    }]);
-    setForm({ assignedUserId: 0, workType: "収穫", note: "", crop: "" });
-    setShowForm(false);
+    setAdding(true);
+    setAddError("");
+    const ok = await addSchedule(selectedDate, form.note.trim(), form.crop, form.assignedUserId || null, form.workType);
+    setAdding(false);
+    if (ok) {
+      setForm({ assignedUserId: 0, workType: "収穫", note: "", crop: "" });
+      setShowForm(false);
+    } else {
+      setAddError("追加に失敗しました。もう一度お試しください。");
+    }
   };
 
-  const saveEdit = () => {
-    if (detail?.kind !== "schedule") return;
-    const id = detail.data.id;
-    setSchedules(prev => prev.map(s => s.id === id ? {
-      ...s, date: editForm.date, work_type: editForm.workType, title: editForm.workType,
-      note: editForm.note, crop: editForm.crop,
-      assigned_user_id: editForm.assignedUserId || undefined,
-    } : s));
-    setEditingSchedule(false);
-    backToList();
+  const saveEdit = async () => {
+    if (detail?.kind !== "schedule" || savingEdit) return;
+    setSavingEdit(true);
+    const ok = await updateSchedule(detail.data.id, editForm.date, editForm.note, editForm.crop, editForm.assignedUserId || null, editForm.workType);
+    setSavingEdit(false);
+    if (ok) { setEditingSchedule(false); backToList(); }
+  };
+
+  const confirmDeleteReport = (id: number) => {
+    Alert.alert("確認", "この作業報告を削除しますか？", [
+      { text: "キャンセル", style: "cancel" },
+      { text: "削除", style: "destructive", onPress: async () => {
+        const err = await deleteReport(id);
+        if (err) Alert.alert("削除に失敗しました", err);
+        else backToList();
+      } },
+    ]);
+  };
+  const confirmDeleteSchedule = (id: string) => {
+    Alert.alert("確認", "この予定を削除しますか？", [
+      { text: "キャンセル", style: "cancel" },
+      { text: "削除", style: "destructive", onPress: async () => {
+        const err = await deleteSchedule(id);
+        if (err) Alert.alert("削除に失敗しました", err);
+        else backToList();
+      } },
+    ]);
   };
 
   const sortReports = (items: Report[]) => [...items].sort((a, b) => {
@@ -174,9 +206,8 @@ export default function CalendarView() {
     return { items: all.slice(0, 2), extra: Math.max(0, all.length - 2) };
   };
 
-  // 日付セル(週/月共通)
   const DayCell = ({ date, minHeight }: { date: string | null; minHeight: number }) => {
-    const isToday = date === TODAY;
+    const isToday = date === today;
     const isSel = date === selectedDate;
     const dow = date ? new Date(date + "T00:00:00").getDay() : 0;
     const { items, extra } = cellItems(date);
@@ -213,27 +244,19 @@ export default function CalendarView() {
     color: active ? C.ink : C.textSub,
   });
 
-  // 選択系(RN版はselect代替としてチップ横並び)
-  const chipRow = (opts: { key: string; label: string }[], value: string, onSelect: (v: string) => void) => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ gap: 6 }}>
-      {opts.map(o => (
-        <Pressable key={o.key} onPress={() => onSelect(o.key)}
-          style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, backgroundColor: value === o.key ? C.inkSoft : C.card }}>
-          <Text style={{ fontSize: 13, fontWeight: "600", color: value === o.key ? C.ink : C.textSub }}>{o.label}</Text>
-        </Pressable>
-      ))}
-    </ScrollView>
+  const formSelectRow = (label: string, value: string, onPress: () => void) => (
+    <Pressable onPress={onPress} style={{ backgroundColor: C.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <Text style={{ fontSize: 16, color: value ? C.text : C.textMuted }}>{value || label}</Text>
+      <Feather name="chevron-down" size={14} color={C.textMuted} />
+    </Pressable>
   );
 
-  const workerOpts = [{ key: "0", label: "作業者(任意)" }, ...users.filter(u => u.role !== "viewer").map(u => ({ key: String(u.id), label: u.name }))];
-  const workTypeOpts = WORK_TEMPLATES.map(t => ({ key: t, label: t }));
-  const cropOpts = [{ key: "", label: "作物(任意)" }, ...crops.map(c => ({ key: c.name, label: c.name }))];
+  const workers = users.filter(u => u.role !== "viewer");
 
   return (
     <>
       {/* ── カレンダー本体 ── */}
       <View style={{ backgroundColor: C.card, borderRadius: 20, overflow: "hidden", marginBottom: 14, ...SHADOW.card }}>
-        {/* nav */}
         <View style={{ paddingTop: 12, paddingHorizontal: 14, paddingBottom: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Pressable onPress={goPrev} style={{ width: 34, height: 34, backgroundColor: C.well, borderRadius: 999, alignItems: "center", justifyContent: "center" }}>
             <Feather name="chevron-left" size={16} color={C.textSub} />
@@ -254,21 +277,18 @@ export default function CalendarView() {
           </Pressable>
         </View>
 
-        {/* 曜日ヘッダー */}
         <View style={{ flexDirection: "row" }}>
           {DOW.map(d => (
             <Text key={d} style={{ flex: 1, textAlign: "center", paddingVertical: 5, fontSize: 11, fontWeight: "600", letterSpacing: 1, color: C.textMuted }}>{d}</Text>
           ))}
         </View>
 
-        {/* 週表示 */}
         {calView === "week" && (
           <View style={{ flexDirection: "row", gap: 1, backgroundColor: C.border }}>
             {weekDays.map(date => <DayCell key={date} date={date} minHeight={80} />)}
           </View>
         )}
 
-        {/* 月表示 */}
         {calView === "month" && (
           <View style={{ gap: 1, backgroundColor: C.border }}>
             {Array.from({ length: days.length / 7 }, (_, w) => (
@@ -298,7 +318,7 @@ export default function CalendarView() {
           </View>
           {currentFilter === "user" && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 7 }} contentContainerStyle={{ paddingHorizontal: 10, gap: 5 }}>
-              {[{ id: 0, name: "全員" }, ...users.filter(u => u.role !== "viewer")].map(u => (
+              {[{ id: 0, name: "全員" }, ...workers].map(u => (
                 <Pressable key={u.id} onPress={() => setFilterUserId(u.id)} style={filterChip(filterUserId === u.id)}>
                   <Text style={filterChipText(filterUserId === u.id)}>{u.name}</Text>
                 </Pressable>
@@ -327,7 +347,6 @@ export default function CalendarView() {
         <View style={{ paddingHorizontal: 16, paddingBottom: 32 }}>
           {detail ? (
             <>
-              {/* 詳細ヘッダー */}
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 }}>
                 <Pressable onPress={backToList} style={{ backgroundColor: C.well, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Feather name="chevron-left" size={14} color={C.textSub} />
@@ -338,7 +357,7 @@ export default function CalendarView() {
                     ? `${userName(detail.data.user_id)} の作業報告`
                     : `${userName(detail.data.assigned_user_id ?? detail.data.user_id)} の予定`}
                 </Text>
-                {detail.kind === "schedule" && !editingSchedule && (
+                {detail.kind === "schedule" && !editingSchedule && (isAdmin || detail.data.user_id === currentUserId || detail.data.assigned_user_id === currentUserId) && (
                   <Pressable
                     onPress={() => {
                       const s = detail.data;
@@ -399,12 +418,14 @@ export default function CalendarView() {
                         </View>
                       ) : null}
                     </View>
-                    {!!r.pesticide_id && (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.pesticideBg, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 8, alignSelf: "flex-start" }}>
+                    {(r.pesticides_used?.length ? r.pesticides_used : r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : []).map(pu => (
+                      <View key={pu.id} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.pesticideBg, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 8, alignSelf: "flex-start" }}>
                         <Feather name="droplet" size={12} color={C.pesticide} />
-                        <Text style={{ fontSize: 12, color: C.pesticide }}>{pesticideName(r.pesticide_id)}</Text>
+                        <Text style={{ fontSize: 12, color: C.pesticide }}>
+                          {pesticideName(pu.id)}{pu.amount ? ` / ${pu.amount}` : ""}
+                        </Text>
                       </View>
-                    )}
+                    ))}
                     {!!r.weather && (
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                         <Text style={{ fontSize: 12, color: C.textMuted }}>{r.weather}{r.temp ? ` ${r.temp}°C` : ""}</Text>
@@ -427,8 +448,11 @@ export default function CalendarView() {
                         <Text style={{ fontSize: 12, color: C.textSub }}>{r.note}</Text>
                       </View>
                     )}
-                    {(IS_ADMIN || r.user_id === CURRENT_USER_ID) && (
-                      <Pressable onPress={backToList} style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 }}>
+                    {!!r.image_url && (
+                      <Image source={{ uri: r.image_url }} style={{ width: "100%", height: 240, borderRadius: 10, marginTop: 8 }} resizeMode="cover" />
+                    )}
+                    {(isAdmin || r.user_id === currentUserId) && (
+                      <Pressable onPress={() => confirmDeleteReport(r.id)} style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 }}>
                         <Feather name="trash-2" size={12} color={C.danger} />
                         <Text style={{ fontSize: 12, fontWeight: "600", color: C.danger }}>この記録を削除</Text>
                       </Pressable>
@@ -440,14 +464,10 @@ export default function CalendarView() {
               {/* 予定編集フォーム */}
               {detail.kind === "schedule" && editingSchedule && (
                 <View style={{ backgroundColor: C.well, borderRadius: 14, padding: 14, marginBottom: 14 }}>
-                  <TextInput
-                    value={editForm.date}
-                    onChangeText={v => setEditForm(f => ({ ...f, date: v }))}
-                    style={{ backgroundColor: C.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, fontSize: 16, color: C.text, marginBottom: 8 }}
-                  />
-                  {chipRow(workerOpts, String(editForm.assignedUserId), v => setEditForm(f => ({ ...f, assignedUserId: Number(v) })))}
-                  {chipRow(workTypeOpts, editForm.workType, v => setEditForm(f => ({ ...f, workType: v })))}
-                  {chipRow(cropOpts, editForm.crop, v => setEditForm(f => ({ ...f, crop: v })))}
+                  {formSelectRow("日付", editForm.date, () => setShowEditDatePicker(true))}
+                  {formSelectRow("作業者（任意）", editForm.assignedUserId ? userName(editForm.assignedUserId) : "", () => setPickerFor("editWorker"))}
+                  {formSelectRow("作業種別", editForm.workType, () => setPickerFor("editWork"))}
+                  {formSelectRow("作物（任意）", editForm.crop, () => setPickerFor("editCrop"))}
                   <TextInput
                     placeholder="メモ（任意）"
                     placeholderTextColor={C.textMuted}
@@ -459,8 +479,8 @@ export default function CalendarView() {
                     <Pressable onPress={() => setEditingSchedule(false)} style={{ flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: C.card, alignItems: "center" }}>
                       <Text style={{ color: C.textSub, fontSize: 14, fontWeight: "700" }}>キャンセル</Text>
                     </Pressable>
-                    <Pressable onPress={saveEdit} style={{ flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: C.info, alignItems: "center" }}>
-                      <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>保存</Text>
+                    <Pressable onPress={saveEdit} style={{ flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: savingEdit ? C.border : C.info, alignItems: "center" }}>
+                      <Text style={{ color: savingEdit ? C.textMuted : "#fff", fontSize: 14, fontWeight: "700" }}>{savingEdit ? "保存中..." : "保存"}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -497,13 +517,12 @@ export default function CalendarView() {
                         <Text style={{ fontSize: 12, color: C.textSub }}>{s.note}</Text>
                       </View>
                     )}
-                    <Pressable
-                      onPress={() => { setSchedules(prev => prev.filter(x => x.id !== s.id)); backToList(); }}
-                      style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 }}
-                    >
-                      <Feather name="trash-2" size={12} color={C.danger} />
-                      <Text style={{ fontSize: 12, fontWeight: "600", color: C.danger }}>この予定を削除</Text>
-                    </Pressable>
+                    {(isAdmin || s.user_id === currentUserId || s.assigned_user_id === currentUserId) && (
+                      <Pressable onPress={() => confirmDeleteSchedule(s.id)} style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 }}>
+                        <Feather name="trash-2" size={12} color={C.danger} />
+                        <Text style={{ fontSize: 12, fontWeight: "600", color: C.danger }}>この予定を削除</Text>
+                      </Pressable>
+                    )}
                   </View>
                 );
               })()}
@@ -511,12 +530,10 @@ export default function CalendarView() {
               <CommentThread
                 targetType={detail.kind}
                 targetId={detail.kind === "report" ? String(detail.data.id) : detail.data.id}
-                currentUserId={CURRENT_USER_ID}
               />
             </>
           ) : (
             <>
-              {/* 日付一覧ヘッダー */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <Text style={{ fontWeight: "700", fontSize: 17, color: C.text }}>{selectedDate}</Text>
                 <View style={{ flexDirection: "row", gap: 6 }}>
@@ -533,13 +550,12 @@ export default function CalendarView() {
                 </View>
               </View>
 
-              {/* 予定追加フォーム */}
               {showForm && (
                 <View style={{ backgroundColor: C.well, borderRadius: 14, padding: 14, marginBottom: 14 }}>
                   <Text style={{ fontSize: 12, fontWeight: "700", color: C.textSub, marginBottom: 10 }}>新しい予定</Text>
-                  {chipRow(workerOpts, String(form.assignedUserId), v => setForm(f => ({ ...f, assignedUserId: Number(v) })))}
-                  {chipRow(workTypeOpts, form.workType, v => setForm(f => ({ ...f, workType: v })))}
-                  {chipRow(cropOpts, form.crop, v => setForm(f => ({ ...f, crop: v })))}
+                  {formSelectRow("作業者（任意）", form.assignedUserId ? userName(form.assignedUserId) : "", () => setPickerFor("formWorker"))}
+                  {formSelectRow("作業種別", form.workType, () => setPickerFor("formWork"))}
+                  {formSelectRow("作物（任意）", form.crop, () => setPickerFor("formCrop"))}
                   <TextInput
                     placeholder="メモ（任意）"
                     placeholderTextColor={C.textMuted}
@@ -547,13 +563,13 @@ export default function CalendarView() {
                     onChangeText={v => setForm(f => ({ ...f, note: v }))}
                     style={{ backgroundColor: C.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, fontSize: 16, color: C.text, marginBottom: 10 }}
                   />
-                  <Pressable onPress={handleAdd} style={{ paddingVertical: 11, borderRadius: 8, backgroundColor: C.info, alignItems: "center" }}>
-                    <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>追加する</Text>
+                  {!!addError && <Text style={{ color: C.danger, fontSize: 12, marginBottom: 8 }}>{addError}</Text>}
+                  <Pressable onPress={handleAdd} style={{ paddingVertical: 11, borderRadius: 8, backgroundColor: adding ? C.border : C.info, alignItems: "center" }}>
+                    <Text style={{ color: adding ? C.textMuted : "#fff", fontSize: 14, fontWeight: "700" }}>{adding ? "追加中..." : "追加する"}</Text>
                   </Pressable>
                 </View>
               )}
 
-              {/* 作業報告リスト */}
               {dayReports.length > 0 && (
                 <View style={{ marginBottom: 14 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 }}>
@@ -601,6 +617,7 @@ export default function CalendarView() {
                               <Text style={{ fontSize: 11, color: C.textMuted }}>{r.work_time}h</Text>
                             </View>
                           ) : null}
+                          {!!r.image_url && <Text style={{ fontSize: 11, color: C.textSub }}>📷 写真あり</Text>}
                         </View>
                         {!!r.note && (
                           <View style={{ backgroundColor: C.card, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 7, marginTop: 5 }}>
@@ -613,7 +630,6 @@ export default function CalendarView() {
                 </View>
               )}
 
-              {/* 予定リスト */}
               {daySchedules.length > 0 && (
                 <View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 }}>
@@ -661,6 +677,51 @@ export default function CalendarView() {
           )}
         </View>
       </BottomSheet>
+
+      {/* ピッカー群 */}
+      <Picker
+        open={pickerFor === "formWorker" || pickerFor === "editWorker"}
+        title="作業者"
+        options={[{ key: "0", label: "指定なし" }, ...workers.map(u => ({ key: String(u.id), label: u.name }))]}
+        value={String(pickerFor === "editWorker" ? editForm.assignedUserId : form.assignedUserId)}
+        onSelect={v => pickerFor === "editWorker"
+          ? setEditForm(f => ({ ...f, assignedUserId: Number(v) }))
+          : setForm(f => ({ ...f, assignedUserId: Number(v) }))}
+        onClose={() => setPickerFor(null)}
+      />
+      <Picker
+        open={pickerFor === "formWork" || pickerFor === "editWork"}
+        title="作業種別"
+        options={WORK_TEMPLATES.map(t => ({ key: t, label: t }))}
+        value={pickerFor === "editWork" ? editForm.workType : form.workType}
+        onSelect={v => pickerFor === "editWork"
+          ? setEditForm(f => ({ ...f, workType: v }))
+          : setForm(f => ({ ...f, workType: v }))}
+        onClose={() => setPickerFor(null)}
+      />
+      <Picker
+        open={pickerFor === "formCrop" || pickerFor === "editCrop"}
+        title="作物"
+        options={[{ key: "", label: "指定なし" }, ...crops.map(c => ({ key: c.name, label: c.name }))]}
+        value={pickerFor === "editCrop" ? editForm.crop : form.crop}
+        onSelect={v => pickerFor === "editCrop"
+          ? setEditForm(f => ({ ...f, crop: v }))
+          : setForm(f => ({ ...f, crop: v }))}
+        onClose={() => setPickerFor(null)}
+      />
+
+      {showEditDatePicker && (
+        <DateTimePicker
+          value={new Date((editForm.date || today) + "T00:00:00")}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={(event, selected) => {
+            setShowEditDatePicker(false);
+            if (event.type === "dismissed" || !selected) return;
+            setEditForm(f => ({ ...f, date: selected.toISOString().slice(0, 10) }));
+          }}
+        />
+      )}
     </>
   );
 }

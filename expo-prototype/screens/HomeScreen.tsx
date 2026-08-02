@@ -2,19 +2,30 @@ import { View, Text, Pressable, ScrollView } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C, SHADOW, RADIUS, workTypeColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
-import {
-  reports, schedules, comments, weatherNow, TODAY,
-  cropName, userName, scheduleTitle,
-} from "../mock";
+import { useStore } from "../lib/store";
 
-// ─── ダッシュボード（src/App.tsx tab==="home" ブロックの移植）──────────
-// カード構成・余白・フォントサイズは Web 版の値をそのまま使用
-export default function HomeScreen() {
-  const sevenAgo = "2026-07-25";
-  const weekStart = "2026-07-27";
+// ─── ダッシュボード（src/App.tsx tab==="home" ブロックの移植・実データ）───
+interface Props {
+  onGoReport: () => void;
+  onQuickReport: () => void;
+}
+
+export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
+  const { reports, schedules, comments, wxAuto, wxLoading, weatherCoords, cropName, userName } = useStore();
+
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const sevenAgo = new Date(today.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+  // 今週の開始(日曜)
+  const weekStartDate = new Date(today);
+  weekStartDate.setDate(today.getDate() - today.getDay());
+  const weekStart = weekStartDate.toISOString().slice(0, 10);
+
   const workCount7d = reports.filter(r => r.date >= sevenAgo).length;
   const weekHarvest = reports.filter(r => r.date >= weekStart).reduce((s, r) => s + (Number(r.quantity) || 0), 0);
-  const todayScheds = schedules.filter(s => s.date === TODAY);
+  const todayScheds = schedules.filter(s => s.date === todayStr);
+
+  const scheduleTitle = (s: typeof schedules[number]) => (s.title && s.title !== s.work_type ? s.title : "");
 
   const feed = comments.slice(0, 3).map(cm => {
     if (cm.target_type === "report") {
@@ -28,27 +39,32 @@ export default function HomeScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 }}>
       {/* 天気カード */}
-      <View style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12, ...SHADOW.card }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
-            <Text style={{ fontSize: 30, fontWeight: "700", color: C.text, lineHeight: 30 }}>{weatherNow.temp}°</Text>
-            <Text style={{ fontSize: 13, color: C.textSub }}>{weatherNow.label} · {weatherNow.place}</Text>
-          </View>
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Feather name="droplet" size={13} color={C.info} />
-              <Text style={{ fontSize: 12, color: C.textSub }}>{weatherNow.humidity}%</Text>
+      {!wxLoading && wxAuto && (
+        <View style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12, ...SHADOW.card }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+              <Text style={{ fontSize: 30, fontWeight: "700", color: C.text, lineHeight: 30 }}>{wxAuto.temp}°</Text>
+              <Text style={{ fontSize: 13, color: C.textSub }}>
+                {wxAuto.label}{weatherCoords?.name ? ` · ${weatherCoords.name}` : ""}
+              </Text>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Feather name="cloud-rain" size={13} color={C.rain} />
-              <Text style={{ fontSize: 12, color: C.textSub }}>{weatherNow.rain}mm</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              {wxAuto.humidity !== undefined && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="droplet" size={13} color={C.info} />
+                  <Text style={{ fontSize: 12, color: C.textSub }}>{wxAuto.humidity}%</Text>
+                </View>
+              )}
+              {wxAuto.rain !== undefined && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="cloud-rain" size={13} color={C.rain} />
+                  <Text style={{ fontSize: 12, color: C.textSub }}>{wxAuto.rain}mm</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
-        <Btn variant="tertiary" size="sm" style={{ marginTop: 10 }} icon={<Feather name="wind" size={13} color={C.textSub} />}>
-          防除タイミング助言
-        </Btn>
-      </View>
+      )}
 
       {/* 統計カードグリッド */}
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
@@ -76,7 +92,7 @@ export default function HomeScreen() {
         {todayScheds.length === 0 ? (
           <View>
             <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 8 }}>予定はありません</Text>
-            <Btn variant="secondary" size="sm" icon={<Feather name="plus" size={13} color={C.text} />}>作業を追加</Btn>
+            <Btn variant="secondary" size="sm" onPress={onQuickReport} icon={<Feather name="plus" size={13} color={C.text} />}>作業を追加</Btn>
           </View>
         ) : todayScheds.map((s, i) => {
           const wc = s.work_type ? workTypeColor(s.work_type) : null;
@@ -102,7 +118,7 @@ export default function HomeScreen() {
                   </Text>
                 )}
               </View>
-              <Btn variant="secondary" size="sm" icon={<Feather name="clipboard" size={13} color={C.text} />}>実績にする</Btn>
+              <Btn variant="secondary" size="sm" onPress={onQuickReport} icon={<Feather name="clipboard" size={13} color={C.text} />}>実績にする</Btn>
             </View>
           );
         })}
@@ -116,7 +132,7 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 11, fontWeight: "500", color: C.textMuted }}>新着コメント</Text>
           </View>
           {feed.map(({ cm, label }, i) => (
-            <Pressable key={cm.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.border }}>
+            <View key={cm.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.border }}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text numberOfLines={1} style={{ fontSize: 13, color: C.text }}>
                   <Text style={{ fontWeight: "700" }}>{userName(cm.user_id)}</Text>
@@ -125,26 +141,17 @@ export default function HomeScreen() {
                 <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{label}</Text>
               </View>
               <Feather name="chevron-right" size={14} color={C.textMuted} />
-            </Pressable>
+            </View>
           ))}
         </View>
       )}
 
       {/* 記録一覧への導線 */}
-      <Pressable style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <Pressable onPress={onGoReport} style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
         <Feather name="clipboard" size={16} color={C.textMuted} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>記録一覧を見る</Text>
           <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{reports.length}件の作業記録</Text>
-        </View>
-        <Feather name="chevron-right" size={16} color={C.textMuted} />
-      </Pressable>
-
-      {/* マップカード */}
-      <Pressable style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginTop: 4, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Feather name="map-pin" size={16} color={C.textMuted} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>圃場マップ</Text>
         </View>
         <Feather name="chevron-right" size={16} color={C.textMuted} />
       </Pressable>

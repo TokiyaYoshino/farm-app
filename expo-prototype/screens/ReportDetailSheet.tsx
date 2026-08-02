@@ -1,21 +1,32 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Image, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C, workTypeColor } from "../ui/tokens";
 import BottomSheet from "../ui/BottomSheet";
 import CommentThread from "../ui/CommentThread";
-import { pesticides, cropName, userName, type Report } from "../mock";
+import { useStore } from "../lib/store";
+import type { Report } from "../lib/types";
 
-// ─── 記録詳細シート（src/App.tsx selectedReport ボトムシートの移植）──────
-// 記録一覧の「詳細を見る」から開く。作業情報チップ・農薬・天気・メモ・コメント。
+// ─── 記録詳細シート（src/App.tsx selectedReport ボトムシートの移植・実データ）─
 interface Props {
   report: Report | null;
   onClose: () => void;
 }
 
-const CURRENT_USER_ID = 1;
-
 export default function ReportDetailSheet({ report, onClose }: Props) {
+  const { currentUser, isAdmin, pesticides, cropName, userName, deleteReport } = useStore();
   const r = report;
+
+  const confirmDelete = (id: number) => {
+    Alert.alert("確認", "この作業報告を削除しますか？", [
+      { text: "キャンセル", style: "cancel" },
+      { text: "削除", style: "destructive", onPress: async () => {
+        const err = await deleteReport(id);
+        if (err) Alert.alert("削除に失敗しました", err);
+        else onClose();
+      } },
+    ]);
+  };
+
   return (
     <BottomSheet open={!!r} onClose={onClose}>
       {r && (
@@ -73,16 +84,22 @@ export default function ReportDetailSheet({ report, onClose }: Props) {
                   <Text style={{ fontSize: 12, color: C.textSub }}>{r.work_time}h</Text>
                 </View>
               ) : null}
+              {r.soil_ph != null && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="activity" size={12} color={C.textSub} />
+                  <Text style={{ fontSize: 12, color: C.textSub }}>pH {r.soil_ph}</Text>
+                </View>
+              )}
             </View>
 
-            {!!r.pesticide_id && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.pesticideBg, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 8, alignSelf: "flex-start" }}>
+            {(r.pesticides_used?.length ? r.pesticides_used : r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : []).map(pu => (
+              <View key={pu.id} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.pesticideBg, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 8, alignSelf: "flex-start" }}>
                 <Feather name="droplet" size={12} color={C.pesticide} />
                 <Text style={{ fontSize: 12, color: C.pesticide }}>
-                  {pesticides.find(p => p.id === r.pesticide_id)?.name ?? ""}
+                  {pesticides.find(p => p.id === pu.id)?.name ?? ""}{pu.amount ? ` / ${pu.amount}` : ""}
                 </Text>
               </View>
-            )}
+            ))}
 
             {!!r.weather && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
@@ -107,9 +124,20 @@ export default function ReportDetailSheet({ report, onClose }: Props) {
                 <Text style={{ fontSize: 12, color: C.textSub }}>{r.note}</Text>
               </View>
             )}
+
+            {!!r.image_url && (
+              <Image source={{ uri: r.image_url }} style={{ width: "100%", height: 240, borderRadius: 10, marginTop: 8 }} resizeMode="cover" />
+            )}
+
+            {(isAdmin || r.user_id === currentUser?.id) && (
+              <Pressable onPress={() => confirmDelete(r.id)} style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 }}>
+                <Feather name="trash-2" size={12} color={C.danger} />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: C.danger }}>この記録を削除</Text>
+              </Pressable>
+            )}
           </View>
 
-          <CommentThread targetType="report" targetId={String(r.id)} currentUserId={CURRENT_USER_ID} />
+          <CommentThread targetType="report" targetId={String(r.id)} />
         </View>
       )}
     </BottomSheet>

@@ -1,60 +1,148 @@
-import { useState } from "react";
-import { View, Text, TextInput, Pressable } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, TextInput, Pressable, Image, Platform, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import * as ImagePicker from "expo-image-picker";
 import { C, RADIUS, workTypeColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import BottomSheet from "../ui/BottomSheet";
-import { crops, fields, users, weatherNow, TODAY, WORK_TEMPLATES } from "../mock";
+import Picker from "../ui/Picker";
+import { useStore } from "../lib/store";
+import { fetchWeatherForPeriod, type PeriodWeather } from "../lib/weather";
+import { WORK_TEMPLATES, isPesticideWorkType, calcWorkMinutes } from "../lib/types";
 
-// ─── クイック作業記録モーダル（src/App.tsx showQuickReport ブロックの移植）───
-// Soft Widget のグループ入力: 灰 well（radius 18・padding 6）に白 row（radius 14）を積む。
-// Web の <select> は RN に無いためタップでローテーション（試作のため簡略、見た目は同一）
+// ─── クイック作業記録（src/App.tsx showQuickReport + addReport の移植・実データ）─
+// 灰well+白rowのグループ入力。作物/圃場/作業種別は BottomSheet ピッカー、
+// 日付/時刻はネイティブ DateTimePicker。写真は expo-image-picker →
+// Supabase Storage。開始終了が揃うと Open-Meteo で時間帯天気を自動取得。
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
+const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+const toTimeStr = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
 export default function QuickReportSheet({ open, onClose }: Props) {
-  const [date, setDate] = useState(TODAY);
-  const [cropIdx, setCropIdx] = useState(0);
-  const [fieldIdx, setFieldIdx] = useState(0);
-  const [workIdx, setWorkIdx] = useState(0);
+  const {
+    currentUser, users, crops, fields, pesticides, workCategories,
+    wxAuto, wxLoading, weatherCoords, addReport,
+  } = useStore();
+
+  const [date, setDate] = useState(() => toDateStr(new Date()));
+  const [cropId, setCropId] = useState(0);
+  const [fieldName, setFieldName] = useState("");
+  const [workCategoryId, setWorkCategoryId] = useState(0);
+  const [workType, setWorkType] = useState(WORK_TEMPLATES[0]);
+  const [quantityUnit, setQuantityUnit] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const [userIdx, setUserIdx] = useState(0);
+  const [userId, setUserId] = useState(0);
   const [quantity, setQuantity] = useState("");
   const [workStart, setWorkStart] = useState("");
   const [workEnd, setWorkEnd] = useState("");
   const [note, setNote] = useState("");
+  const [soilPh, setSoilPh] = useState("");
+  const [selectedPesticides, setSelectedPesticides] = useState<string[]>([]);
+  const [pesticideAmounts, setPesticideAmounts] = useState<Record<string, string>>({});
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [periodWeather, setPeriodWeather] = useState<PeriodWeather | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [pickerFor, setPickerFor] = useState<"crop" | "field" | "work" | "user" | null>(null);
+  const [dtPicker, setDtPicker] = useState<"date" | "start" | "end" | null>(null);
 
-  const workType = WORK_TEMPLATES[workIdx];
-  const workers = users.filter(u => u.role !== "viewer");
+  // 初期値: 自分・先頭の作物/圃場（データ到着後に一度だけ）
+  useEffect(() => {
+    if (currentUser && !userId) setUserId(currentUser.id);
+    if (crops.length > 0 && !cropId) setCropId(crops[0].id);
+    if (fields.length > 0 && !fieldName) setFieldName(fields[0].name);
+  }, [currentUser, crops, fields]);
 
-  // Soft Widget グループ入力の row（S.wrow 相当）
+  // 開始・終了時刻が揃ったら圃場（なければ設定座標）の気象を自動取得（Web版と同一）
+  useEffect(() => {
+    if (!workStart || !workEnd || !date) { setPeriodWeather(null); return; }
+    const selectedField = fields.find(f => f.name === fieldName);
+    const lat = selectedField?.lat ?? weatherCoords?.lat;
+    const lng = selectedField?.lng ?? weatherCoords?.lng;
+    if (!lat || !lng) return;
+    let cancelled = false;
+    fetchWeatherForPeriod(lat, lng, date, workStart, workEnd)
+      .then(w => { if (!cancelled) setPeriodWeather(w); })
+      .catch(() => { if (!cancelled) setPeriodWeather(null); });
+    return () => { cancelled = true; };
+  }, [workStart, workEnd, date, fieldName]);
+
+  const pickImage = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert("写真ライブラリへのアクセスが許可されていません"); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"], quality: 0.7, allowsEditing: false,
+    });
+    if (!result.canceled && result.assets[0]) setImageUri(result.assets[0].uri);
+  };
+
+  const resetForm = () => {
+    setQuantity(""); setWorkStart(""); setWorkEnd(""); setNote(""); setSoilPh("");
+    setSelectedPesticides([]); setPesticideAmounts({}); setImageUri(null);
+    setPeriodWeather(null); setExpanded(false);
+    setDate(toDateStr(new Date()));
+  };
+
+  // ── 登録（Web版 addReport のペイロード構築と同一） ──
+  const submit = async () => {
+    if (!date || !workType || submitting) return;
+    setSubmitting(true);
+    const pw = periodWeather;
+    const w = pw ? null : wxAuto;
+    const err = await addReport({
+      user_id: userId || currentUser?.id,
+      crop_id: cropId,
+      field: fieldName,
+      date,
+      work_type: workType,
+      work_category_id: workCategoryId || null,
+      quantity: quantity,
+      quantity_value: quantity ? parseFloat(quantity) : null,
+      quantity_unit: quantityUnit || null,
+      work_time: "",
+      note,
+      weather: pw?.weather ?? w?.label ?? "",
+      temp: pw?.temp ?? (w?.temp !== undefined ? String(w.temp) : ""),
+      humidity: pw?.humidity ?? (w?.humidity !== undefined ? String(w.humidity) : ""),
+      rain: pw?.rain ?? (w?.rain !== undefined ? String(w.rain) : ""),
+      pesticide_id: selectedPesticides[0] || undefined,
+      pesticide_amount: selectedPesticides[0] ? (pesticideAmounts[selectedPesticides[0]] || undefined) : undefined,
+      pesticides_used: selectedPesticides.length > 0
+        ? selectedPesticides.map(id => ({ id, amount: pesticideAmounts[id] || null }))
+        : undefined,
+      soil_ph: soilPh ? parseFloat(soilPh) : null,
+      work_start: workStart || null,
+      work_end: workEnd || null,
+      work_minutes: calcWorkMinutes(workStart, workEnd),
+    }, imageUri);
+    setSubmitting(false);
+    if (err) { Alert.alert("登録に失敗しました", err); return; }
+    resetForm();
+    onClose();
+  };
+
+  // ── Soft Widget スタイル ──
   const wrow = {
-    backgroundColor: C.card,
-    borderRadius: RADIUS.row,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 12,
-    shadowColor: "#101114",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: C.card, borderRadius: RADIUS.row,
+    paddingVertical: 12, paddingHorizontal: 16,
+    flexDirection: "row" as const, alignItems: "center" as const, gap: 12,
+    shadowColor: "#101114", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2, elevation: 1,
   };
   const lbl2 = { fontSize: 11, fontWeight: "500" as const, color: C.textMuted, marginBottom: 2 };
   const fieldValue = { fontSize: 16, fontWeight: "600" as const, color: C.text };
   const lbl = { fontSize: 12, fontWeight: "600" as const, color: C.textSub, marginBottom: 5 };
   const underlineInput = {
-    paddingVertical: 11,
-    borderBottomWidth: 1.5,
-    borderBottomColor: C.border,
-    fontSize: 15,
-    color: C.text,
-    marginBottom: 16,
+    paddingVertical: 11, borderBottomWidth: 1.5, borderBottomColor: C.border,
+    fontSize: 15, color: C.text, marginBottom: 16,
   };
+
+  const workers = users.filter(u => u.role !== "viewer");
+  const selectedCat = workCategories.find(c => c.id === workCategoryId);
+  const showQuantity = workCategories.length === 0 || !!quantityUnit || !!selectedCat?.unit;
 
   return (
     <BottomSheet open={open} onClose={onClose}>
@@ -67,56 +155,64 @@ export default function QuickReportSheet({ open, onClose }: Props) {
       </View>
 
       <View style={{ paddingHorizontal: 16 }}>
-        {/* 天気（白row） */}
+        {/* 天気（白row・自動取得） */}
         <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 6, marginBottom: 12 }}>
           <View style={wrow}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2 }}>
                 <Feather name="map-pin" size={11} color={C.textMuted} />
-                <Text style={lbl2}>{weatherNow.place} · 天気（自動）</Text>
+                <Text style={lbl2}>{weatherCoords?.name ?? "..."} · 天気（自動）</Text>
               </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                  <Feather name="sun" size={14} color={C.primary} />
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: C.text }}>{weatherNow.label}</Text>
+              {wxLoading ? (
+                <Text style={{ fontSize: 13, color: C.textMuted }}>取得中...</Text>
+              ) : wxAuto ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: C.text }}>{wxAuto.label}</Text>
+                  <Text style={{ color: C.border }}>|</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                    <Feather name="thermometer" size={14} color={C.temp} />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: C.textSub }}>{wxAuto.temp}°C</Text>
+                  </View>
+                  {wxAuto.humidity !== undefined && (
+                    <>
+                      <Text style={{ color: C.border }}>|</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Feather name="droplet" size={14} color={C.info} />
+                        <Text style={{ fontSize: 13, fontWeight: "600", color: C.textSub }}>{wxAuto.humidity}%</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
-                <Text style={{ color: C.border }}>|</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                  <Feather name="thermometer" size={14} color={C.temp} />
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: C.textSub }}>{weatherNow.temp}°C</Text>
-                </View>
-                <Text style={{ color: C.border }}>|</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                  <Feather name="droplet" size={14} color={C.info} />
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: C.textSub }}>{weatherNow.humidity}%</Text>
-                </View>
-              </View>
+              ) : (
+                <Text style={{ fontSize: 13, color: C.textMuted }}>天気を取得できませんでした</Text>
+              )}
             </View>
           </View>
         </View>
 
         {/* 日付・作物/圃場・作業種別（グループ入力） */}
         <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 6, marginBottom: 12 }}>
-          <View style={wrow}>
+          <Pressable style={wrow} onPress={() => setDtPicker("date")}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={lbl2}>日付</Text>
-              <TextInput value={date} onChangeText={setDate} style={[fieldValue, { padding: 0 }]} />
+              <Text style={fieldValue}>{date}</Text>
             </View>
-          </View>
+            <Feather name="calendar" size={16} color={C.textMuted} />
+          </Pressable>
           <View style={[wrow, { marginTop: 6 }]}>
-            <Pressable style={{ flex: 1, minWidth: 0 }} onPress={() => setCropIdx(i => (i + 1) % crops.length)}>
+            <Pressable style={{ flex: 1, minWidth: 0 }} onPress={() => setPickerFor("crop")}>
               <Text style={lbl2}>作物</Text>
-              <Text style={fieldValue}>{crops[cropIdx].name}</Text>
+              <Text style={fieldValue}>{crops.find(c => c.id === cropId)?.name ?? "選択"}</Text>
             </Pressable>
             <Pressable
               style={{ flex: 1, minWidth: 0, borderLeftWidth: 1, borderLeftColor: C.hairline, paddingLeft: 16 }}
-              onPress={() => setFieldIdx(i => (i + 1) % fields.length)}
+              onPress={() => setPickerFor("field")}
             >
               <Text style={lbl2}>圃場</Text>
-              <Text style={fieldValue}>{fields[fieldIdx].name}</Text>
+              <Text style={fieldValue}>{fieldName || "選択"}</Text>
             </Pressable>
           </View>
-          <Pressable style={[wrow, { marginTop: 6 }]} onPress={() => setWorkIdx(i => (i + 1) % WORK_TEMPLATES.length)}>
+          <Pressable style={[wrow, { marginTop: 6 }]} onPress={() => setPickerFor("work")}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={lbl2}>作業の種類</Text>
               <Text style={fieldValue}>{workType}</Text>
@@ -139,37 +235,133 @@ export default function QuickReportSheet({ open, onClose }: Props) {
 
         {/* 写真 */}
         <Text style={lbl}>写真</Text>
-        <Pressable style={{ alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 2, borderStyle: "dashed", borderColor: C.border, borderRadius: 8, paddingVertical: 20, marginBottom: 12, backgroundColor: C.bg }}>
-          <Feather name="camera" size={24} color={C.textMuted} />
-          <Text style={{ color: C.textMuted, fontSize: 13 }}>タップして写真を選択</Text>
-        </Pressable>
+        {imageUri ? (
+          <View style={{ position: "relative", marginBottom: 12 }}>
+            <Image source={{ uri: imageUri }} style={{ width: "100%", height: 200, borderRadius: 8 }} resizeMode="cover" />
+            <Pressable
+              onPress={() => setImageUri(null)}
+              style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <Feather name="x" size={12} color="#fff" />
+              <Text style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}>削除</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={pickImage} style={{ alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 2, borderStyle: "dashed", borderColor: C.border, borderRadius: 8, paddingVertical: 20, marginBottom: 12, backgroundColor: C.bg }}>
+            <Feather name="camera" size={24} color={C.textMuted} />
+            <Text style={{ color: C.textMuted, fontSize: 13 }}>タップして写真を選択</Text>
+          </Pressable>
+        )}
 
         {expanded && (
           <>
             {/* 作業者 */}
             <Text style={lbl}>作業者</Text>
-            <Pressable onPress={() => setUserIdx(i => (i + 1) % workers.length)} style={underlineInput}>
-              <Text style={{ fontSize: 15, color: C.text }}>{workers[userIdx].name}</Text>
+            <Pressable onPress={() => setPickerFor("user")} style={[underlineInput, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
+              <Text style={{ fontSize: 15, color: C.text }}>{users.find(u => u.id === userId)?.name ?? "選択"}</Text>
+              <Feather name="chevron-down" size={14} color={C.textMuted} />
             </Pressable>
 
             {/* 実績数量 */}
-            <Text style={lbl}>実績数量（kg）</Text>
-            <TextInput
-              value={quantity}
-              onChangeText={setQuantity}
-              placeholder="例: 20"
-              placeholderTextColor={C.textMuted}
-              keyboardType="numeric"
-              style={underlineInput}
-            />
+            {showQuantity && (
+              <>
+                <Text style={lbl}>実績数量{quantityUnit ? `（${quantityUnit}）` : ""}</Text>
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 12 }}>
+                  <TextInput
+                    value={quantity}
+                    onChangeText={setQuantity}
+                    placeholder="例: 20"
+                    placeholderTextColor={C.textMuted}
+                    keyboardType="numeric"
+                    style={[underlineInput, { flex: 1, marginBottom: 0 }]}
+                  />
+                  <TextInput
+                    value={quantityUnit}
+                    onChangeText={setQuantityUnit}
+                    placeholder="単位"
+                    placeholderTextColor={C.textMuted}
+                    style={[underlineInput, { width: 70, marginBottom: 0, fontSize: 13 }]}
+                  />
+                </View>
+              </>
+            )}
 
             {/* 作業時刻 */}
             <Text style={lbl}>作業時刻</Text>
             <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 12 }}>
-              <TextInput value={workStart} onChangeText={setWorkStart} placeholder="06:30" placeholderTextColor={C.textMuted} style={[underlineInput, { flex: 1, marginBottom: 0 }]} />
+              <Pressable onPress={() => setDtPicker("start")} style={[underlineInput, { flex: 1, marginBottom: 0 }]}>
+                <Text style={{ fontSize: 15, color: workStart ? C.text : C.textMuted }}>{workStart || "開始"}</Text>
+              </Pressable>
               <Text style={{ color: C.textMuted, fontSize: 13 }}>〜</Text>
-              <TextInput value={workEnd} onChangeText={setWorkEnd} placeholder="08:00" placeholderTextColor={C.textMuted} style={[underlineInput, { flex: 1, marginBottom: 0 }]} />
+              <Pressable onPress={() => setDtPicker("end")} style={[underlineInput, { flex: 1, marginBottom: 0 }]}>
+                <Text style={{ fontSize: 15, color: workEnd ? C.text : C.textMuted }}>{workEnd || "終了"}</Text>
+              </Pressable>
             </View>
+            {periodWeather && (
+              <View style={{ backgroundColor: C.well, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: C.text }}>{periodWeather.weather}</Text>
+                {!!periodWeather.temp && <Text style={{ fontSize: 12, color: C.textSub }}>{periodWeather.temp}°C</Text>}
+                {!!periodWeather.humidity && <Text style={{ fontSize: 12, color: C.textSub }}>湿度{periodWeather.humidity}%</Text>}
+                {parseFloat(periodWeather.rain) > 0 && <Text style={{ fontSize: 12, color: C.textSub }}>雨量{periodWeather.rain}mm</Text>}
+                <Text style={{ fontSize: 11, color: C.textMuted, marginLeft: "auto" }}>自動取得</Text>
+              </View>
+            )}
+
+            {/* 農薬複数選択（防除のときのみ・Web版と同一の出し分け） */}
+            {isPesticideWorkType(workType) && (
+              <>
+                <Text style={lbl}>使用農薬（任意）</Text>
+                {pesticides.length === 0 ? (
+                  <View style={{ backgroundColor: C.bg, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12, color: C.textMuted }}>登録済みの農薬がありません</Text>
+                  </View>
+                ) : (
+                  <View style={{ borderWidth: 1.5, borderColor: C.border, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 10, marginBottom: 12, backgroundColor: "#fff" }}>
+                    {pesticides.map(p => {
+                      const checked = selectedPesticides.includes(p.id);
+                      return (
+                        <View key={p.id}>
+                          <Pressable
+                            onPress={() => setSelectedPesticides(prev => checked ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                            style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 }}
+                          >
+                            <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: checked ? C.ink : C.border, backgroundColor: checked ? C.ink : "#fff", alignItems: "center", justifyContent: "center" }}>
+                              {checked && <Feather name="check" size={12} color="#fff" />}
+                            </View>
+                            <Text style={{ fontSize: 14, color: C.text, flex: 1 }}>{p.name}</Text>
+                            {!!p.type && <Text style={{ fontSize: 11, color: C.textMuted }}>{p.type}</Text>}
+                          </Pressable>
+                          {checked && (
+                            <TextInput
+                              value={pesticideAmounts[p.id] ?? ""}
+                              onChangeText={v => setPesticideAmounts(prev => ({ ...prev, [p.id]: v }))}
+                              placeholder="散布量（例: 100L）"
+                              placeholderTextColor={C.textMuted}
+                              style={{ marginLeft: 26, marginBottom: 6, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: C.well, borderRadius: 8, fontSize: 13, color: C.text }}
+                            />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* 土壌pH（施肥のときのみ・Web版と同一の出し分け） */}
+            {workType === "施肥" && (
+              <>
+                <Text style={lbl}>土壌pH（任意）</Text>
+                <TextInput
+                  value={soilPh}
+                  onChangeText={setSoilPh}
+                  placeholder="例: 6.5"
+                  placeholderTextColor={C.textMuted}
+                  keyboardType="numeric"
+                  style={underlineInput}
+                />
+              </>
+            )}
 
             {/* メモ */}
             <Text style={lbl}>メモ</Text>
@@ -184,11 +376,85 @@ export default function QuickReportSheet({ open, onClose }: Props) {
           </>
         )}
 
-        {/* 保存（primary は1画面1個） */}
-        <Btn variant="primary" size="lg" onPress={onClose} icon={<Feather name="check" size={16} color="#fff" />}>
-          記録する
+        {/* 保存 */}
+        <Btn variant="primary" size="lg" onPress={submit} icon={<Feather name="check" size={16} color="#fff" />}>
+          {submitting ? "登録中..." : "記録する"}
         </Btn>
       </View>
+
+      {/* 選択ピッカー */}
+      <Picker
+        open={pickerFor === "crop"}
+        title="作物"
+        options={crops.map(c => ({ key: String(c.id), label: c.name }))}
+        value={String(cropId)}
+        onSelect={v => setCropId(Number(v))}
+        onClose={() => setPickerFor(null)}
+      />
+      <Picker
+        open={pickerFor === "field"}
+        title="圃場"
+        options={fields.map(f => ({ key: f.name, label: f.name }))}
+        value={fieldName}
+        onSelect={setFieldName}
+        onClose={() => setPickerFor(null)}
+      />
+      <Picker
+        open={pickerFor === "work"}
+        title="作業の種類"
+        options={workCategories.length > 0
+          ? workCategories.map(c => ({ key: `cat-${c.id}`, label: c.name + (c.unit ? `（${c.unit}）` : "") }))
+          : WORK_TEMPLATES.map(t => ({ key: t, label: t }))}
+        value={workCategoryId ? `cat-${workCategoryId}` : workType}
+        onSelect={v => {
+          if (v.startsWith("cat-")) {
+            const cat = workCategories.find(c => c.id === Number(v.slice(4)));
+            if (cat) {
+              setWorkCategoryId(cat.id);
+              setWorkType(cat.name);
+              setQuantityUnit(cat.unit ?? "");
+            }
+          } else {
+            setWorkCategoryId(0);
+            setWorkType(v);
+          }
+          if (!isPesticideWorkType(v.startsWith("cat-") ? (workCategories.find(c => c.id === Number(v.slice(4)))?.name ?? "") : v)) {
+            setSelectedPesticides([]);
+            setPesticideAmounts({});
+          }
+        }}
+        onClose={() => setPickerFor(null)}
+      />
+      <Picker
+        open={pickerFor === "user"}
+        title="作業者"
+        options={workers.map(u => ({ key: String(u.id), label: u.name }))}
+        value={String(userId)}
+        onSelect={v => setUserId(Number(v))}
+        onClose={() => setPickerFor(null)}
+      />
+
+      {/* 日付・時刻ピッカー */}
+      {dtPicker && (
+        <DateTimePicker
+          value={(() => {
+            if (dtPicker === "date") return new Date(date + "T00:00:00");
+            const t = dtPicker === "start" ? workStart : workEnd;
+            const d = new Date();
+            if (t) { const [h, m] = t.split(":").map(Number); d.setHours(h, m); }
+            return d;
+          })()}
+          mode={dtPicker === "date" ? "date" : "time"}
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={(event, selected) => {
+            setDtPicker(null);
+            if (event.type === "dismissed" || !selected) return;
+            if (dtPicker === "date") setDate(toDateStr(selected));
+            else if (dtPicker === "start") setWorkStart(toTimeStr(selected));
+            else setWorkEnd(toTimeStr(selected));
+          }}
+        />
+      )}
     </BottomSheet>
   );
 }
