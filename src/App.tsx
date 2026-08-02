@@ -23,6 +23,7 @@ import AnalyticsView from "./components/AnalyticsView";
 import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
+import { harvestQty, excludedHarvestCount } from "./lib/metrics";
 import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
@@ -370,6 +371,8 @@ export default function App() {
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
   const [showCropAddForm, setShowCropAddForm] = useState(false);
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"report"|"backlog">("report");
+  // 管理タブの作物カード「分析で見る →」から作物を指定して分析画面へ着地させる
+  const [analyticsCropId, setAnalyticsCropId] = useState<number | "all">("all");
   const [showMapModal, setShowMapModal]       = useState(false);
   const cropExpandedInit                       = useRef(false);
   const [deleteModal, setDeleteModal]     = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -1461,7 +1464,7 @@ export default function App() {
 
   const cropStats = crops.map(c => {
     const rs   = reports.filter(r => r.crop_id === c.id);
-    const tot  = rs.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+    const tot  = rs.reduce((s, r) => s + harvestQty(r), 0);
     const last = [...rs].sort((a, b) => b.date.localeCompare(a.date))[0];
     const growDays = c.start_date
       ? Math.floor((Date.now() - new Date(c.start_date).getTime()) / 86400000)
@@ -1622,9 +1625,65 @@ export default function App() {
   };
 
   // ─── 記録検索チャット ─────────────────────────────────────
+  // 農薬の登録情報（総使用回数など）は通常、農薬管理画面でパネルを開いたときに遅延ロードされる。
+  // 検索チャットで「あと何回使えるか」に答えるには全農薬ぶんが要るので、まとめて先読みする。
+  const prefetchAllRegistrations = async (): Promise<Record<string, PesticideRegistration[]>> => {
+    const missing = pesticides.filter(p => !pRegs[p.id]).map(p => p.id);
+    if (missing.length === 0) return pRegs;
+    const { data } = await supabase
+      .from("pesticide_registrations")
+      .select("pesticide_id,registration_no,product_name,crop_name,pest_name,dilution,usage_timing,usage_count,total_count,application")
+      .in("pesticide_id", missing);
+    const grouped: Record<string, PesticideRegistration[]> = { ...pRegs };
+    (data ?? []).forEach(row => {
+      const key = (row as PesticideRegistration).pesticide_id;
+      if (!key) return;
+      (grouped[key] ??= []).push(row as PesticideRegistration);
+    });
+    setPRegs(grouped);
+    return grouped;
+  };
+
+  /**
+   * 農薬ごとの「登録上限」と「今年の散布実績」を1ブロックにまとめる。
+   * total_count は FAMIC 原文に範囲や条件（「14回以内(土壌灌注は2回以内…)」）を含むため、
+   * 数値に正規化せず原文のまま渡す（docs/db-schema.md の方針）。
+   */
+  const formatPesticideLimits = (regs: Record<string, PesticideRegistration[]>): string => {
+    const yearPrefix = new Date().toISOString().slice(0, 4);
+    const lines: string[] = [];
+    pesticides.forEach(p => {
+      const rows = regs[p.id] ?? [];
+      const sprays = reports
+        .filter(r => r.date.startsWith(yearPrefix))
+        .filter(r => (r.pesticides_used?.some(u => u.id === p.id)) || r.pesticide_id === p.id)
+        .map(r => r.date)
+        .sort();
+      if (rows.length === 0 && sprays.length === 0) return;
+      const used = sprays.length > 0
+        ? `今年の散布 ${sprays.length}回（${sprays.map(d => d.slice(5).replace("-", "/")).join("、")}）`
+        : "今年の散布 0回";
+      if (rows.length === 0) {
+        lines.push(`- ${p.name}: 登録情報なし / ${used}`);
+        return;
+      }
+      rows.forEach(rg => {
+        const limit = rg.total_count?.trim() || "総使用回数の記載なし";
+        const timing = rg.usage_timing?.trim() ? ` / 使用時期 ${rg.usage_timing.trim()}` : "";
+        lines.push(`- ${p.name}（${rg.crop_name || "作物不明"}・${rg.pest_name || "対象不明"}）: 総使用回数 ${limit}${timing} / ${used}`);
+      });
+    });
+    if (lines.length === 0) return "";
+    return [
+      "",
+      `## 農薬の登録上限と${yearPrefix}年の散布実績（FAMIC登録情報・原文のまま）`,
+      ...lines,
+    ].join("\n");
+  };
+
   // 検索対象の記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）。
   // 一覧フィルタが有効ならその絞り込み結果を優先し、無効なら直近180日・最新200件にフォールバックする。
-  const formatRecordsForChat = (): { text: string; count: number } => {
+  const formatRecordsForChat = (regs: Record<string, PesticideRegistration[]>): { text: string; count: number } => {
     const base = reportFilterActive ? filteredReports : reports;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 180);
@@ -1633,7 +1692,7 @@ export default function App() {
       .slice()
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 200);
-    const text = target.map(r => {
+    const lines = target.map(r => {
       const parts = [`${r.date} 【${cropName(r.crop_id)}${r.field ? "・" + r.field : ""}】`];
       if (r.work_type) parts.push(`作業:${r.work_type}`);
       if (r.quantity) parts.push(`数量:${r.quantity}`);
@@ -1651,23 +1710,36 @@ export default function App() {
       if (r.note) parts.push(`メモ:${r.note}`);
       parts.push(`担当:${userName(r.user_id)}`);
       return parts.join(" / ");
-    }).join("\n");
-    return { text, count: target.length };
+    });
+    // API側が records 20000文字までしか受け付けないため、農薬の登録上限ブロックを先に確保し、
+    // 残りの予算に収まるぶんだけ記録を新しい順に詰める（超過して 400 で弾かれるのを防ぐ）。
+    const limits = formatPesticideLimits(regs);
+    const budget = 19000 - limits.length;
+    const kept: string[] = [];
+    let used = 0;
+    for (const line of lines) {
+      if (used + line.length + 1 > budget) break;
+      kept.push(line);
+      used += line.length + 1;
+    }
+    return { text: kept.join("\n") + limits, count: kept.length };
   };
 
   const sendSearchChatMessage = async () => {
     const question = searchChatInput.trim();
     if (!question || searchChatLoading) return;
-    const { text: records, count } = formatRecordsForChat();
-    if (!records) {
-      setSearchChatError("対象の作業記録がありません。");
-      return;
-    }
     setSearchChatMessages(m => [...m, { role: "user", content: question }]);
     setSearchChatInput("");
     setSearchChatLoading(true);
     setSearchChatError("");
     try {
+      // 農薬の登録上限も一緒に渡すため、未取得ぶんをここで先読みする
+      const regs = await prefetchAllRegistrations();
+      const { text: records, count } = formatRecordsForChat(regs);
+      if (!records) {
+        setSearchChatError("対象の作業記録がありません。");
+        return;
+      }
       const res = await fetch("/api/search-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1856,26 +1928,30 @@ export default function App() {
   const sevenAgo      = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
   const weekStart     = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return d.toISOString().slice(0,10); })();
   const workCount7d        = reports.filter(r => r.date >= sevenAgo).length;
-  const weekHarvest        = reports.filter(r => r.date >= weekStart).reduce((s,r) => s+(Number(r.quantity)||0), 0);
+  const weekReports        = reports.filter(r => r.date >= weekStart);
+  const weekHarvest        = weekReports.reduce((s,r) => s + harvestQty(r), 0);
+  const weekHarvestSkipped = excludedHarvestCount(weekReports);
   const todayStr           = new Date().toISOString().slice(0,10);
 
-  // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）
-  const monthlyHarvest = (cropId: number, year: number) => {
+  // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）。cropId "all" で全作物合算。
+  const monthlyHarvest = (cropId: number | "all", year: number) => {
     const prefix = String(year);
     const m: Record<string,number> = {};
-    reports.filter(r => r.crop_id === cropId && r.quantity && r.date.startsWith(prefix)).forEach(r => {
-      const mo = r.date.slice(5,7);
-      m[mo] = (m[mo]||0) + (Number(r.quantity)||0);
-    });
+    reports
+      .filter(r => (cropId === "all" || r.crop_id === cropId) && r.date.startsWith(prefix))
+      .forEach(r => {
+        const mo = r.date.slice(5,7);
+        m[mo] = (m[mo]||0) + harvestQty(r);
+      });
     return Array.from({ length:12 }, (_, i) => {
       const mo = String(i+1).padStart(2,"0");
       return { month:`${i+1}月`, total: m[mo] || 0 };
     });
   };
 
-  // 作物のデータがある年一覧
+  // 作物の収穫データがある年一覧
   const cropDataYears = (cropId: number) =>
-    [...new Set(reports.filter(r => r.crop_id === cropId && r.quantity).map(r => Number(r.date.slice(0,4))))].sort();
+    [...new Set(reports.filter(r => r.crop_id === cropId && harvestQty(r) > 0).map(r => Number(r.date.slice(0,4))))].sort();
 
   // 圃場ごとの作付け履歴集計
   const getFieldCropHistory = (fieldName: string) => {
@@ -2178,6 +2254,11 @@ export default function App() {
                 </div>
               ) : (
                 <div style={{ fontSize:13, color:C.textMuted, paddingTop:6 }}>記録なし</div>
+              )}
+              {weekHarvestSkipped > 0 && (
+                <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>
+                  単位がkg以外の記録{weekHarvestSkipped}件を除外
+                </div>
               )}
             </div>
           </div>
@@ -2605,7 +2686,7 @@ export default function App() {
                         </div>
                       </div>
                       <button
-                        onClick={e => { e.stopPropagation(); setTab("analytics"); }}
+                        onClick={e => { e.stopPropagation(); setAnalyticsCropId(c.id); setAnalyticsSubTab("report"); setTab("analytics"); }}
                         style={{ background:"none", border:"none", cursor:"pointer", color:C.ink, fontSize:13, fontWeight:600, padding:0 }}
                       >
                         分析で見る →
@@ -3495,10 +3576,15 @@ export default function App() {
       {tab === "analytics" && (
         analyticsSubTab === "report" ? (
           <AnalyticsView
-            currentOrg={currentOrg}
             organizationId={currentOrganizationId}
             lat={weatherCoords?.lat ?? null}
             lng={weatherCoords?.lng ?? null}
+            reports={reports}
+            crops={crops}
+            pesticides={pesticides}
+            users={users}
+            cropId={analyticsCropId}
+            onCropChange={setAnalyticsCropId}
           />
         ) : (
           <GanttChart
