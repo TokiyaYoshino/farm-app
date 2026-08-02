@@ -149,7 +149,7 @@ const selectStyle = {
   padding: "8px 14px",
   borderRadius: 999,
   border: "none",
-  fontSize: 13,
+  fontSize: 16,
   background: C.well,
   color: C.text,
   marginRight: 8,

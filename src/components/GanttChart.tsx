@@ -64,8 +64,8 @@ function endOfMonth(y: number, m: number): Date {
 
 // ── フォームスタイル ────────────────────────────────────────
 const lbl = { fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 } as const;
-const inp = { width:"100%", padding:"11px 14px", borderRadius:12, border:"none", fontSize:15, marginBottom:12, background:C.well, color:C.text, boxSizing:"border-box" } as const;
-const sel = { width:"100%", padding:"11px 14px", borderRadius:12, border:"none", fontSize:15, marginBottom:12, background:C.well, color:C.text } as const;
+const inp = { width:"100%", padding:"11px 14px", borderRadius:12, border:"none", fontSize:16, marginBottom:12, background:C.well, color:C.text, boxSizing:"border-box" } as const;
+const sel = { width:"100%", padding:"11px 14px", borderRadius:12, border:"none", fontSize:16, marginBottom:12, background:C.well, color:C.text } as const;
 const btnPrimary = btn("primary", "lg");
 
 // ── テーブルセルの共通ボーダースタイル ──────────────────────
@@ -416,7 +416,9 @@ export default function GanttChart({
             style={{ background:C.card, borderRadius:"24px 24px 0 0", width:"100%", maxHeight:"88vh", overflowY:"auto", paddingBottom:"calc(32px + env(safe-area-inset-bottom))", boxShadow:SHADOW.float }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ width:38, height:4, background:C.well, borderRadius:4, margin:"12px auto 0" }} />
+            <button onClick={closeModal} aria-label="閉じる" style={{ display:"flex", justifyContent:"center", width:"100%", padding:"12px 0 0", border:"none", background:"none", cursor:"pointer" }}>
+              <div style={{ width:38, height:4, background:C.well, borderRadius:4 }} />
+            </button>
             <div style={{ padding:"16px 16px 0" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
                 <div style={{ fontWeight:700, fontSize:17, color:C.text }}>

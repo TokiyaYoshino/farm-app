@@ -2026,8 +2026,8 @@ export default function App() {
     sec:     css({ fontSize:12, fontWeight:600, color:C.textMuted, marginBottom:8, marginTop:20, letterSpacing:0.4, textTransform:"uppercase" as const }),
     lbl:     css({ fontSize:12, fontWeight:600, color:C.textSub, marginBottom:5, display:"flex", alignItems:"center", gap:4 }),
     card:    css({ background:C.card, borderRadius:RADIUS.card, padding:"14px 16px", marginBottom:8, boxShadow:SHADOW.card }),
-    input:   css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
-    select:  css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:15, marginBottom:16, background:"transparent", color:C.text }),
+    input:   css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:16, marginBottom:16, background:"transparent", color:C.text, transition:"border 0.15s", boxSizing:"border-box" as const }),
+    select:  css({ width:"100%", padding:"11px 0", borderRadius:0, border:"none", borderBottom:`1.5px solid ${C.border}`, fontSize:16, marginBottom:16, background:"transparent", color:C.text }),
     btn:     btn("primary", "lg"),
     btnSm:   { ...btn("dangerOutline", "sm"), minWidth:48, flexShrink:0 },
     row:     css({ display:"flex", justifyContent:"space-between", alignItems:"center" }),
@@ -2119,7 +2119,7 @@ export default function App() {
         <div style={{ marginBottom:24 }}>
           <label style={{ fontSize:12, fontWeight:600, color:C.textMuted, display:"block", marginBottom:8 }}>ユーザーID</label>
           <input
-            style={{ width:"100%", padding:"10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:15, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
+            style={{ width:"100%", padding:"10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:16, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
             placeholder="例: kishu-001"
             value={loginId}
             onChange={e => { setLoginId(e.target.value); setLoginError(""); }}
@@ -2132,7 +2132,7 @@ export default function App() {
           <div style={{ position:"relative" }}>
             <input
               type={showPass ? "text" : "password"}
-              style={{ width:"100%", padding:"10px 40px 10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:15, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
+              style={{ width:"100%", padding:"10px 40px 10px 0", border:"none", borderBottom:`1.5px solid ${loginError ? C.danger : C.border}`, fontSize:16, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
               placeholder="パスワード"
               value={loginPass}
               onChange={e => { setLoginPass(e.target.value); setLoginError(""); }}
@@ -2524,7 +2524,7 @@ export default function App() {
                   value={reportQuery}
                   onChange={e => setReportQuery(e.target.value)}
                   placeholder="メモ・作物・圃場・作業で検索"
-                  style={{ flex:1, minWidth:0, border:"none", outline:"none", background:"transparent", fontSize:14, color:C.text }}
+                  style={{ flex:1, minWidth:0, border:"none", outline:"none", background:"transparent", fontSize:16, color:C.text }}
                 />
                 {reportQuery && (
                   <button onClick={() => setReportQuery("")} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex", flexShrink:0 }}><X size={15} strokeWidth={2} /></button>
@@ -3483,7 +3483,7 @@ export default function App() {
                         value={targetYieldInput}
                         onChange={e => setTargetYieldInput(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && updateTargetYield(crop.id, targetYieldInput)}
-                        style={{ width:100, padding:"6px 11px", borderRadius:999, border:`1px solid ${C.hairline}`, fontSize:13, background:C.card, color:C.text, boxSizing:"border-box" as const }}
+                        style={{ width:100, padding:"6px 11px", borderRadius:999, border:`1px solid ${C.hairline}`, fontSize:16, background:C.card, color:C.text, boxSizing:"border-box" as const }}
                       />
                       <button onClick={() => updateTargetYield(crop.id, targetYieldInput)} style={btn("primary", "sm")}>保存</button>
                       <button onClick={() => setEditingTargetYield(false)} style={btn("secondary", "sm")}>×</button>
@@ -3676,11 +3676,11 @@ export default function App() {
                       ? <WxBadges wx={wxAuto} />
                       : (
                         <div style={{ display:"flex", gap:8, marginTop:4 }}>
-                          <select style={{ ...S.select, marginBottom:0, flex:2, fontSize:14, padding:"6px 8px" }} value={wxManual.label}
+                          <select style={{ ...S.select, marginBottom:0, flex:2, fontSize:16, padding:"6px 8px" }} value={wxManual.label}
                             onChange={e => { const o = WEATHER_OPTIONS.find(x => x.label === e.target.value) || WEATHER_OPTIONS[0]; setWxManual(f => ({ ...f, label:o.label, Icon:o.icon })); }}>
                             {WEATHER_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.label}</option>)}
                           </select>
-                          <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1, fontSize:14, padding:"6px 8px" }}
+                          <input type="number" placeholder="気温°C" style={{ ...S.input, marginBottom:0, flex:1, fontSize:16, padding:"6px 8px" }}
                             value={wxManual.temp} onChange={e => setWxManual(f => ({ ...f, temp:e.target.value }))} />
                         </div>
                       )}
@@ -3805,7 +3805,7 @@ export default function App() {
                       <div style={S.lbl}>実績数量{rForm.quantity_unit ? `（${rForm.quantity_unit}）` : ""}</div>
                       <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
                         <input type="number" style={{ ...S.input, marginBottom:0, flex:1 }} placeholder="例: 20" value={rForm.quantity_value} onChange={e => setRForm(f => ({ ...f, quantity_value:e.target.value, quantity:e.target.value }))} />
-                        <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:13, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
+                        <input style={{ ...S.input, marginBottom:0, width:70, flexShrink:0, fontSize:16, padding:"11px 8px" }} placeholder="単位" value={rForm.quantity_unit} onChange={e => setRForm(f => ({ ...f, quantity_unit:e.target.value }))} />
                       </div>
                     </>
                   )}
@@ -3859,7 +3859,7 @@ export default function App() {
                                   placeholder="散布量（例: 100ml、1L）"
                                   value={pesticideAmounts[p.id] || ""}
                                   onChange={e => setPesticideAmounts(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                  style={{ ...S.input, marginLeft:24, marginBottom:0, width:"calc(100% - 24px)", boxSizing:"border-box" as const, fontSize:13, padding:"8px 12px" }}
+                                  style={{ ...S.input, marginLeft:24, marginBottom:0, width:"calc(100% - 24px)", boxSizing:"border-box" as const, fontSize:16, padding:"8px 12px" }}
                                 />
                               )}
                             </div>
@@ -3924,7 +3924,9 @@ export default function App() {
       {setAuthTarget && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end" }} onClick={() => setSetAuthTarget(null)}>
           <div style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", padding:"20px 16px 36px" }} onClick={e => e.stopPropagation()}>
-            <div style={{ width:36, height:4, background:C.border, borderRadius:4, margin:"0 auto 16px" }} />
+            <button onClick={() => setSetAuthTarget(null)} aria-label="閉じる" style={{ display:"flex", justifyContent:"center", width:"100%", padding:"0 0 16px", border:"none", background:"none", cursor:"pointer" }}>
+              <div style={{ width:36, height:4, background:C.border, borderRadius:4 }} />
+            </button>
             <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:16, display:"flex", alignItems:"center", gap:6 }}>
               <KeyRound size={15} color={C.primary} strokeWidth={2} />
               {setAuthTarget.name} のログイン設定

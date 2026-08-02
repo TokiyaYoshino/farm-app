@@ -408,7 +408,7 @@ export default function CalendarView({
               <select
                 value={filterUserId}
                 onChange={e => setFilterUserId(Number(e.target.value))}
-                style={css({ width: "100%", padding: "7px 12px", borderRadius: 999, border: `1px solid ${C.hairline}`, fontSize: 12, background: C.card, color: C.text, boxSizing: "border-box" })}
+                style={css({ width: "100%", padding: "7px 12px", borderRadius: 999, border: `1px solid ${C.hairline}`, fontSize: 16, background: C.card, color: C.text, boxSizing: "border-box" })}
               >
                 <option value={0}>全員</option>
                 {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -452,7 +452,9 @@ export default function CalendarView({
             style={css({ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "88vh", overflowY: "auto", padding: "16px 16px calc(48px + env(safe-area-inset-bottom))", boxShadow: SHADOW.float })}
             onClick={e => e.stopPropagation()}
           >
-            <div style={css({ width: 36, height: 4, background: C.border, borderRadius: 4, margin: "0 auto 14px" })} />
+            <button onClick={closePopup} aria-label="閉じる" style={css({ display: "flex", justifyContent: "center", width: "100%", padding: "0 0 14px", border: "none", background: "none", cursor: "pointer" })}>
+              <div style={css({ width: 36, height: 4, background: C.border, borderRadius: 4 })} />
+            </button>
 
             {/* ── 詳細ビュー ── */}
             {detail ? (
@@ -545,12 +547,12 @@ export default function CalendarView({
                   return (
                     <div style={css({ background: C.well, borderRadius: 14, padding: 14, marginBottom: 14 })}>
                       <input type="date"
-                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                         value={editForm.date}
                         onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
                       />
                       <select
-                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                         value={editForm.assignedUserId || ""}
                         onChange={e => setEditForm(f => ({ ...f, assignedUserId: e.target.value ? Number(e.target.value) : 0 }))}
                       >
@@ -558,14 +560,14 @@ export default function CalendarView({
                         {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                       </select>
                       <select
-                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                         value={editForm.workType}
                         onChange={e => setEditForm(f => ({ ...f, workType: e.target.value }))}
                       >
                         {WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                       <select
-                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                         value={editForm.crop}
                         onChange={e => setEditForm(f => ({ ...f, crop: e.target.value }))}
                       >
@@ -573,7 +575,7 @@ export default function CalendarView({
                         {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                       </select>
                       <input
-                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 10, background: C.card, color: C.text, boxSizing: "border-box" })}
+                        style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 10, background: C.card, color: C.text, boxSizing: "border-box" })}
                         placeholder="メモ（任意）"
                         value={editForm.note}
                         onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))}
@@ -681,7 +683,7 @@ export default function CalendarView({
                   <div style={css({ background: C.well, borderRadius: 14, padding: 14, marginBottom: 14 })}>
                     <div style={css({ fontSize: 12, fontWeight: 700, color: C.textSub, marginBottom: 10 })}>新しい予定</div>
                     <select autoFocus
-                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                       value={form.assignedUserId || ""}
                       onChange={e => setForm(f => ({ ...f, assignedUserId: e.target.value ? Number(e.target.value) : 0 }))}
                     >
@@ -689,14 +691,14 @@ export default function CalendarView({
                       {users.filter(u => u.role !== "viewer").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                     <select
-                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                       value={form.workType}
                       onChange={e => setForm(f => ({ ...f, workType: e.target.value }))}
                     >
                       {WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <select
-                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
+                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 8, background: C.card, color: C.text, boxSizing: "border-box" })}
                       value={form.crop}
                       onChange={e => setForm(f => ({ ...f, crop: e.target.value }))}
                     >
@@ -704,7 +706,7 @@ export default function CalendarView({
                       {crops.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                     <input
-                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 14, marginBottom: 10, background: C.card, color: C.text, boxSizing: "border-box" })}
+                      style={css({ width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", fontSize: 16, marginBottom: 10, background: C.card, color: C.text, boxSizing: "border-box" })}
                       placeholder="メモ（任意）"
                       value={form.note}
                       onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
