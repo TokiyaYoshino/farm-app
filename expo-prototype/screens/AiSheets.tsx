@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Image, Platform, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -185,6 +185,8 @@ export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () 
 }
 
 // ── ③ 防除タイミング助言 ──
+// Web版と同一の制約: 1日1回。開くたびに生成すると ai_outputs に重複が溜まるため、
+// 当日ぶんが無いときだけ生成し、あれば保存済みの結果を読み込んで表示する。
 export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { weatherCoords, currentUser } = useStore();
   const organizationId = currentUser?.organization_id ?? null;
@@ -193,6 +195,29 @@ export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () 
   const [forecast, setForecast] = useState("");
   const [error, setError] = useState("");
   const [showForecast, setShowForecast] = useState(false);
+  const [savedToday, setSavedToday] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    if (!open || !organizationId) return;
+    let cancelled = false;
+    setChecking(true);
+    (async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data } = await supabase.from("ai_outputs")
+        .select("output_text")
+        .eq("organization_id", organizationId)
+        .eq("kind", "pest_advice")
+        .eq("target_date", today)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (cancelled) return;
+      const saved = data?.[0]?.output_text as string | undefined;
+      if (saved) { setResult(saved); setSavedToday(true); }
+      setChecking(false);
+    })();
+    return () => { cancelled = true; };
+  }, [open, organizationId]);
 
   const generate = async () => {
     const lat = weatherCoords?.lat;
@@ -206,6 +231,7 @@ export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () 
       const res = await pestControlAdviceApi(fc, lat, lng);
       if (res.ok) {
         setResult(res.data.advice);
+        setSavedToday(true);
         void saveAiOutput(organizationId, currentUser?.id ?? null, "pest_advice", {
           inputSummary: fc,
           outputText: res.data.advice, usage: res.data.usage, costUsd: res.data.costUsd,
@@ -240,9 +266,19 @@ export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () 
             <Text style={{ fontSize: 11, color: C.textSub, lineHeight: 17, fontVariant: ["tabular-nums"] }}>{forecast}</Text>
           </View>
         )}
-        <Btn variant="primary" size="lg" onPress={generate} icon={loading ? undefined : <Feather name="wind" size={15} color="#fff" />}>
-          {loading ? "生成中..." : result ? "もう一度生成" : "助言を生成"}
-        </Btn>
+        {checking ? (
+          <View style={{ alignItems: "center", paddingVertical: 12 }}>
+            <ActivityIndicator size="small" color={C.textMuted} />
+          </View>
+        ) : savedToday ? (
+          <Text style={{ fontSize: 12, color: C.textMuted, textAlign: "center" }}>
+            本日分の助言は生成済みです（1日1回）。明日また生成できます。
+          </Text>
+        ) : (
+          <Btn variant="primary" size="lg" onPress={generate} icon={loading ? undefined : <Feather name="wind" size={15} color="#fff" />}>
+            {loading ? "生成中..." : "助言を生成"}
+          </Btn>
+        )}
       </View>
     </BottomSheet>
   );

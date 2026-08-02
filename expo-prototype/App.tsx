@@ -13,8 +13,11 @@ import GanttScreen from "./screens/GanttScreen";
 import ManageScreen from "./screens/ManageScreen";
 import QuickReportSheet from "./screens/QuickReportSheet";
 import NotificationsSheet from "./screens/NotificationsSheet";
+import ReportDetailSheet from "./screens/ReportDetailSheet";
+import ScheduleDetailSheet from "./screens/ScheduleDetailSheet";
 import BottomSheet from "./ui/BottomSheet";
 import Btn from "./ui/Btn";
+import type { Report, Schedule } from "./lib/types";
 
 // ─── ルート（src/App.tsx のヘッダー・サブタブ・ボトムナビ・FAB の移植）────
 type Tab = "home" | "report" | "analytics" | "manage";
@@ -60,13 +63,19 @@ function SubTabBar<T extends string>({ tabs, value, onChange }: {
 
 function Root() {
   const insets = useSafeAreaInsets();
-  const { authSession, authLoading, loading, currentUser, logout, unreadNotifCount, markNotifsSeen } = useStore();
+  const {
+    authSession, authLoading, loading, loadError, retryLoad,
+    currentUser, logout, unreadNotifCount, markNotifsSeen,
+    quickReportOpen, openQuickReport, closeQuickReport, reports, schedules,
+  } = useStore();
   const [tab, setTab] = useState<Tab>("home");
   const [analyticsSubTab, setAnalyticsSubTab] = useState<AnalyticsSubTab>("report");
   const [manageSubTab, setManageSubTab] = useState<ManageSubTab>("crops");
-  const [showQuickReport, setShowQuickReport] = useState(false);
   const [showUserSheet, setShowUserSheet] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
+  // 通知タップからの直接遷移用
+  const [notifReport, setNotifReport] = useState<Report | null>(null);
+  const [notifSchedule, setNotifSchedule] = useState<Schedule | null>(null);
 
   // ── Auth ゲート（Web版と同一の3段階） ──
   if (authLoading) {
@@ -82,6 +91,21 @@ function Root() {
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: 12 }}>
         <ActivityIndicator color={C.ink} />
         <Text style={{ fontSize: 14, color: C.textMuted }}>読み込み中...</Text>
+      </View>
+    );
+  }
+  // 初期ロード失敗（機内モード・圏外等）。無言の空画面にしない
+  if (loadError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: 12, padding: 32 }}>
+        <Feather name="wifi-off" size={32} color={C.textMuted} />
+        <Text style={{ fontSize: 15, fontWeight: "700", color: C.text }}>データを取得できませんでした</Text>
+        <Text style={{ fontSize: 13, color: C.textMuted, textAlign: "center", lineHeight: 20 }}>
+          電波の届く場所で再試行してください
+        </Text>
+        <Btn variant="primary" size="md" onPress={retryLoad} icon={<Feather name="refresh-cw" size={14} color="#fff" />}>
+          再試行
+        </Btn>
       </View>
     );
   }
@@ -139,14 +163,14 @@ function Root() {
       )}
 
       {/* コンテンツ */}
-      {tab === "home" && <HomeScreen onGoReport={() => setTab("report")} onQuickReport={() => setShowQuickReport(true)} />}
+      {tab === "home" && <HomeScreen onGoReport={() => setTab("report")} onQuickReport={() => openQuickReport()} />}
       {tab === "report" && <ReportScreen />}
       {tab === "analytics" && (analyticsSubTab === "report" ? <AnalyticsScreen /> : <GanttScreen />)}
       {tab === "manage" && <ManageScreen subTab={manageSubTab} />}
 
       {/* FAB（記録） */}
       <Pressable
-        onPress={() => setShowQuickReport(true)}
+        onPress={() => openQuickReport()}
         style={{
           position: "absolute", right: 16, bottom: 86 + insets.bottom,
           flexDirection: "row", alignItems: "center", gap: 7,
@@ -172,16 +196,24 @@ function Root() {
         })}
       </View>
 
-      <QuickReportSheet open={showQuickReport} onClose={() => setShowQuickReport(false)} />
+      <QuickReportSheet open={quickReportOpen} onClose={closeQuickReport} />
       <NotificationsSheet
         open={showNotifs}
         onClose={() => setShowNotifs(false)}
         onOpenTarget={cm => {
-          // 通知タップで対象の画面へ（記録=記録タブ / 予定=カレンダー）
-          setTab("report");
-          void cm;
+          // 通知タップで対象の記録・予定の詳細シートを直接開く
+          if (cm.target_type === "report") {
+            const r = reports.find(x => String(x.id) === cm.target_id);
+            if (r) { setNotifReport(r); return; }
+          } else {
+            const sc = schedules.find(x => x.id === cm.target_id);
+            if (sc) { setNotifSchedule(sc); return; }
+          }
+          setTab("report"); // 対象が見つからない場合(削除済み等)は記録タブへ
         }}
       />
+      <ReportDetailSheet report={notifReport} onClose={() => setNotifReport(null)} />
+      <ScheduleDetailSheet schedule={notifSchedule} onClose={() => setNotifSchedule(null)} />
 
       {/* ユーザーシート（ログアウト） */}
       <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.4}>

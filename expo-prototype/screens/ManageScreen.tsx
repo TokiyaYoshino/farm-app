@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, Alert, Platform, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Platform, ActivityIndicator, RefreshControl } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Location from "expo-location";
@@ -34,6 +34,7 @@ export default function ManageScreen({ subTab }: Props) {
     isAdmin, crops, fields, pesticides, reports, cropName,
     addCrop, deleteCrop, addField, deleteField, setFieldLocation,
     addPesticide, deletePesticide, searchPesticideMaster,
+    refreshing, refresh,
   } = useStore();
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -159,6 +160,7 @@ export default function ManageScreen({ subTab }: Props) {
       style={{ flex: 1, backgroundColor: C.bg }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 150 }}
       onScrollBeginDrag={() => openMenuId && setOpenMenuId(null)}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.ink} />}
     >
       {/* ── 作物 ── */}
       {subTab === "crops" && (

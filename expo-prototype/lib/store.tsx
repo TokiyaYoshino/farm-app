@@ -17,6 +17,10 @@ interface Store {
   authSession: AuthSession | null;
   authLoading: boolean;
   loading: boolean;
+  loadError: boolean;
+  retryLoad: () => Promise<void>;
+  refreshing: boolean;
+  refresh: () => Promise<void>;
   login: (loginId: string, password: string) => Promise<string | null>; // エラーメッセージ or null
   logout: () => Promise<void>;
   // data
@@ -39,6 +43,15 @@ interface Store {
   unreadNotifCount: number;
   notifSeenAt: string;
   markNotifsSeen: () => void;
+  // 記録フォームのドラフト（コピーして作成・タイマー終了からの反映に使う）
+  quickReportDraft: Partial<Report> | null;
+  quickReportOpen: boolean;
+  openQuickReport: (draft?: Partial<Report>) => void;
+  closeQuickReport: () => void;
+  // 作業タイマー（開始時刻のみ保持。終了時に経過分を記録フォームへ）
+  workStartedAt: string | null;
+  startWork: () => void;
+  stopWork: () => void;
   // helpers
   cropName: (id: number) => string;
   userName: (id: number) => string;
@@ -103,56 +116,100 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── ログイン後の一括データ取得（Web版 useEffect [authSession] と同一） ──
+  // ── 一括データ取得（Web版 useEffect [authSession] と同一のクエリ）──
+  // 初期ロード・エラー時の再試行・プル・トゥ・リフレッシュで共用する。
+  // 失敗したら throw し、呼び出し側で loadError / RefreshControl を制御する。
+  const fetchAll = useCallback(async (session: AuthSession) => {
+    const { data: meRow, error: meErr } = await supabase.from("users").select("*").eq("auth_id", session.user.id).maybeSingle();
+    if (meErr) throw meErr;
+    const me = (meRow ?? null) as User | null;
+    const org = me?.org ?? "kishu";
+    const organizationId = me?.organization_id ?? null;
+    setCurrentOrg(org);
+    setCurrentOrganizationId(organizationId);
+    if (me) setCurrentUser(me);
+
+    const results = await Promise.all([
+      supabase.from("users").select("*").eq("organization_id", organizationId).order("id"),
+      supabase.from("crops").select("*").eq("org", org).order("id"),
+      supabase.from("fields").select("*").eq("org", org).order("id"),
+      supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
+      supabase.from("settings").select("*").eq("org", org).maybeSingle(),
+      supabase.from("schedules").select("*").eq("organization_id", organizationId).order("date"),
+      supabase.from("pesticides").select("*").eq("org", org).order("name"),
+      supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
+      supabase.from("work_categories").select("*").order("id"),
+      supabase.from("comments").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
+    ]);
+    // ネットワーク断のときは全クエリが error になる。最初のエラーで通信失敗として扱う
+    const firstError = results.find(r => r.error)?.error;
+    if (firstError && results.every(r => r.error)) throw firstError;
+
+    const [{ data: allUsers }, { data: c }, { data: fd }, { data: r }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: wc }, { data: cmts }] = results;
+    const loc = s
+      ? { lat: (s as AppSettings).lat, lng: (s as AppSettings).lng, name: (s as AppSettings).location_name }
+      : { lat: 35.0167, lng: 135.5833, name: "京都府亀岡市" };
+    setWeatherCoords(loc);
+    setUsers((allUsers ?? []) as User[]);
+    if (c) setCrops(c as Crop[]);
+    if (fd) setFields(fd as Field[]);
+    if (r) setReports(r as Report[]);
+    if (sch) setSchedules(sch as Schedule[]);
+    if (ps) setPesticides(ps as Pesticide[]);
+    if (prj) setProjects(prj as Project[]);
+    if (wc) setWorkCategories(wc as WorkCategory[]);
+    if (cmts) setComments(cmts as Comment[]);
+  }, []);
+
+  const [loadError, setLoadError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // 初期ロード（ログイン後）
   useEffect(() => {
     if (!authSession) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
+      setLoading(true);
+      setLoadError(false);
       try {
-        setLoading(true);
-        const { data: meRow } = await supabase.from("users").select("*").eq("auth_id", authSession.user.id).maybeSingle();
-        const me = (meRow ?? null) as User | null;
-        const org = me?.org ?? "kishu";
-        const organizationId = me?.organization_id ?? null;
-        if (cancelled) return;
-        setCurrentOrg(org);
-        setCurrentOrganizationId(organizationId);
-        if (me) setCurrentUser(me);
-
-        const [{ data: allUsers }, { data: c }, { data: fd }, { data: r }, { data: s }, { data: sch }, { data: ps }, { data: prj }, { data: wc }, { data: cmts }] = await Promise.all([
-          supabase.from("users").select("*").eq("organization_id", organizationId).order("id"),
-          supabase.from("crops").select("*").eq("org", org).order("id"),
-          supabase.from("fields").select("*").eq("org", org).order("id"),
-          supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
-          supabase.from("settings").select("*").eq("org", org).maybeSingle(),
-          supabase.from("schedules").select("*").eq("organization_id", organizationId).order("date"),
-          supabase.from("pesticides").select("*").eq("org", org).order("name"),
-          supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
-          supabase.from("work_categories").select("*").order("id"),
-          supabase.from("comments").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
-        ]);
-        if (cancelled) return;
-        const loc = s
-          ? { lat: (s as AppSettings).lat, lng: (s as AppSettings).lng, name: (s as AppSettings).location_name }
-          : { lat: 35.0167, lng: 135.5833, name: "京都府亀岡市" };
-        setWeatherCoords(loc);
-        setUsers((allUsers ?? []) as User[]);
-        if (c) setCrops(c as Crop[]);
-        if (fd) setFields(fd as Field[]);
-        if (r) setReports(r as Report[]);
-        if (sch) setSchedules(sch as Schedule[]);
-        if (ps) setPesticides(ps as Pesticide[]);
-        if (prj) setProjects(prj as Project[]);
-        if (wc) setWorkCategories(wc as WorkCategory[]);
-        if (cmts) setComments(cmts as Comment[]);
+        await fetchAll(authSession);
       } catch (e) {
         console.error("Startup error:", e);
+        if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [authSession]);
+  }, [authSession, fetchAll]);
+
+  // エラー画面の「再試行」
+  const retryLoad = useCallback(async () => {
+    if (!authSession) return;
+    setLoading(true);
+    setLoadError(false);
+    try {
+      await fetchAll(authSession);
+    } catch (e) {
+      console.error("Retry error:", e);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [authSession, fetchAll]);
+
+  // プル・トゥ・リフレッシュ（失敗しても既存表示を保つ）
+  const refresh = useCallback(async () => {
+    if (!authSession || refreshing) return;
+    setRefreshing(true);
+    try {
+      await fetchAll(authSession);
+    } catch (e) {
+      console.error("Refresh error:", e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [authSession, refreshing, fetchAll]);
 
   // ── 天気（Web版 useEffect [weatherCoords] と同一・リトライ2回） ──
   useEffect(() => {
@@ -402,6 +459,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (currentUser) AsyncStorage.setItem(`notifSeen_${currentUser.id}`, now);
   }, [currentUser]);
 
+  // ── 記録フォームのドラフト（コピーして作成／タイマー終了→フォーム反映） ──
+  const [quickReportDraft, setQuickReportDraft] = useState<Partial<Report> | null>(null);
+  const [quickReportOpen, setQuickReportOpen] = useState(false);
+  const openQuickReport = useCallback((draft?: Partial<Report>) => {
+    setQuickReportDraft(draft ?? null);
+    setQuickReportOpen(true);
+  }, []);
+  const closeQuickReport = useCallback(() => {
+    setQuickReportOpen(false);
+    setQuickReportDraft(null);
+  }, []);
+
+  // ── 作業タイマー ──
+  // Web版は sessions テーブルの update を行うが、開始経路（insert）が現行UIから
+  // 露出していないため、アプリでは端末内タイマー→終了時にフォームへ反映のみとする。
+  const [workStartedAt, setWorkStartedAt] = useState<string | null>(null);
+  const startWork = useCallback(() => setWorkStartedAt(new Date().toISOString()), []);
+  const stopWork = useCallback(() => {
+    if (!workStartedAt) return;
+    const start = new Date(workStartedAt);
+    const end = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setWorkStartedAt(null);
+    // 開始・終了時刻を入れた状態で記録フォームを開く（時間帯天気も自動取得される）
+    openQuickReport({
+      work_start: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+      work_end: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
+    });
+  }, [workStartedAt, openQuickReport]);
+
   // ── ヘルパー ──
   const cropName = useCallback((id: number) => crops.find(c => c.id === id)?.name ?? "未設定", [crops]);
   const userName = useCallback((id: number) => users.find(u => u.id === id)?.name ?? "未設定", [users]);
@@ -409,11 +496,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     comments.filter(cm => cm.target_type === type && cm.target_id === String(id)).length, [comments]);
 
   const store: Store = {
-    authSession, authLoading, loading, login, logout,
+    authSession, authLoading, loading, loadError, retryLoad, refreshing, refresh, login, logout,
     currentUser, isAdmin: (currentUser?.role ?? "worker") === "admin",
     users, crops, fields, reports, schedules, pesticides, projects, workCategories, comments,
     weatherCoords, wxAuto, wxLoading,
     myNotifs, unreadNotifCount, notifSeenAt, markNotifsSeen,
+    quickReportDraft, quickReportOpen, openQuickReport, closeQuickReport,
+    workStartedAt, startWork, stopWork,
     cropName, userName, commentCountOf,
     addReport, deleteReport,
     addSchedule, updateSchedule, deleteSchedule,

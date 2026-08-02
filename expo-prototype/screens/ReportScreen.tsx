@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, RefreshControl } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C, SHADOW, RADIUS, workTypeColor, cropColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
@@ -14,7 +14,22 @@ import { WORK_TEMPLATES, type Report } from "../lib/types";
 // ─── 作業記録（src/App.tsx tab==="report" ブロックの移植・実データ）──────
 // 表示モード切替・検索バー・フィルタチップ・記録カード・未報告リスト。
 export default function ReportScreen() {
-  const { reports, schedules, crops, fields, users, pesticides, cropName, userName, commentCountOf } = useStore();
+  const { reports, schedules, crops, fields, users, pesticides, cropName, userName, commentCountOf, openQuickReport, refreshing, refresh } = useStore();
+
+  // コピーして作成（Web版 handleCopyReport と同一: 日付は今日・数量はクリア）
+  const copyReport = (r: Report) => {
+    openQuickReport({
+      user_id: r.user_id,
+      crop_id: r.crop_id,
+      field: r.field,
+      work_type: r.work_type,
+      work_category_id: r.work_category_id ?? undefined,
+      quantity_unit: r.quantity_unit ?? "",
+      work_start: r.work_start ?? undefined,
+      work_end: r.work_end ?? undefined,
+      note: r.note,
+    });
+  };
 
   const [reportView, setReportView] = useState<"calendar" | "list">("calendar");
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
@@ -61,7 +76,11 @@ export default function ReportScreen() {
   const workers = users.filter(u => u.role !== "viewer");
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: C.bg }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.ink} />}
+    >
       {/* 表示モード切替 */}
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
         {([["calendar", "カレンダー", "calendar"], ["list", "記録一覧", "search"]] as const).map(([key, label, icon]) => (
@@ -253,6 +272,7 @@ export default function ReportScreen() {
                 )}
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                   <Btn variant="secondary" size="sm" style={{ flex: 1 }} onPress={() => setSelectedReport(r)}>詳細を見る</Btn>
+                  <Btn variant="soft" size="sm" style={{ flex: 1 }} onPress={() => copyReport(r)} icon={<Feather name="copy" size={12} color={C.ink} />}>コピーして作成</Btn>
                 </View>
               </View>
             );

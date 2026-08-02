@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, Pressable, ScrollView, RefreshControl } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C, SHADOW, RADIUS, workTypeColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
@@ -14,10 +14,28 @@ interface Props {
   onQuickReport: () => void;
 }
 
+const fmtElapsed = (s: number) => {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+};
+
 export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
-  const { reports, schedules, comments, wxAuto, wxLoading, weatherCoords, cropName, userName } = useStore();
+  const {
+    reports, schedules, comments, wxAuto, wxLoading, weatherCoords, cropName, userName,
+    workStartedAt, startWork, stopWork, refreshing, refresh,
+  } = useStore();
   const [showMap, setShowMap] = useState(false);
   const [showPestAdvice, setShowPestAdvice] = useState(false);
+
+  // 作業タイマーの経過秒（Web版 workElapsed と同一の1秒更新）
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!workStartedAt) { setElapsed(0); return; }
+    const started = new Date(workStartedAt).getTime();
+    setElapsed(Math.floor((Date.now() - started) / 1000));
+    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, [workStartedAt]);
 
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
@@ -43,7 +61,25 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
   }).filter((x): x is NonNullable<typeof x> => x !== null);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: C.bg }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.ink} />}
+    >
+      {/* 作業セッション（Web版の「作業中」カード。作業中のみ表示） */}
+      {workStartedAt && (
+        <View style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 12, ...SHADOW.card }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: C.danger }} />
+            <Text style={{ fontSize: 14, fontWeight: "700", color: C.text, flex: 1 }}>作業中</Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: C.text, fontVariant: ["tabular-nums"] }}>
+              {fmtElapsed(elapsed)}
+            </Text>
+            <Btn variant="secondary" size="sm" onPress={stopWork}>終了する</Btn>
+          </View>
+        </View>
+      )}
+
       {/* 天気カード */}
       {!wxLoading && wxAuto && (
         <View style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12, ...SHADOW.card }}>
@@ -105,7 +141,12 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
         {todayScheds.length === 0 ? (
           <View>
             <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 8 }}>予定はありません</Text>
-            <Btn variant="secondary" size="sm" onPress={onQuickReport} icon={<Feather name="plus" size={13} color={C.text} />}>作業を追加</Btn>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Btn variant="secondary" size="sm" onPress={onQuickReport} icon={<Feather name="plus" size={13} color={C.text} />}>作業を追加</Btn>
+              {!workStartedAt && (
+                <Btn variant="soft" size="sm" onPress={startWork} icon={<Feather name="play" size={13} color={C.ink} />}>作業を開始</Btn>
+              )}
+            </View>
           </View>
         ) : todayScheds.map((s, i) => {
           const wc = s.work_type ? workTypeColor(s.work_type) : null;
@@ -135,6 +176,11 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
             </View>
           );
         })}
+        {todayScheds.length > 0 && !workStartedAt && (
+          <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 4 }}>
+            <Btn variant="soft" size="sm" onPress={startWork} icon={<Feather name="play" size={13} color={C.ink} />}>作業を開始（タイマー）</Btn>
+          </View>
+        )}
       </View>
 
       {/* 新着コメント */}

@@ -9,12 +9,14 @@ import BottomSheet from "../ui/BottomSheet";
 import Picker from "../ui/Picker";
 import { useStore } from "../lib/store";
 import { fetchWeatherForPeriod, type PeriodWeather } from "../lib/weather";
+import { canUseAiFeature, structureVoiceApi, saveAiOutput } from "../lib/ai";
 import { WORK_TEMPLATES, isPesticideWorkType, calcWorkMinutes } from "../lib/types";
 
 // ─── クイック作業記録（src/App.tsx showQuickReport + addReport の移植・実データ）─
 // 灰well+白rowのグループ入力。作物/圃場/作業種別は BottomSheet ピッカー、
 // 日付/時刻はネイティブ DateTimePicker。写真は expo-image-picker →
 // Supabase Storage。開始終了が揃うと Open-Meteo で時間帯天気を自動取得。
+// ドラフト（コピーして作成・タイマー終了）は store の quickReportDraft から受け取る。
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -26,7 +28,7 @@ const toTimeStr = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${Strin
 export default function QuickReportSheet({ open, onClose }: Props) {
   const {
     currentUser, users, crops, fields, pesticides, workCategories,
-    wxAuto, wxLoading, weatherCoords, addReport,
+    wxAuto, wxLoading, weatherCoords, addReport, quickReportDraft,
   } = useStore();
 
   const [date, setDate] = useState(() => toDateStr(new Date()));
@@ -47,6 +49,7 @@ export default function QuickReportSheet({ open, onClose }: Props) {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [periodWeather, setPeriodWeather] = useState<PeriodWeather | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [aiStructuring, setAiStructuring] = useState(false);
   const [pickerFor, setPickerFor] = useState<"crop" | "field" | "work" | "user" | null>(null);
   const [dtPicker, setDtPicker] = useState<"date" | "start" | "end" | null>(null);
 
@@ -56,6 +59,25 @@ export default function QuickReportSheet({ open, onClose }: Props) {
     if (crops.length > 0 && !cropId) setCropId(crops[0].id);
     if (fields.length > 0 && !fieldName) setFieldName(fields[0].name);
   }, [currentUser, crops, fields]);
+
+  // ドラフト反映（Web版 handleCopyReport / stopWork の rForm 反映と同一の趣旨）
+  useEffect(() => {
+    if (!open || !quickReportDraft) return;
+    const d = quickReportDraft;
+    if (d.crop_id != null) setCropId(d.crop_id);
+    if (d.field != null) setFieldName(d.field);
+    if (d.work_type != null) setWorkType(d.work_type);
+    if (d.work_category_id != null) setWorkCategoryId(d.work_category_id);
+    if (d.quantity_unit != null) setQuantityUnit(d.quantity_unit ?? "");
+    if (d.note != null) setNote(d.note);
+    if (d.user_id != null) setUserId(d.user_id);
+    if (d.work_start != null || d.work_end != null) {
+      setWorkStart(d.work_start ?? "");
+      setWorkEnd(d.work_end ?? "");
+      setExpanded(true); // 時刻が入っているので詳細を開いて見せる
+    }
+    setDate(toDateStr(new Date())); // コピー時は日付を今日に（Web版と同一）
+  }, [open, quickReportDraft]);
 
   // 開始・終了時刻が揃ったら圃場（なければ設定座標）の気象を自動取得（Web版と同一）
   useEffect(() => {
@@ -85,6 +107,51 @@ export default function QuickReportSheet({ open, onClose }: Props) {
     setSelectedPesticides([]); setPesticideAmounts({}); setImageUri(null);
     setPeriodWeather(null); setExpanded(false);
     setDate(toDateStr(new Date()));
+  };
+
+  // ── メモをAIでフォームに振り分け（Web版 structure-voice 呼び出しと同一） ──
+  // 文字起こしはキーボードのマイクボタン（iOS標準音声入力）で行い、
+  // 書き溜めたメモの構造化だけAPIに投げる。
+  const structureNote = async () => {
+    if (!note.trim() || aiStructuring) return;
+    setAiStructuring(true);
+    try {
+      const res = await structureVoiceApi(
+        note,
+        fields.map(f => f.name),
+        workCategories.length > 0 ? workCategories.map(c => c.name) : WORK_TEMPLATES,
+        pesticides.map(p => p.name),
+      );
+      if (!res.ok) { Alert.alert("AI整理に失敗しました", res.error); return; }
+      const s = res.data;
+      if (s.note) setNote(s.note);
+      if (s.field && fields.some(fd => fd.name === s.field)) setFieldName(s.field);
+      if (s.work_category) {
+        const cat = workCategories.find(c => c.name === s.work_category);
+        if (cat) {
+          setWorkCategoryId(cat.id);
+          setWorkType(cat.name);
+          setQuantityUnit(cat.unit ?? "");
+        } else if (WORK_TEMPLATES.includes(s.work_category)) {
+          setWorkType(s.work_category);
+        }
+      }
+      if (s.pesticide_names.length > 0) {
+        const ids = pesticides.filter(p => s.pesticide_names.includes(p.name)).map(p => p.id);
+        if (ids.length > 0) setSelectedPesticides(ids);
+      }
+      if (s.quantity_value != null) setQuantity(String(s.quantity_value));
+      if (s.quantity_unit) setQuantityUnit(s.quantity_unit);
+      if (s.soil_ph != null) setSoilPh(String(s.soil_ph));
+      void saveAiOutput(currentUser?.organization_id ?? null, currentUser?.id ?? null, "voice_structure", {
+        targetDate: date, field: s.field ?? fieldName ?? null,
+        inputSummary: note, outputJson: s,
+      });
+    } catch {
+      Alert.alert("AI整理に失敗しました");
+    } finally {
+      setAiStructuring(false);
+    }
   };
 
   // ── 登録（Web版 addReport のペイロード構築と同一） ──
@@ -363,16 +430,32 @@ export default function QuickReportSheet({ open, onClose }: Props) {
               </>
             )}
 
-            {/* メモ */}
-            <Text style={lbl}>メモ</Text>
+            {/* メモ（キーボードのマイクで音声入力 → AIでフォームに振り分け） */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+              <Text style={[lbl, { marginBottom: 0 }]}>メモ</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Feather name="mic" size={11} color={C.textMuted} />
+                <Text style={{ fontSize: 11, color: C.textMuted }}>キーボードのマイクで音声入力できます</Text>
+              </View>
+            </View>
             <TextInput
               value={note}
               onChangeText={setNote}
               placeholder="作業の内容・気づいたこと"
               placeholderTextColor={C.textMuted}
               multiline
-              style={[underlineInput, { minHeight: 60, textAlignVertical: "top" }]}
+              style={[underlineInput, { minHeight: 60, textAlignVertical: "top", marginBottom: 8 }]}
             />
+            {canUseAiFeature("voiceStructuring") && !!note.trim() && (
+              <Btn
+                variant="soft" size="sm"
+                style={{ alignSelf: "stretch", marginBottom: 12 }}
+                onPress={structureNote}
+                icon={<Feather name="star" size={13} color={C.ink} />}
+              >
+                {aiStructuring ? "整理中..." : "メモをAIでフォームに反映"}
+              </Btn>
+            )}
           </>
         )}
 

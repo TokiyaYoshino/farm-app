@@ -199,3 +199,18 @@ export const pestControlAdviceApi = (forecast: string, lat: number, lng: number)
 
 export const diagnoseImageApi = (imageUrl: string, cropName?: string) =>
   callApi<{ diagnosis: DiagnosisResult; usage?: unknown; costUsd?: number }>("/api/diagnose-image", cropName ? { imageUrl, cropName } : { imageUrl });
+
+// 音声メモの構造化（Web版 /api/structure-voice と同一ボディ）。
+// 文字起こし自体は iOS キーボードの音声入力（無料）を使い、構造化のみAPIに投げる
+// —— Web版が Web Speech API（無料）+ 構造化API という分担なのと同じ構成。
+export interface StructuredVoice {
+  field: string | null;
+  work_category: string | null;
+  pesticide_names: string[];
+  quantity_value: number | null;
+  quantity_unit: string | null;
+  soil_ph: number | null;
+  note: string;
+}
+export const structureVoiceApi = (transcript: string, fields: string[], workCategories: string[], pesticides: string[]) =>
+  callApi<StructuredVoice>("/api/structure-voice", { transcript, fields, workCategories, pesticides });

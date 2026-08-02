@@ -676,52 +676,52 @@ export default function CalendarView() {
             </>
           )}
         </View>
+
+        {/* ピッカー群（iOSはModalの外に兄弟Modalを重ねられないため、シートの中に置く） */}
+        <Picker
+          open={pickerFor === "formWorker" || pickerFor === "editWorker"}
+          title="作業者"
+          options={[{ key: "0", label: "指定なし" }, ...workers.map(u => ({ key: String(u.id), label: u.name }))]}
+          value={String(pickerFor === "editWorker" ? editForm.assignedUserId : form.assignedUserId)}
+          onSelect={v => pickerFor === "editWorker"
+            ? setEditForm(f => ({ ...f, assignedUserId: Number(v) }))
+            : setForm(f => ({ ...f, assignedUserId: Number(v) }))}
+          onClose={() => setPickerFor(null)}
+        />
+        <Picker
+          open={pickerFor === "formWork" || pickerFor === "editWork"}
+          title="作業種別"
+          options={WORK_TEMPLATES.map(t => ({ key: t, label: t }))}
+          value={pickerFor === "editWork" ? editForm.workType : form.workType}
+          onSelect={v => pickerFor === "editWork"
+            ? setEditForm(f => ({ ...f, workType: v }))
+            : setForm(f => ({ ...f, workType: v }))}
+          onClose={() => setPickerFor(null)}
+        />
+        <Picker
+          open={pickerFor === "formCrop" || pickerFor === "editCrop"}
+          title="作物"
+          options={[{ key: "", label: "指定なし" }, ...crops.map(c => ({ key: c.name, label: c.name }))]}
+          value={pickerFor === "editCrop" ? editForm.crop : form.crop}
+          onSelect={v => pickerFor === "editCrop"
+            ? setEditForm(f => ({ ...f, crop: v }))
+            : setForm(f => ({ ...f, crop: v }))}
+          onClose={() => setPickerFor(null)}
+        />
+        {showEditDatePicker && (
+          <DateTimePicker
+            value={new Date((editForm.date || today) + "T00:00:00")}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={(event, selected) => {
+              setShowEditDatePicker(false);
+              if (event.type === "dismissed" || !selected) return;
+              setEditForm(f => ({ ...f, date: selected.toISOString().slice(0, 10) }));
+            }}
+          />
+        )}
       </BottomSheet>
 
-      {/* ピッカー群 */}
-      <Picker
-        open={pickerFor === "formWorker" || pickerFor === "editWorker"}
-        title="作業者"
-        options={[{ key: "0", label: "指定なし" }, ...workers.map(u => ({ key: String(u.id), label: u.name }))]}
-        value={String(pickerFor === "editWorker" ? editForm.assignedUserId : form.assignedUserId)}
-        onSelect={v => pickerFor === "editWorker"
-          ? setEditForm(f => ({ ...f, assignedUserId: Number(v) }))
-          : setForm(f => ({ ...f, assignedUserId: Number(v) }))}
-        onClose={() => setPickerFor(null)}
-      />
-      <Picker
-        open={pickerFor === "formWork" || pickerFor === "editWork"}
-        title="作業種別"
-        options={WORK_TEMPLATES.map(t => ({ key: t, label: t }))}
-        value={pickerFor === "editWork" ? editForm.workType : form.workType}
-        onSelect={v => pickerFor === "editWork"
-          ? setEditForm(f => ({ ...f, workType: v }))
-          : setForm(f => ({ ...f, workType: v }))}
-        onClose={() => setPickerFor(null)}
-      />
-      <Picker
-        open={pickerFor === "formCrop" || pickerFor === "editCrop"}
-        title="作物"
-        options={[{ key: "", label: "指定なし" }, ...crops.map(c => ({ key: c.name, label: c.name }))]}
-        value={pickerFor === "editCrop" ? editForm.crop : form.crop}
-        onSelect={v => pickerFor === "editCrop"
-          ? setEditForm(f => ({ ...f, crop: v }))
-          : setForm(f => ({ ...f, crop: v }))}
-        onClose={() => setPickerFor(null)}
-      />
-
-      {showEditDatePicker && (
-        <DateTimePicker
-          value={new Date((editForm.date || today) + "T00:00:00")}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={(event, selected) => {
-            setShowEditDatePicker(false);
-            if (event.type === "dismissed" || !selected) return;
-            setEditForm(f => ({ ...f, date: selected.toISOString().slice(0, 10) }));
-          }}
-        />
-      )}
     </>
   );
 }
