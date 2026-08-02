@@ -35,7 +35,13 @@ export default function BottomSheet({
   return (
     <div style={overlay} onClick={onClose}>
       <div style={sheet} onClick={e => e.stopPropagation()}>
-        <div style={{ width: 38, height: 4, background: C.well, borderRadius: 4, margin: "12px auto 6px", flexShrink: 0 }} />
+        <button
+          onClick={onClose}
+          aria-label="閉じる"
+          style={{ display: "flex", justifyContent: "center", padding: "12px 0 6px", border: "none", background: "none", cursor: "pointer", flexShrink: 0 }}
+        >
+          <div style={{ width: 38, height: 4, background: C.well, borderRadius: 4 }} />
+        </button>
         {children}
       </div>
     </div>

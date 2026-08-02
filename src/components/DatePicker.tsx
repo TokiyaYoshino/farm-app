@@ -52,7 +52,9 @@ export default function DatePicker({ label, value, onSelect, onClose }: Props) {
         onClick={e => e.stopPropagation()}
       >
         {/* Handle */}
-        <div style={css({ width: 38, height: 4, background: C.well, borderRadius: 4, margin: "0 auto 14px" })} />
+        <button onClick={onClose} aria-label="閉じる" style={css({ display: "flex", justifyContent: "center", width: "100%", padding: "0 0 14px", border: "none", background: "none", cursor: "pointer" })}>
+          <div style={css({ width: 38, height: 4, background: C.well, borderRadius: 4 })} />
+        </button>
 
         {/* Header */}
         <div style={css({ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 })}>
