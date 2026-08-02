@@ -422,10 +422,12 @@ export default function App() {
   const [searchChatLoading, setSearchChatLoading] = useState(false);
   const [searchChatError, setSearchChatError]     = useState("");
 
-  // 天気×防除タイミング助言
+  // 天気×防除タイミング助言（1日1回。開くたびに生成すると ai_outputs に重複が溜まるため、
+  // 当日ぶんが無いときだけ生成し、あれば保存済みの結果を読み込んで表示する）
   const [showPestAdviceSheet, setShowPestAdviceSheet] = useState(false);
   const [pestAdviceForecast, setPestAdviceForecast] = useState("");
   const [pestAdviceResult, setPestAdviceResult]     = useState("");
+  const [pestAdviceDate, setPestAdviceDate]         = useState("");
   const [pestAdvicePesticideId, setPestAdvicePesticideId] = useState("");
   const [pestAdviceLoading, setPestAdviceLoading]   = useState(false);
   const [pestAdviceError, setPestAdviceError]       = useState("");
@@ -1610,6 +1612,7 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.advice) {
         setPestAdviceResult(d.advice);
+        setPestAdviceDate(new Date().toISOString().slice(0, 10));
         void saveAiOutput("pest_advice", {
           inputSummary: forecast,
           outputText: d.advice, usage: d.usage, costUsd: d.costUsd,
@@ -1621,6 +1624,35 @@ export default function App() {
       setPestAdviceError("通信に失敗しました。ネットワークをご確認ください。");
     } finally {
       setPestAdviceLoading(false);
+    }
+  };
+
+  // シートを開いたときの入り口。当日ぶんが state に無ければ ai_outputs から先に探し、
+  // それも無いときだけ新規生成する（開くたびに生成すると履歴が無意味に増えるため）。
+  const openPestAdviceSheet = async () => {
+    setShowPestAdviceSheet(true);
+    const today = new Date().toISOString().slice(0, 10);
+    if (pestAdviceResult && pestAdviceDate === today) return;
+    if (pestAdviceLoading) return;
+    if (!currentOrganizationId) { void generatePestControlAdvice(); return; }
+    setPestAdviceLoading(true);
+    const { data } = await supabase
+      .from("ai_outputs")
+      .select("output_text,input_summary")
+      .eq("organization_id", currentOrganizationId)
+      .eq("kind", "pest_advice")
+      .eq("target_date", today)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const saved = data?.[0];
+    if (saved?.output_text) {
+      setPestAdviceResult(saved.output_text);
+      setPestAdviceForecast(saved.input_summary ?? "");
+      setPestAdviceDate(today);
+      setPestAdviceLoading(false);
+    } else {
+      setPestAdviceLoading(false);
+      void generatePestControlAdvice();
     }
   };
 
@@ -2230,7 +2262,7 @@ export default function App() {
               </div>
               {canUseAiFeature("pestControlAdvice") && (
                 <button
-                  onClick={() => { setShowPestAdviceSheet(true); if (!pestAdviceResult && !pestAdviceLoading) generatePestControlAdvice(); }}
+                  onClick={openPestAdviceSheet}
                   style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:10 }}
                 >
                   <Wind size={13} strokeWidth={2} />防除タイミング助言
@@ -4159,9 +4191,18 @@ export default function App() {
             </div>
           )}
 
-          <button onClick={generatePestControlAdvice} disabled={pestAdviceLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:pestAdviceLoading ? 0.6 : 1 }}>
-            <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : pestAdviceResult ? "もう一度確認" : "助言を確認"}
-          </button>
+          {(() => {
+            const advisedToday = !!pestAdviceResult && pestAdviceDate === new Date().toISOString().slice(0, 10);
+            return advisedToday ? (
+              <div style={{ fontSize:12, color:C.textMuted, textAlign:"center" as const }}>
+                本日の助言は確認済みです。更新は翌日以降になります。
+              </div>
+            ) : (
+              <button onClick={generatePestControlAdvice} disabled={pestAdviceLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:pestAdviceLoading ? 0.6 : 1 }}>
+                <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : "助言を確認"}
+              </button>
+            );
+          })()}
         </div>
       </BottomSheet>
 
