@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,6 +17,7 @@ import ReportDetailSheet from "./screens/ReportDetailSheet";
 import ScheduleDetailSheet from "./screens/ScheduleDetailSheet";
 import BottomSheet from "./ui/BottomSheet";
 import Btn from "./ui/Btn";
+import { addPushListeners, getInitialPushPayload, type PushPayload } from "./lib/push";
 import type { Report, Schedule } from "./lib/types";
 
 // ─── ルート（src/App.tsx のヘッダー・サブタブ・ボトムナビ・FAB の移植）────
@@ -64,7 +65,7 @@ function SubTabBar<T extends string>({ tabs, value, onChange }: {
 function Root() {
   const insets = useSafeAreaInsets();
   const {
-    authSession, authLoading, loading, loadError, retryLoad,
+    authSession, authLoading, loading, loadError, retryLoad, refresh,
     currentUser, logout, unreadNotifCount, markNotifsSeen,
     quickReportOpen, openQuickReport, closeQuickReport, reports, schedules,
   } = useStore();
@@ -76,6 +77,50 @@ function Root() {
   // 通知タップからの直接遷移用
   const [notifReport, setNotifReport] = useState<Report | null>(null);
   const [notifSchedule, setNotifSchedule] = useState<Schedule | null>(null);
+
+  // ── 対象（記録・予定）の詳細シートを開く。開けたら true ──
+  // targetType は comments.target_type と同じ緩い string（"report" 以外は予定扱い）
+  const openTarget = useCallback((targetType: string, targetId: string) => {
+    if (targetType === "report") {
+      const r = reports.find(x => String(x.id) === targetId);
+      if (r) { setNotifReport(r); return true; }
+    } else {
+      const sc = schedules.find(x => x.id === targetId);
+      if (sc) { setNotifSchedule(sc); return true; }
+    }
+    return false;
+  }, [reports, schedules]);
+
+  // ── プッシュ通知（受信でデータ再取得・タップで対象を開く） ──
+  // コールドスタート時はデータ取得前にペイロードが来るため、いったん保留して
+  // reports/schedules が揃ってから開く。
+  const [pendingPush, setPendingPush] = useState<PushPayload | null>(null);
+  const initialPushChecked = useRef(false);
+  // refresh は refreshing の変化で再生成されるため、購読を張り直さないようrefで持つ
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
+  useEffect(() => {
+    if (!authSession) return;
+    const remove = addPushListeners({
+      onOpen: payload => setPendingPush(payload),
+      onReceive: () => { void refreshRef.current(); },
+    });
+    // 通知タップでアプリが起動した場合の初回ペイロード（1回だけ）
+    if (!initialPushChecked.current) {
+      initialPushChecked.current = true;
+      getInitialPushPayload().then(p => { if (p?.target_id) setPendingPush(p); });
+    }
+    return remove;
+  }, [authSession]);
+
+  // 通知1件をタップしただけなので既読化はしない（他の未読をベルに残す）
+  useEffect(() => {
+    if (!pendingPush?.target_id || !pendingPush.target_type || loading) return;
+    const { target_type, target_id } = pendingPush;
+    setPendingPush(null);
+    if (!openTarget(target_type, target_id)) setTab("report");
+  }, [pendingPush, loading, openTarget]);
 
   // ── Auth ゲート（Web版と同一の3段階） ──
   if (authLoading) {
@@ -201,15 +246,9 @@ function Root() {
         open={showNotifs}
         onClose={() => setShowNotifs(false)}
         onOpenTarget={cm => {
-          // 通知タップで対象の記録・予定の詳細シートを直接開く
-          if (cm.target_type === "report") {
-            const r = reports.find(x => String(x.id) === cm.target_id);
-            if (r) { setNotifReport(r); return; }
-          } else {
-            const sc = schedules.find(x => x.id === cm.target_id);
-            if (sc) { setNotifSchedule(sc); return; }
-          }
-          setTab("report"); // 対象が見つからない場合(削除済み等)は記録タブへ
+          // 通知タップで対象の記録・予定の詳細シートを直接開く。
+          // 対象が見つからない場合(削除済み等)は記録タブへ
+          if (!openTarget(cm.target_type, cm.target_id)) setTab("report");
         }}
       />
       <ReportDetailSheet report={notifReport} onClose={() => setNotifReport(null)} />

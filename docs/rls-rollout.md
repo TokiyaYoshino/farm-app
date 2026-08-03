@@ -48,6 +48,8 @@ SQL Editor で **2) をテーブル1ブロックずつ**実行する。順番の
 2. `fields` → `pesticides` → `reports` → `schedules` → `comments`
 3. `settings` → `projects` → `tickets` → `ai_outputs` → `daily_weather`
 4. `work_categories` → `pesticides_master` → `pesticide_registrations` → `organizations`
+   - このタイミングで `scripts/migrations/2026-08-04-device-tokens.sql`（プッシュ通知の
+     端末トークン表）も実行してよい。`jwt_organization_id()` に依存するため手順1より後に行う
 5. **最後に `users`**（ログイン画面の login_id→email 解決が匿名selectに依存するため、
    列制限grantを含むブロックを一気に実行し、直後にログインできることを必ず確認）
 6. Storage の 3) ブロック
@@ -90,7 +92,9 @@ JWTに organization_id が入っているか（手順2）を再確認する。
 
 - [ ] `docs/multitenancy-progress.md` の残作業からRLS項目を消し込み、完了日を記録
 - [ ] この手順書に実施日と結果を追記
-- [ ] 次: App Store申請準備（Apple Developer登録 → EAS Build → プッシュ通知 → TestFlight）
+- [ ] 次: App Store申請 → `docs/app-store-submission.md`
+      （プッシュ通知・EAS設定・プライバシーポリシーの実装は2026-08-04に完了済み。
+      残るのはApple Developer登録以降のユーザー作業）
 
 ## 実施記録
 

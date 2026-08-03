@@ -13,13 +13,19 @@
       "backgroundColor": "#F5F5F6"
     },
     "ios": {
+      "bundleIdentifier": "com.kishufarm.farmreport",
+      "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "作業記録に添付する写真を選択するために使用します",
-        "NSLocationWhenInUseUsageDescription": "圃場の位置を現在地から設定するために使用します"
+        "NSCameraUsageDescription": "作業記録に添付する写真を撮影するために使用します",
+        "NSLocationWhenInUseUsageDescription": "圃場の位置を現在地から設定するために使用します",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.kishufarm.farmreport",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -28,12 +34,19 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "READ_MEDIA_IMAGES"
+        "READ_MEDIA_IMAGES",
+        "POST_NOTIFICATIONS"
       ]
     },
     "plugins": [
       "expo-image-picker",
-      "expo-location"
+      "expo-location",
+      [
+        "expo-notifications",
+        {
+          "color": "#2E7D32"
+        }
+      ]
     ]
   }
 }

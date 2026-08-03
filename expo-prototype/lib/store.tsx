@@ -2,10 +2,11 @@
 // 認証セッション監視 → users/crops/fields/reports/schedules/pesticides/
 // projects/work_categories/comments/settings を organization_id / org で取得。
 // CRUD は Web 版のハンドラと同一のクエリ・楽観更新。
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { registerPushToken, unregisterPushToken } from "./push";
 import { fetchCurrentWeather, type CurrentWeather } from "./weather";
 import type {
   User, Crop, Field, Report, Schedule, Comment, Pesticide, PesticideMaster, Project,
@@ -243,10 +244,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // ── プッシュ通知のトークン登録（ログイン後・組織確定後に1回）──
+  // 失敗（権限拒否・Expo Go・シミュレータ）は null が返るだけでアプリは通常動作する。
+  // currentUser は refetch ごとに別オブジェクトになるため、試行済みのユーザーIDを
+  // ref で持って重複要求を防ぐ（権限ダイアログの再表示・無駄なupsertを避ける）。
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const pushRegisteredFor = useRef<number | null>(null);
+  const userId = currentUser?.id ?? null;
+  useEffect(() => {
+    if (!userId || !currentOrganizationId) return;
+    if (pushRegisteredFor.current === userId) return;
+    pushRegisteredFor.current = userId;
+    registerPushToken(userId, currentOrganizationId).then(t => {
+      if (t) setPushToken(t);
+    });
+  }, [userId, currentOrganizationId]);
+
   const logout = useCallback(async () => {
+    // 端末を手放した後に通知が届かないよう、サインアウト前にトークン行を消す
+    if (pushToken) {
+      await unregisterPushToken(pushToken);
+      setPushToken(null);
+    }
+    pushRegisteredFor.current = null; // 別ユーザーで再ログインしたら登録し直す
     await supabase.auth.signOut();
     setCurrentUser(null);
-  }, []);
+  }, [pushToken]);
 
   // ── 画像アップロード（Web版 uploadImage の RN 版: URI → ArrayBuffer） ──
   const uploadImage = async (uri: string): Promise<string> => {

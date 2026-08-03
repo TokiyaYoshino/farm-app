@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2E7D32" />
+    <meta name="description" content="農作業レポート（kishu-farm）のプライバシーポリシー" />
+    <link rel="icon" type="image/svg+xml" href="/app-icon.svg" />
+    <title>プライバシーポリシー — 農作業レポート</title>
+    <style>
+      :root {
+        --bg: #f5f5f6;
+        --card: #fff;
+        --ink: #2e7d32;
+        --text: #1a1c1e;
+        --text-sub: #5a5f65;
+        --hairline: #ebebed;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 16px 64px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+        line-height: 1.85;
+        font-size: 15px;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        background: var(--card);
+        border-radius: 20px;
+        padding: 32px 28px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+      }
+      h1 { font-size: 22px; letter-spacing: -0.4px; margin: 0 0 4px; }
+      .updated { color: var(--text-sub); font-size: 13px; margin: 0 0 28px; }
+      h2 {
+        font-size: 16px;
+        margin: 32px 0 8px;
+        padding-top: 20px;
+        border-top: 1px solid var(--hairline);
+      }
+      h2:first-of-type { border-top: none; padding-top: 0; margin-top: 24px; }
+      p, li { color: var(--text); }
+      ul { padding-left: 20px; margin: 8px 0; }
+      li { margin-bottom: 6px; }
+      dl { margin: 8px 0; }
+      dt { font-weight: 700; margin-top: 14px; }
+      dd { margin: 2px 0 0; padding-left: 0; color: var(--text-sub); }
+      a { color: var(--ink); }
+      .note {
+        background: #f0f7f0;
+        border-radius: 14px;
+        padding: 14px 16px;
+        font-size: 14px;
+        color: var(--text-sub);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>プライバシーポリシー</h1>
+      <p class="updated">農作業レポート（kishu-farm）／最終更新日: 2026年8月4日</p>
+
+      <p>
+        本ポリシーは、農作業レポート（以下「本アプリ」。iOS/Android アプリおよび
+        ウェブ版 kishu-farm を含みます）における利用者情報の取り扱いについて定めるものです。
+        本アプリは農場の作業記録・予定管理・分析を行う業務用アプリであり、
+        利用は運営者から発行されたアカウントを持つ農場関係者に限られます。
+      </p>
+
+      <h2>1. 取得する情報</h2>
+      <dl>
+        <dt>アカウント情報</dt>
+        <dd>氏名、ユーザーID、メールアドレス、所属組織、権限区分（管理者／作業者／閲覧者）</dd>
+
+        <dt>作業記録データ</dt>
+        <dd>
+          作業日、作物、圃場、作業種別、数量、作業時間、使用農薬と使用量、土壌pH、メモ、
+          添付写真、予定、コメント
+        </dd>
+
+        <dt>位置情報</dt>
+        <dd>
+          圃場の位置を登録する目的で、利用者が明示的に「現在地から設定」を操作したときのみ
+          端末の位置情報を取得します。常時取得・バックグラウンド取得・移動履歴の収集は行いません。
+        </dd>
+
+        <dt>写真</dt>
+        <dd>
+          作業記録への添付および病害虫の画像診断のために、利用者が選択・撮影した画像のみを取得します。
+          写真ライブラリ全体を読み取ることはありません。
+        </dd>
+
+        <dt>プッシュ通知トークン</dt>
+        <dd>
+          コメントやメンションの通知を送るため、通知を許可した端末の識別子（Expo プッシュトークン）を
+          保存します。広告目的の識別子（IDFA 等）は取得しません。
+        </dd>
+      </dl>
+      <p>本アプリは行動ターゲティング広告を行わず、そのためのトラッキングも行いません。</p>
+
+      <h2>2. 利用目的</h2>
+      <ul>
+        <li>作業記録・予定・分析機能の提供</li>
+        <li>同一組織のメンバー間での記録・コメントの共有</li>
+        <li>コメントおよびメンションの通知</li>
+        <li>AI 機能（日報の下書き作成、記録の検索応答、病害虫の画像診断、防除タイミングの助言）の提供</li>
+        <li>不具合の調査および機能改善</li>
+      </ul>
+
+      <h2>3. データの保管と第三者提供</h2>
+      <p>
+        データは以下の委託先のサーバー上に保管・処理されます。いずれもサービス提供に必要な範囲での
+        取り扱いに限られ、利用者情報を販売することはありません。
+      </p>
+      <dl>
+        <dt>Supabase Inc.</dt>
+        <dd>データベース、認証、画像ストレージ、プッシュ通知の配信処理</dd>
+
+        <dt>Vercel Inc.</dt>
+        <dd>ウェブ版およびアプリのサーバー処理（API）の実行</dd>
+
+        <dt>OpenAI, L.L.C.</dt>
+        <dd>
+          AI 機能を利用した場合に限り、対象の作業記録テキストまたは診断対象の画像を送信します。
+          API 経由の利用であり、送信内容が OpenAI のモデル学習に利用されない設定で利用しています。
+        </dd>
+
+        <dt>Open-Meteo</dt>
+        <dd>天気情報の取得（圃場または農場所在地の緯度経度のみを送信）</dd>
+
+        <dt>Expo（650 Industries, Inc.）</dt>
+        <dd>プッシュ通知の中継</dd>
+      </dl>
+      <p>
+        上記以外の第三者への提供は、法令に基づく開示請求がある場合を除き行いません。
+      </p>
+
+      <h2>4. データの分離</h2>
+      <p>
+        本アプリは組織単位でデータを分離しており、利用者は自身が所属する組織のデータのみ参照・編集できます。
+        通信は TLS で暗号化され、データベース側でも組織単位のアクセス制御を適用しています。
+      </p>
+
+      <h2>5. 保存期間</h2>
+      <p>
+        作業記録は年次比較・経年分析に用いるため、組織の利用が継続する間は保存します。
+        アカウント削除の申し出があった場合、当該利用者のアカウント情報とプッシュ通知トークンを削除します。
+        作業記録は農場の業務記録として組織に帰属するため、組織の管理者の指示に従って削除または保持します。
+      </p>
+
+      <h2>6. 利用者の権利</h2>
+      <ul>
+        <li>自身の情報の開示・訂正・削除を求めることができます</li>
+        <li>アプリ内でログアウトすると、その端末のプッシュ通知トークンは削除されます</li>
+        <li>位置情報・写真・通知の許可は、端末の設定からいつでも取り消せます</li>
+      </ul>
+
+      <h2>7. 子どもの利用について</h2>
+      <p>本アプリは農場の業務用であり、13歳未満の利用を想定していません。</p>
+
+      <h2>8. 本ポリシーの変更</h2>
+      <p>
+        内容を変更する場合は、本ページの最終更新日を改めて掲載します。
+        重要な変更を行う場合はアプリまたはメールでお知らせします。
+      </p>
+
+      <h2>9. お問い合わせ</h2>
+      <!--
+        TODO（申請前に要記入）: 運営者の正式名称と問い合わせ先メールアドレス。
+        App Store Connect のプライバシーポリシーURLとして提出するため、
+        連絡の取れる実在のアドレスを記載すること（審査で確認される）。
+      -->
+      <div class="note">
+        運営者: <!-- 正式名称を記入 --><br />
+        お問い合わせ先: <!-- 連絡用メールアドレスを記入 -->
+      </div>
+    </main>
+  </body>
+</html>
