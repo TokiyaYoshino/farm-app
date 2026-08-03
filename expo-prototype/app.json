@@ -3,7 +3,7 @@
     "name": "農作業レポート",
     "slug": "farm-app-mobile",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F5F5F6",
     "icon": "./assets/icon.png",
