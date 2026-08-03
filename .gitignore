@@ -30,6 +30,8 @@ expo-prototype/qr.html
 .vercel
 .env.local
 .env*
+# プレースホルダのみのテンプレートは共有する（EASへの環境変数登録手順を含む）
+!.env.example
 
 # Claude Code のローカル作業ディレクトリ（worktrees が数百MBになる）
 .claude/

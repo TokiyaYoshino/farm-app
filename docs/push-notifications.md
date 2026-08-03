@@ -74,6 +74,8 @@ supabase functions deploy push-comment --no-verify-jwt
 
 ### 4. EAS プロジェクトIDの設定
 
+実機ビルドの手順全体は `docs/testflight-guide.md` にまとめてある。
+
 `getExpoPushTokenAsync` は `extra.eas.projectId` を要求する。
 `eas build` を初回実行すると `app.json` に自動で追記される（手動なら `eas init`）。
 

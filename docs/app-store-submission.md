@@ -2,6 +2,10 @@
 
 対象: `expo-prototype/`（Expo SDK 54 / iOS）。Android（Google Play）は後回し。
 
+**先に実機で動かしたい場合は `docs/testflight-guide.md`**（EAS のセットアップから
+TestFlight 配信まで）。本書は公開審査に出すための入力項目をまとめたもので、
+手順3〜5は TestFlight ガイドと重複する。
+
 ## 前提: 先に終わらせること
 
 1. **RLS の実ポリシー化** — `docs/rls-rollout.md`。現状 `allow_all` のため、
