@@ -24,6 +24,8 @@ import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { harvestQty, excludedHarvestCount } from "./lib/metrics";
+import { summarizeUsageByCrop, formatPesticideUsageForPrompt } from "./lib/pesticideUsage";
+import PesticideUsageSummary, { PesticideUsageCard } from "./components/PesticideUsageSummary";
 import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
@@ -181,7 +183,9 @@ async function fetchPestControlForecast(lat: number, lng: number): Promise<strin
 // ─── 型 ─────────────────────────────────────────────────
 type Role = "admin" | "worker" | "viewer";
 interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; organization_id?: string; }
-interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; }
+// famic_crop_name は FAMIC 登録適用部の作物名（例: 南高梅 → うめ）との手動紐付け。
+// 未設定なら農薬の使用回数は「判定不可」として扱う（自動マッチングはしない）
+interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; famic_crop_name?: string | null; }
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
 interface Session { id: number; user_id: number; field_id: number | null; started_at: string; voice_memo: string; }
@@ -340,7 +344,7 @@ export default function App() {
   const [workCategories, setWorkCategories] = useState<WorkCategory[]>([]);
   const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", work_category_id:0, quantity:"", quantity_value:"", quantity_unit:"", work_time:"", work_start:"", work_end:"", note:"", pesticide_id:"", pesticide_amount:"" });
   const [periodWeather, setPeriodWeather] = useState<{ temp:string; humidity:string; rain:string; weather:string } | null>(null);
-  const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"" });
+  const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"", famic_crop_name:"" });
   const [fForm, setFForm]                 = useState({ name:"" });
   const [expandedCrops, setExpandedCrops] = useState<Set<number>>(new Set());
   const [imageFile, setImageFile]         = useState<File | null>(null);
@@ -382,6 +386,9 @@ export default function App() {
   const [chartYear, setChartYear]         = useState(() => new Date().getFullYear());
   const [editingTargetYield, setEditingTargetYield] = useState(false);
   const [targetYieldInput, setTargetYieldInput]     = useState("");
+  // FAMIC 作物名のインライン編集（管理タブ > 作物）。編集中の作物 id を持つ
+  const [editingFamicCropId, setEditingFamicCropId] = useState<number | null>(null);
+  const [famicCropInput, setFamicCropInput]         = useState("");
   const [selectedPesticides, setSelectedPesticides] = useState<string[]>([]);
   const [pesticideAmounts, setPesticideAmounts]     = useState<Record<string, string>>({});
   const [soilPh, setSoilPh]                         = useState("");
@@ -1085,12 +1092,13 @@ export default function App() {
       name: cForm.name.trim(),
       start_date: cForm.start_date,
       target_yield: cForm.target_yield ? Number(cForm.target_yield) : null,
+      famic_crop_name: cForm.famic_crop_name.trim() || null,
       org: currentOrg, organization_id: currentOrganizationId,
     }]).select();
     setSubmitting(false);
     if (error) { console.error("addCrop error:", error); return showToast(error.message, "err"); }
     if (data) setCrops(p => [...p, data[0] as Crop]);
-    setCForm({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"" });
+    setCForm({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"", famic_crop_name:"" });
     showToast("作物を追加しました");
   };
 
@@ -1109,6 +1117,18 @@ export default function App() {
     setCrops(prev => prev.map(c => c.id === cropId ? { ...c, target_yield: num ?? undefined } : c));
     setEditingTargetYield(false);
     showToast("目標収穫量を更新しました");
+  };
+
+  // FAMIC 登録適用部の作物名との紐付け。「南高梅」→「うめ」のように登録上の作物名と
+  // 一致しないため自動マッチングはせず、手入力で対応させる。未設定のあいだは
+  // 農薬の総使用回数を「判定不可」として扱う（誤判定で法令違反に導かないため）。
+  const updateFamicCropName = async (cropId: number, value: string) => {
+    const name = value.trim() || null;
+    const { error } = await supabase.from("crops").update({ famic_crop_name: name }).eq("id", cropId);
+    if (error) { console.error("updateFamicCropName error:", error); return showToast(error.message, "err"); }
+    setCrops(prev => prev.map(c => c.id === cropId ? { ...c, famic_crop_name: name } : c));
+    setEditingFamicCropId(null);
+    showToast(name ? "FAMIC 作物名を設定しました" : "FAMIC 作物名を解除しました");
   };
 
   const handleCopyReport = (report: Report) => {
@@ -1676,42 +1696,53 @@ export default function App() {
     return grouped;
   };
 
-  /**
-   * 農薬ごとの「登録上限」と「今年の散布実績」を1ブロックにまとめる。
-   * total_count は FAMIC 原文に範囲や条件（「14回以内(土壌灌注は2回以内…)」）を含むため、
-   * 数値に正規化せず原文のまま渡す（docs/db-schema.md の方針）。
-   */
-  const formatPesticideLimits = (regs: Record<string, PesticideRegistration[]>): string => {
-    const yearPrefix = new Date().toISOString().slice(0, 4);
-    const lines: string[] = [];
-    pesticides.forEach(p => {
-      const rows = regs[p.id] ?? [];
-      const sprays = reports
-        .filter(r => r.date.startsWith(yearPrefix))
-        .filter(r => (r.pesticides_used?.some(u => u.id === p.id)) || r.pesticide_id === p.id)
-        .map(r => r.date)
-        .sort();
-      if (rows.length === 0 && sprays.length === 0) return;
-      const used = sprays.length > 0
-        ? `今年の散布 ${sprays.length}回（${sprays.map(d => d.slice(5).replace("-", "/")).join("、")}）`
-        : "今年の散布 0回";
-      if (rows.length === 0) {
-        lines.push(`- ${p.name}: 登録情報なし / ${used}`);
+  // 作業報告フォームで農薬を選んだら、その農薬の保存済み適用情報を引いて使用回数の判定に使う。
+  // 保存済みが0件の農薬は pRegs にキーが立たないため、取得済み判定を state ではなく
+  // この ref で持つ（state だけで見ると同じ農薬を無限に取得し続ける）。
+  const regFetchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const missing = selectedPesticides.filter(id => !regFetchedRef.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach(id => regFetchedRef.current.add(id));
+    void (async () => {
+      const { data, error } = await supabase
+        .from("pesticide_registrations")
+        .select("pesticide_id,registration_no,product_name,crop_name,pest_name,dilution,usage_timing,usage_count,total_count,application")
+        .in("pesticide_id", missing);
+      if (error) {
+        console.error("pesticide_registrations fetch error:", error);
+        // 取り直せるように取得済み印を戻す（判定不可のまま固定させない）
+        missing.forEach(id => regFetchedRef.current.delete(id));
         return;
       }
-      rows.forEach(rg => {
-        const limit = rg.total_count?.trim() || "総使用回数の記載なし";
-        const timing = rg.usage_timing?.trim() ? ` / 使用時期 ${rg.usage_timing.trim()}` : "";
-        lines.push(`- ${p.name}（${rg.crop_name || "作物不明"}・${rg.pest_name || "対象不明"}）: 総使用回数 ${limit}${timing} / ${used}`);
+      setPRegs(prev => {
+        const next = { ...prev };
+        // 今回取得した農薬ぶんは丸ごと差し替える（既存に足すと、パネルを開いて
+        // 取得済みだった農薬の適用行が二重になり使用回数の判定根拠が壊れる）。
+        // 0件の農薬も空配列で確定させ、「未取得」と「取得したが適用行なし」を区別する
+        missing.forEach(id => { next[id] = []; });
+        (data ?? []).forEach(row => {
+          const key = (row as PesticideRegistration).pesticide_id;
+          if (!key || !next[key] || !missing.includes(key)) return;
+          next[key].push(row as PesticideRegistration);
+        });
+        return next;
       });
+    })();
+  }, [selectedPesticides]);
+
+  /**
+   * 農薬ごとの「登録上限」と「使用実績」を1ブロックにまとめる。
+   *
+   * 集計・判定は src/lib/pesticideUsage.ts に集約してあり、農薬管理タブ・作業報告フォームの
+   * 表示と同じ関数を通す（AI の回答と画面の数字が食い違わないようにするため）。
+   * 集計単位は年ではなく作付け（総使用回数は生育期間中の上限のため）。
+   * total_count は FAMIC 原文のまま渡す（docs/db-schema.md の方針）。
+   */
+  const formatPesticideLimits = (regs: Record<string, PesticideRegistration[]>): string =>
+    formatPesticideUsageForPrompt({
+      pesticides, crops, reports, registrationsByPesticide: regs,
     });
-    if (lines.length === 0) return "";
-    return [
-      "",
-      `## 農薬の登録上限と${yearPrefix}年の散布実績（FAMIC登録情報・原文のまま）`,
-      ...lines,
-    ].join("\n");
-  };
 
   // 検索対象の記録を人間可読テキストに整形する（API側はこのテキストのみ受け取る疎結合設計）。
   // 一覧フィルタが有効ならその絞り込み結果を優先し、無効なら直近180日・最新200件にフォールバックする。
@@ -2659,6 +2690,11 @@ export default function App() {
                     <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
                     <div style={S.lbl}>目標収穫量（kg/年・任意）</div>
                     <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
+                    <div style={S.lbl}>FAMIC 作物名（任意）</div>
+                    <input style={S.input} placeholder="例: うめ（南高梅なら「うめ」）" value={cForm.famic_crop_name} onChange={e => setCForm(f => ({ ...f, famic_crop_name:e.target.value }))} />
+                    <div style={{ fontSize:11, color:C.textMuted, marginTop:-8, marginBottom:12, lineHeight:1.6 }}>
+                      農薬登録情報（FAMIC）上の作物名。農薬の総使用回数を照合するのに使います。未設定でも記録はできますが、使用回数の判定はできません。
+                    </div>
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
                       {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
                     </button>
@@ -2684,7 +2720,12 @@ export default function App() {
                       <span style={{ width:10, height:10, borderRadius:"50%", background:cropColor(c.id), flexShrink:0 }} />
                       <div style={{ minWidth:0, flex:1 }}>
                         <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{c.name}</div>
-                        <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{c.start_date}{stat?.growDays != null ? ` · ${stat.growDays}日目` : ""}</div>
+                        <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
+                          {c.start_date}{stat?.growDays != null ? ` · ${stat.growDays}日目` : ""}
+                          {c.famic_crop_name
+                            ? ` · FAMIC「${c.famic_crop_name}」`
+                            : <span style={{ color:C.warning, fontWeight:600 }}> · FAMIC 作物名 未設定</span>}
+                        </div>
                       </div>
                     </button>
                     <div style={{ display:"flex", alignItems:"center", gap:2, flexShrink:0 }}>
@@ -2717,6 +2758,40 @@ export default function App() {
                           <div style={{ fontSize:11, color:C.textMuted, marginTop:3 }}>{stat.tot > 0 ? "kg収穫" : "収穫なし"}</div>
                         </div>
                       </div>
+
+                      {/* FAMIC 作物名の紐付け（農薬の総使用回数を照合するのに使う）。
+                          自動マッチングはしない方針のため、目標収穫量と同じ操作感で手入力させる */}
+                      <div style={{ ...S.wellBox, padding:6, marginBottom:12 }}>
+                        <div style={{ ...S.wrow, display:"block" }}>
+                          <div style={S.lbl2}>FAMIC 作物名（農薬の使用回数の照合用）</div>
+                          {editingFamicCropId === c.id ? (
+                            <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                              <input
+                                autoFocus placeholder="例: うめ"
+                                value={famicCropInput}
+                                onChange={e => setFamicCropInput(e.target.value)}
+                                onKeyDown={e => e.key === "Enter" && updateFamicCropName(c.id, famicCropInput)}
+                                style={{ flex:1, minWidth:0, padding:"6px 11px", borderRadius:RADIUS.pill, border:`1px solid ${C.hairline}`, fontSize:16, background:C.card, color:C.text, boxSizing:"border-box" as const }}
+                              />
+                              <button onClick={() => updateFamicCropName(c.id, famicCropInput)} style={btn("primary", "sm")}>保存</button>
+                              <button onClick={() => setEditingFamicCropId(null)} style={btn("secondary", "sm")}>×</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setFamicCropInput(c.famic_crop_name ?? ""); setEditingFamicCropId(c.id); }}
+                              style={{ fontSize:15, fontWeight:700, color: c.famic_crop_name ? C.text : C.warning, background:"none", border:"none", padding:0, cursor:"pointer", textAlign:"left" as const }}
+                            >
+                              {c.famic_crop_name || "未設定 — タップして設定"}
+                            </button>
+                          )}
+                          {!c.famic_crop_name && editingFamicCropId !== c.id && (
+                            <div style={{ fontSize:11, color:C.textMuted, marginTop:4, lineHeight:1.6 }}>
+                              FAMIC 作物名が未設定のため、農薬の使用回数を判定できません。農薬登録情報上の作物名（例: 南高梅なら「うめ」）を入れてください。
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <button
                         onClick={e => { e.stopPropagation(); setAnalyticsCropId(c.id); setAnalyticsSubTab("report"); setTab("analytics"); }}
                         style={{ background:"none", border:"none", cursor:"pointer", color:C.ink, fontSize:13, fontWeight:600, padding:0 }}
@@ -2933,6 +3008,20 @@ export default function App() {
                         <span style={{ color:C.textMuted, fontSize:11 }}>第{c.registration_no}号</span>
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {/* 自農場の作付けごとの使用状況。適用情報の一覧より先に出す
+                    （撒く前に見るべきなのは「あと何回か」であって登録原文の一覧ではないため） */}
+                {pRegOpen === p.id && pRegs[p.id] && crops.length > 0 && (
+                  <div style={{ marginTop:8 }}>
+                    <PesticideUsageSummary
+                      title="自農場の使用状況（作付けごと）"
+                      summaries={summarizeUsageByCrop({
+                        pesticideId: p.id, crops, reports, registrations: pRegs[p.id],
+                      })}
+                      onSetupCrop={() => setManageSubTab("crops")}
+                    />
                   </div>
                 )}
 
@@ -3866,6 +3955,36 @@ export default function App() {
                           ))}
                         </div>
                       )}
+
+                      {/* 選択中の農薬 × 選択中の作物の使用状況。記録は事後入力なので散布前の抑止には
+                          ならないが、超過に気づいて出荷判断・次回以降の計画に反映できるようにする。
+                          既定は要点のみ（compact）で、詳細は行タップで展開する */}
+                      {selectedPesticides.length > 0 && (() => {
+                        const crop = crops.find(c => c.id === rForm.crop_id);
+                        if (!crop) {
+                          return (
+                            <div style={{ fontSize:12, color:C.textSub, background:C.well, borderRadius:RADIUS.row, padding:"10px 12px", marginBottom:12, lineHeight:1.6 }}>
+                              作物が未選択のため、農薬の使用回数は判定できません。作物を選ぶと作付けごとの使用実績を表示します。
+                            </div>
+                          );
+                        }
+                        return selectedPesticides.map(id => {
+                          const p = pesticides.find(x => x.id === id);
+                          if (!p) return null;
+                          return (
+                            <PesticideUsageCard
+                              key={id}
+                              title={`${p.name} の使用状況`}
+                              compact
+                              summaries={summarizeUsageByCrop({
+                                pesticideId: id, crops: [crop], reports,
+                                registrations: pRegs[id] ?? [],
+                              })}
+                              onSetupCrop={() => { setTab("manage"); setManageSubTab("crops"); }}
+                            />
+                          );
+                        });
+                      })()}
                     </>
                   )}
 
