@@ -6,13 +6,18 @@ import * as Location from "expo-location";
 import { C, SHADOW, RADIUS, cropColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import RowMenu from "../ui/RowMenu";
+import PesticideUsageSummary from "../ui/PesticideUsageSummary";
 import { useStore } from "../lib/store";
+import { summarizeUsageByCrop } from "../lib/pesticideUsage";
 import type { PesticideMaster } from "../lib/types";
 
 // ─── 管理（src/App.tsx tab==="manage" ブロックの移植・実データ）──────────
-// 作物: 追加+展開式統計 / 圃場: 追加+GPS位置設定+作付け履歴 / 農薬: 追加+リスト。
+// 作物: 追加+展開式統計+FAMIC作物名の紐付け / 圃場: 追加+GPS位置設定+作付け履歴 /
+// 農薬: 追加+リスト+適用情報（FAMIC）+作付けごとの使用状況。
 interface Props {
   subTab: "crops" | "fields" | "pesticides";
+  /** 農薬の使用状況から「FAMIC 作物名を設定する」への導線（作物サブタブへ） */
+  onGoCrops?: () => void;
 }
 
 const secStyle = {
@@ -29,17 +34,25 @@ const underlineInput = {
   fontSize: 15, color: C.text, marginBottom: 16,
 };
 
-export default function ManageScreen({ subTab }: Props) {
+export default function ManageScreen({ subTab, onGoCrops }: Props) {
   const {
     isAdmin, crops, fields, pesticides, reports, cropName,
-    addCrop, deleteCrop, addField, deleteField, setFieldLocation,
+    addCrop, updateFamicCropName, deleteCrop, addField, deleteField, setFieldLocation,
     addPesticide, deletePesticide, searchPesticideMaster,
+    pRegs, openRegistrations, saveRegistrationsFor,
     refreshing, refresh,
   } = useStore();
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const [showCropAddForm, setShowCropAddForm] = useState(false);
-  const [cForm, setCForm] = useState({ name: "", start_date: todayStr, target_yield: "" });
+  const [cForm, setCForm] = useState({ name: "", start_date: todayStr, target_yield: "", famic_crop_name: "" });
+  // FAMIC 作物名のインライン編集（Web版 editingFamicCropId と同一）
+  const [editingFamicCropId, setEditingFamicCropId] = useState<number | null>(null);
+  const [famicCropInput, setFamicCropInput] = useState("");
+  // 農薬の適用情報パネル（Web版 pRegOpen / pRegLoading / pRegCandidates と同一）
+  const [pRegOpen, setPRegOpen] = useState<string | null>(null);
+  const [pRegLoading, setPRegLoading] = useState<string | null>(null);
+  const [pRegCandidates, setPRegCandidates] = useState<{ pesticideId: string; list: { registration_no: string; product_name: string }[] } | null>(null);
   const [fForm, setFForm] = useState({ name: "" });
   const [pForm, setPForm] = useState({ name: "", type: "", dilution_rate: "" });
   // 農薬マスタ検索（Web版と同一: 300msデバウンス→ilike検索→候補選択で自動入力）
@@ -84,11 +97,41 @@ export default function ManageScreen({ subTab }: Props) {
   const handleAddCrop = async () => {
     if (!cForm.name.trim() || submitting) return;
     setSubmitting(true);
-    const err = await addCrop(cForm.name, cForm.start_date, cForm.target_yield);
+    const err = await addCrop(cForm.name, cForm.start_date, cForm.target_yield, cForm.famic_crop_name);
     setSubmitting(false);
     if (err) { Alert.alert("追加に失敗しました", err); return; }
-    setCForm({ name: "", start_date: todayStr, target_yield: "" });
+    setCForm({ name: "", start_date: todayStr, target_yield: "", famic_crop_name: "" });
     setShowCropAddForm(false);
+  };
+
+  const handleSaveFamicCropName = async (cropId: number) => {
+    const err = await updateFamicCropName(cropId, famicCropInput);
+    if (err) { Alert.alert("設定に失敗しました", err); return; }
+    setEditingFamicCropId(null);
+  };
+
+  // 適用情報パネルの開閉＋取得（Web版 openRegistrations の呼び出し側と同一のフロー）
+  const handleOpenRegistrations = async (pesticideId: string) => {
+    if (pRegOpen === pesticideId) { setPRegOpen(null); return; }
+    setPRegOpen(pesticideId);
+    setPRegCandidates(null);
+    const p = pesticides.find(x => x.id === pesticideId);
+    if (!p || pRegs[pesticideId]?.length) return; // 取得済み
+    setPRegLoading(pesticideId);
+    const res = await openRegistrations(p);
+    setPRegLoading(null);
+    if (typeof res === "string") { Alert.alert("適用情報を取得できませんでした", res); setPRegOpen(null); return; }
+    if (res && "candidates" in res) setPRegCandidates({ pesticideId, list: res.candidates });
+  };
+
+  const handleSelectCandidate = async (pesticideId: string, registrationNo: string) => {
+    const p = pesticides.find(x => x.id === pesticideId);
+    if (!p) return;
+    setPRegCandidates(null);
+    setPRegLoading(pesticideId);
+    const err = await saveRegistrationsFor(p, registrationNo);
+    setPRegLoading(null);
+    if (err) { Alert.alert("適用情報を取得できませんでした", err); setPRegOpen(null); }
   };
 
   const handleAddField = async () => {
@@ -190,6 +233,12 @@ export default function ManageScreen({ subTab }: Props) {
                   <Text style={lblStyle}>目標収穫量（kg/年・任意）</Text>
                   <TextInput style={underlineInput} placeholder="例: 500" placeholderTextColor={C.textMuted} keyboardType="numeric"
                     value={cForm.target_yield} onChangeText={v => setCForm(f => ({ ...f, target_yield: v }))} />
+                  <Text style={lblStyle}>FAMIC 作物名（任意）</Text>
+                  <TextInput style={[underlineInput, { marginBottom: 6 }]} placeholder="例: うめ（南高梅なら「うめ」）" placeholderTextColor={C.textMuted}
+                    value={cForm.famic_crop_name} onChangeText={v => setCForm(f => ({ ...f, famic_crop_name: v }))} />
+                  <Text style={{ fontSize: 11, color: C.textMuted, lineHeight: 17, marginBottom: 14 }}>
+                    農薬登録情報（FAMIC）上の作物名。農薬の総使用回数を照合するのに使います。未設定でも記録はできますが、使用回数の判定はできません。
+                  </Text>
                   <Btn variant="primary" size="lg" onPress={handleAddCrop} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
                     {submitting ? "追加中..." : "作物を追加"}
                   </Btn>
@@ -214,6 +263,9 @@ export default function ManageScreen({ subTab }: Props) {
                       <Text style={{ fontWeight: "700", fontSize: 15, color: C.text }}>{c.name}</Text>
                       <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
                         {c.start_date}{stat?.growDays != null ? ` · ${stat.growDays}日目` : ""}
+                        {c.famic_crop_name
+                          ? ` · FAMIC「${c.famic_crop_name}」`
+                          : <Text style={{ color: C.warning, fontWeight: "600" }}> · FAMIC 作物名 未設定</Text>}
                       </Text>
                     </View>
                   </View>
@@ -251,6 +303,40 @@ export default function ManageScreen({ subTab }: Props) {
                           <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>{s.l}</Text>
                         </View>
                       ))}
+                    </View>
+
+                    {/* FAMIC 作物名の紐付け（農薬の総使用回数を照合するのに使う）。
+                        自動マッチングはしない方針のため手入力させる（Web版と同一） */}
+                    <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 6, marginTop: 12 }}>
+                      <View style={{ backgroundColor: C.card, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12 }}>
+                        <Text style={{ fontSize: 11, fontWeight: "500", color: C.textMuted, marginBottom: 2 }}>
+                          FAMIC 作物名（農薬の使用回数の照合用）
+                        </Text>
+                        {editingFamicCropId === c.id ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                            <TextInput
+                              autoFocus placeholder="例: うめ" placeholderTextColor={C.textMuted}
+                              value={famicCropInput}
+                              onChangeText={setFamicCropInput}
+                              onSubmitEditing={() => handleSaveFamicCropName(c.id)}
+                              style={{ flex: 1, minWidth: 0, paddingVertical: 6, paddingHorizontal: 11, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: C.hairline, fontSize: 16, backgroundColor: C.card, color: C.text }}
+                            />
+                            <Btn variant="primary" size="sm" onPress={() => handleSaveFamicCropName(c.id)}>保存</Btn>
+                            <Btn variant="secondary" size="sm" onPress={() => setEditingFamicCropId(null)}>×</Btn>
+                          </View>
+                        ) : (
+                          <Pressable onPress={() => { setFamicCropInput(c.famic_crop_name ?? ""); setEditingFamicCropId(c.id); }}>
+                            <Text style={{ fontSize: 15, fontWeight: "700", color: c.famic_crop_name ? C.text : C.warning }}>
+                              {c.famic_crop_name || "未設定 — タップして設定"}
+                            </Text>
+                          </Pressable>
+                        )}
+                        {!c.famic_crop_name && editingFamicCropId !== c.id && (
+                          <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 17 }}>
+                            FAMIC 作物名が未設定のため、農薬の使用回数を判定できません。農薬登録情報上の作物名（例: 南高梅なら「うめ」）を入れてください。
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </>
                 )}
@@ -430,22 +516,106 @@ export default function ManageScreen({ subTab }: Props) {
           ) : (
             <View style={[cardStyle, { paddingVertical: 0 }]}>
               {pesticides.map((p, i) => (
-                <View key={p.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.hairline }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: C.pesticideBg, alignItems: "center", justifyContent: "center" }}>
-                    <Feather name="droplet" size={14} color={C.pesticide} />
+                <View key={p.id} style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.hairline }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: C.pesticideBg, alignItems: "center", justifyContent: "center" }}>
+                      <Feather name="droplet" size={14} color={C.pesticide} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontWeight: "700", fontSize: 14, color: C.text }}>{p.name}</Text>
+                      <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                        {[p.type, p.dilution_rate].filter(Boolean).join(" · ") || "詳細未設定"}
+                      </Text>
+                    </View>
+                    {isAdmin && (
+                      <RowMenu menuKey={`mp${p.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                        items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => confirmDelete("この農薬を削除しますか？", async () => {
+                          const err = await deletePesticide(p.id);
+                          if (err) Alert.alert("削除に失敗しました", err);
+                        }) }]} />
+                    )}
                   </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontWeight: "700", fontSize: 14, color: C.text }}>{p.name}</Text>
-                    <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                      {[p.type, p.dilution_rate].filter(Boolean).join(" · ") || "詳細未設定"}
+
+                  {/* 適用情報（FAMIC）の開閉ボタン（Web版と同一フロー） */}
+                  <Pressable
+                    onPress={() => handleOpenRegistrations(p.id)}
+                    disabled={pRegLoading === p.id}
+                    style={{ paddingBottom: 10, opacity: pRegLoading === p.id ? 0.6 : 1 }}
+                  >
+                    <Text style={{ fontSize: 12, color: C.ink, fontWeight: "600" }}>
+                      {pRegLoading === p.id
+                        ? "適用情報を取得中..."
+                        : pRegOpen === p.id
+                          ? "▲ 適用情報を閉じる"
+                          : `▼ 適用情報${pRegs[p.id]?.length ? `（${pRegs[p.id].length}件）` : "を見る"}`}
                     </Text>
-                  </View>
-                  {isAdmin && (
-                    <RowMenu menuKey={`mp${p.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
-                      items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => confirmDelete("この農薬を削除しますか？", async () => {
-                        const err = await deletePesticide(p.id);
-                        if (err) Alert.alert("削除に失敗しました", err);
-                      }) }]} />
+                  </Pressable>
+
+                  {/* 登録番号の候補が複数ある場合の選択（Web版 pRegCandidates と同一） */}
+                  {pRegOpen === p.id && pRegCandidates?.pesticideId === p.id && (
+                    <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 8, marginBottom: 10 }}>
+                      <Text style={{ fontSize: 11, color: C.textMuted, marginBottom: 6, lineHeight: 17 }}>
+                        同名の登録が複数あります。製品ラベルの登録番号と一致するものを選んでください。
+                      </Text>
+                      {pRegCandidates.list.map(cand => (
+                        <Pressable
+                          key={cand.registration_no}
+                          onPress={() => handleSelectCandidate(p.id, cand.registration_no)}
+                          style={{ backgroundColor: C.card, borderRadius: RADIUS.row, paddingVertical: 8, paddingHorizontal: 10, marginBottom: 6 }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: C.text }}>{cand.product_name}</Text>
+                          <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>登録第{cand.registration_no}号</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* 自農場の作付けごとの使用状況。適用情報の一覧より先に出す
+                      （撒く前に見るべきなのは「あと何回か」であって登録原文の一覧ではないため） */}
+                  {pRegOpen === p.id && pRegs[p.id] && crops.length > 0 && (
+                    <View style={{ marginBottom: 10 }}>
+                      <PesticideUsageSummary
+                        title="自農場の使用状況（作付けごと）"
+                        summaries={summarizeUsageByCrop({
+                          pesticideId: p.id, crops, reports, registrations: pRegs[p.id],
+                        })}
+                        onSetupCrop={onGoCrops}
+                      />
+                    </View>
+                  )}
+
+                  {/* 適用情報の一覧（FAMIC 原文・Web版と同一の注記と30件上限） */}
+                  {pRegOpen === p.id && pRegs[p.id] && (
+                    <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 12, marginBottom: 10 }}>
+                      <Text style={{ fontSize: 11, color: C.textMuted, marginBottom: 10, lineHeight: 17 }}>
+                        {p.registration_no ? `農薬登録第${p.registration_no}号の適用内容（FAMIC 農薬登録情報より）。` : "FAMIC 農薬登録情報より。"}
+                        <Text style={{ color: C.textSub, fontWeight: "700" }}>実際の使用時は必ず製品ラベルの表示を確認してください。</Text>
+                      </Text>
+                      {pRegs[p.id].length === 0 && (
+                        <Text style={{ fontSize: 12, color: C.textMuted }}>適用情報がありません</Text>
+                      )}
+                      {pRegs[p.id].slice(0, 30).map((r, ri) => (
+                        <View key={r.id ?? ri} style={{ backgroundColor: C.card, borderRadius: RADIUS.row, paddingVertical: 8, paddingHorizontal: 10, marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: C.text }}>
+                            {r.crop_name}{r.pest_name ? ` / ${r.pest_name}` : ""}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 2, lineHeight: 18 }}>
+                            {[
+                              r.dilution && `希釈 ${r.dilution}`,
+                              r.usage_timing && `使用時期 ${r.usage_timing}`,
+                              r.usage_count && `本剤 ${r.usage_count}`,
+                              r.total_count && `総使用回数 ${r.total_count}`,
+                              r.application && `方法 ${r.application}`,
+                            ].filter(Boolean).join(" · ")}
+                          </Text>
+                        </View>
+                      ))}
+                      {pRegs[p.id].length > 30 && (
+                        <Text style={{ fontSize: 11, color: C.textMuted, textAlign: "center", paddingTop: 4 }}>
+                          ほか{pRegs[p.id].length - 30}件（登録内容の全文はラベル・登録情報でご確認ください）
+                        </Text>
+                      )}
+                    </View>
                   )}
                 </View>
               ))}

@@ -6,7 +6,7 @@ import { wmoToLabel } from "./weather";
 import type { Report, Pesticide } from "./types";
 
 // Web版本番（Vercel）。api/ ディレクトリのサーバーレス関数がここに載っている
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://kishu-farm.vercel.app";
+export const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://kishu-farm.vercel.app";
 
 // ai_outputs.model に残すモデル名（api/*.ts のモデル指定が正）
 const AI_MODEL = "gpt-4o-mini";
@@ -100,7 +100,7 @@ export function formatDayRecords(reports: Report[], date: string, h: FormatHelpe
   }).join("\n");
 }
 
-export function formatRecordsForChat(reports: Report[], h: FormatHelpers): { text: string; count: number } {
+export function formatRecordsForChat(reports: Report[], h: FormatHelpers, limitsBlock = ""): { text: string; count: number } {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 180);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
@@ -119,15 +119,17 @@ export function formatRecordsForChat(reports: Report[], h: FormatHelpers): { tex
     parts.push(`担当:${h.userName(r.user_id)}`);
     return parts.join(" / ");
   });
-  // API側の records 上限 20000 文字に収める（Web版と同じ趣旨。登録上限ブロックは未対応のため単純詰め）
+  // API側が records 20000文字までしか受け付けないため、農薬の登録上限ブロックを先に確保し、
+  // 残りの予算に収まるぶんだけ記録を新しい順に詰める（Web版 formatRecordsForChat と同一）
+  const budget = 19000 - limitsBlock.length;
   const out: string[] = [];
   let total = 0;
   for (const line of lines) {
-    if (total + line.length + 1 > 20000) break;
+    if (total + line.length + 1 > budget) break;
     out.push(line);
     total += line.length + 1;
   }
-  return { text: out.join("\n"), count: out.length };
+  return { text: out.join("\n") + limitsBlock, count: out.length };
 }
 
 // ── 防除助言用の天気予報テキスト（Web版 fetchPestControlForecast と同一） ──

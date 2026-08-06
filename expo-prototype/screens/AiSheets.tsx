@@ -13,6 +13,7 @@ import {
   generateReportApi, searchChatApi, pestControlAdviceApi, diagnoseImageApi,
   saveAiOutput, type DiagnosisResult,
 } from "../lib/ai";
+import { formatPesticideUsageForPrompt } from "../lib/pesticideUsage";
 
 // ─── AI機能シート群（src/App.tsx のAI系ボトムシートの移植）────────────────
 // AI日報生成 / 記録検索チャット / 防除タイミング助言 / 画像診断（単体）。
@@ -107,7 +108,7 @@ export function DailyReportSheet({ open, onClose }: { open: boolean; onClose: ()
 
 // ── ② 記録検索チャット ──
 export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { reports, pesticides, cropName, userName } = useStore();
+  const { reports, crops, pesticides, cropName, userName, prefetchAllRegistrations } = useStore();
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -120,7 +121,13 @@ export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () 
     setInput("");
     setLoading(true);
     setError("");
-    const { text: records, count } = formatRecordsForChat(reports, { cropName, userName, pesticides });
+    // 農薬の登録上限と使用実績も一緒に渡すため、未取得ぶんを先読みする（Web版と同一）。
+    // 画面表示と同じ summarizeUsage を通すので、AI の回答と画面の数字が食い違わない
+    const regs = await prefetchAllRegistrations();
+    const limitsBlock = formatPesticideUsageForPrompt({
+      pesticides, crops, reports, registrationsByPesticide: regs,
+    });
+    const { text: records, count } = formatRecordsForChat(reports, { cropName, userName, pesticides }, limitsBlock);
     if (!records) {
       setError("対象の作業記録がありません。");
       setLoading(false);

@@ -10,8 +10,15 @@ import { registerPushToken, unregisterPushToken } from "./push";
 import { fetchCurrentWeather, type CurrentWeather } from "./weather";
 import type {
   User, Crop, Field, Report, Schedule, Comment, Pesticide, PesticideMaster, Project,
-  WorkCategory, AppSettings,
+  WorkCategory, AppSettings, PesticideRegistration,
 } from "./types";
+
+// Web版 /api/pesticide-registration（FAMICのZIPにCORSが無くクライアントから直接取得
+// できないための中継）。アプリからも同じVercel APIを叩く。lib/ai.ts と同じ既定。
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://kishu-farm.vercel.app";
+
+// pesticide_registrations から引く列（Web版 App.tsx の select と同一）
+const REG_COLUMNS = "pesticide_id,registration_no,product_name,crop_name,pest_name,dilution,usage_timing,usage_count,total_count,application";
 
 interface Store {
   // auth
@@ -63,8 +70,19 @@ interface Store {
   addSchedule: (date: string, note: string, crop: string, assignedUserId: number | null, workType: string, field?: string) => Promise<boolean>;
   updateSchedule: (id: string, date: string, note: string, crop: string, assignedUserId: number | null, workType: string, field?: string) => Promise<boolean>;
   deleteSchedule: (id: string) => Promise<string | null>;
-  addCrop: (name: string, startDate: string, targetYield: string) => Promise<string | null>;
+  addCrop: (name: string, startDate: string, targetYield: string, famicCropName?: string) => Promise<string | null>;
+  updateFamicCropName: (cropId: number, value: string) => Promise<string | null>;
   deleteCrop: (id: number) => Promise<string | null>;
+  // 農薬の適用情報（FAMIC）。キーが無い = 未取得、空配列 = 取得したが適用行なし
+  pRegs: Record<string, PesticideRegistration[]>;
+  // 保存済みの適用情報を必要ぶんだけ引く（記録フォーム・チャットの判定用）
+  loadSavedRegistrations: (pesticideIds: string[]) => Promise<void>;
+  // 全農薬ぶんを先読みして返す（チャットで「あと何回使えるか」に答える用）
+  prefetchAllRegistrations: () => Promise<Record<string, PesticideRegistration[]>>;
+  // パネルを開いたときの取得。候補が複数あるときは candidates を返して選ばせる
+  openRegistrations: (p: Pesticide) => Promise<{ candidates: { registration_no: string; product_name: string }[] } | string | null>;
+  // 候補から登録番号を確定して取得・保存
+  saveRegistrationsFor: (p: Pesticide, registrationNo: string) => Promise<string | null>;
   addField: (name: string) => Promise<string | null>;
   deleteField: (id: number) => Promise<string | null>;
   setFieldLocation: (fieldId: number, lat: number, lng: number) => Promise<string | null>;
@@ -365,17 +383,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── 作物・圃場・農薬（Web版と同一） ──
-  const addCrop = useCallback(async (name: string, startDate: string, targetYield: string): Promise<string | null> => {
+  const addCrop = useCallback(async (name: string, startDate: string, targetYield: string, famicCropName?: string): Promise<string | null> => {
     const { data, error } = await supabase.from("crops").insert([{
       name: name.trim(),
       start_date: startDate,
       target_yield: targetYield ? Number(targetYield) : null,
+      famic_crop_name: famicCropName?.trim() || null,
       org: currentOrg, organization_id: currentOrganizationId,
     }]).select();
     if (error) return error.message;
     if (data) setCrops(p => [...p, data[0] as Crop]);
     return null;
   }, [currentOrg, currentOrganizationId]);
+
+  // FAMIC 登録適用部の作物名との紐付け（Web版 updateFamicCropName と同一）。
+  // 「南高梅」→「うめ」のように登録上の作物名と一致しないため自動マッチングはせず手入力。
+  // 未設定のあいだは農薬の総使用回数を「判定不可」として扱う
+  const updateFamicCropName = useCallback(async (cropId: number, value: string): Promise<string | null> => {
+    const name = value.trim() || null;
+    const { error } = await supabase.from("crops").update({ famic_crop_name: name }).eq("id", cropId);
+    if (error) return error.message;
+    setCrops(prev => prev.map(c => c.id === cropId ? { ...c, famic_crop_name: name } : c));
+    return null;
+  }, []);
 
   const deleteCrop = useCallback(async (id: number): Promise<string | null> => {
     const { error } = await supabase.from("crops").delete().eq("id", id);
@@ -432,6 +462,139 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setPesticides(p => p.filter(x => x.id !== id));
     return null;
   }, []);
+
+  // ── 農薬の適用情報（FAMIC・Web版 pRegs / openRegistrations / saveRegistrations の移植） ──
+  // キーが無い = 未取得、空配列 = 取得したが適用行なし（この区別で「判定不可」の理由を分ける）
+  const [pRegs, setPRegs] = useState<Record<string, PesticideRegistration[]>>({});
+  // 保存済み0件の農薬は pRegs にキーが立たないため、取得済み判定は ref で持つ
+  // （state だけで見ると同じ農薬を無限に取得し続ける。Web版 regFetchedRef と同一の理由）
+  const regFetchedRef = useRef<Set<string>>(new Set());
+
+  // 保存済みの適用情報をまとめて引く（記録フォームで農薬を選んだとき・チャットの先読み）
+  const loadSavedRegistrations = useCallback(async (pesticideIds: string[]): Promise<void> => {
+    const missing = pesticideIds.filter(id => !regFetchedRef.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach(id => regFetchedRef.current.add(id));
+    const { data, error } = await supabase
+      .from("pesticide_registrations").select(REG_COLUMNS).in("pesticide_id", missing);
+    if (error) {
+      console.error("pesticide_registrations fetch error:", error);
+      // 取り直せるように取得済み印を戻す（判定不可のまま固定させない）
+      missing.forEach(id => regFetchedRef.current.delete(id));
+      return;
+    }
+    setPRegs(prev => {
+      const next = { ...prev };
+      // 今回取得した農薬ぶんは丸ごと差し替える（既存に足すと適用行が二重になり
+      // 使用回数の判定根拠が壊れる）。0件も空配列で確定させる
+      missing.forEach(id => { next[id] = []; });
+      (data ?? []).forEach(row => {
+        const key = (row as PesticideRegistration).pesticide_id;
+        if (!key || !next[key] || !missing.includes(key)) return;
+        next[key].push(row as PesticideRegistration);
+      });
+      return next;
+    });
+  }, []);
+
+  // 全農薬ぶんを先読みして最新の pRegs を返す（チャット送信時。Web版 prefetchAllRegistrations と同一）
+  const prefetchAllRegistrations = useCallback(async (): Promise<Record<string, PesticideRegistration[]>> => {
+    const missing = pesticides.filter(p => !regFetchedRef.current.has(p.id)).map(p => p.id);
+    if (missing.length === 0) return pRegs;
+    missing.forEach(id => regFetchedRef.current.add(id));
+    const { data, error } = await supabase
+      .from("pesticide_registrations").select(REG_COLUMNS).in("pesticide_id", missing);
+    if (error) {
+      missing.forEach(id => regFetchedRef.current.delete(id));
+      return pRegs;
+    }
+    const grouped: Record<string, PesticideRegistration[]> = { ...pRegs };
+    missing.forEach(id => { grouped[id] = []; });
+    (data ?? []).forEach(row => {
+      const key = (row as PesticideRegistration).pesticide_id;
+      if (!key || !missing.includes(key)) return;
+      grouped[key].push(row as PesticideRegistration);
+    });
+    setPRegs(grouped);
+    return grouped;
+  }, [pesticides, pRegs]);
+
+  // 登録番号ごとの適用情報を Vercel API 経由で取得して保存（Web版 saveRegistrations と同一）。
+  // 取得した値は正規化せず原文のまま保持する。最終的に正しいのは製品ラベルの表示
+  const saveRegistrationsFor = useCallback(async (p: Pesticide, registrationNo: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/pesticide-registration`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ registrationNo }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) return (d as { error?: string }).error || "適用情報を取得できませんでした。";
+      const rows = (d.rows ?? []) as PesticideRegistration[];
+      if (rows.length === 0) return `登録番号 ${registrationNo} の適用情報が見つかりませんでした。`;
+
+      // 取り直しのたびに増えないよう、この農薬の既存ぶんを置き換える
+      await supabase.from("pesticide_registrations").delete().eq("pesticide_id", p.id);
+      const { error } = await supabase.from("pesticide_registrations").insert(
+        rows.map(r => ({
+          organization_id: currentOrganizationId,
+          pesticide_id: p.id,
+          registration_no: r.registration_no,
+          product_name: r.product_name,
+          crop_name: r.crop_name,
+          pest_name: r.pest_name,
+          dilution: r.dilution,
+          usage_timing: r.usage_timing,
+          usage_count: r.usage_count,
+          total_count: r.total_count,
+          application: r.application,
+          raw: r.raw ?? null,
+        })),
+      );
+      if (error) return error.message;
+
+      // 農薬側にも登録番号を残し、次回以降は候補選択を挟まずに済むようにする
+      if (p.registration_no !== registrationNo) {
+        await supabase.from("pesticides").update({ registration_no: registrationNo }).eq("id", p.id);
+        setPesticides(list => list.map(x => (x.id === p.id ? { ...x, registration_no: registrationNo } : x)));
+      }
+      regFetchedRef.current.add(p.id);
+      setPRegs(m => ({ ...m, [p.id]: rows }));
+      return null;
+    } catch {
+      return "通信に失敗しました。ネットワークをご確認ください。";
+    }
+  }, [currentOrganizationId]);
+
+  // 適用情報パネルを開いたときの取得フロー（Web版 openRegistrations と同一）。
+  // 保存済み → 登録番号あり → 名前検索で候補を返す、の順
+  const openRegistrations = useCallback(async (p: Pesticide): Promise<{ candidates: { registration_no: string; product_name: string }[] } | string | null> => {
+    if (pRegs[p.id] && pRegs[p.id].length > 0) return null; // 取得済み
+    const { data: saved } = await supabase
+      .from("pesticide_registrations").select("*").eq("pesticide_id", p.id);
+    if (saved && saved.length > 0) {
+      regFetchedRef.current.add(p.id);
+      setPRegs(m => ({ ...m, [p.id]: saved as PesticideRegistration[] }));
+      return null;
+    }
+    if (p.registration_no) return saveRegistrationsFor(p, p.registration_no);
+    // 登録番号が分からない農薬は、名前から候補を出して選んでもらう
+    try {
+      const res = await fetch(`${API_BASE}/api/pesticide-registration`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: p.name }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) return (d as { error?: string }).error || "農薬登録情報を検索できませんでした。";
+      const list = (d.candidates ?? []) as { registration_no: string; product_name: string }[];
+      if (list.length === 0) return `「${p.name}」に一致する登録が見つかりませんでした。`;
+      if (list.length === 1) return saveRegistrationsFor(p, list[0].registration_no);
+      return { candidates: list };
+    } catch {
+      return "通信に失敗しました。ネットワークをご確認ください。";
+    }
+  }, [pRegs, saveRegistrationsFor]);
 
   // ── コメント（Web版と同一） ──
   const loadComments = useCallback(async (targetType: string, targetId: string): Promise<Comment[]> => {
@@ -529,8 +692,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cropName, userName, commentCountOf,
     addReport, deleteReport,
     addSchedule, updateSchedule, deleteSchedule,
-    addCrop, deleteCrop, addField, deleteField, setFieldLocation,
+    addCrop, updateFamicCropName, deleteCrop, addField, deleteField, setFieldLocation,
     addPesticide, deletePesticide, searchPesticideMaster,
+    pRegs, loadSavedRegistrations, prefetchAllRegistrations, openRegistrations, saveRegistrationsFor,
     loadComments, addComment, editComment,
   };
 

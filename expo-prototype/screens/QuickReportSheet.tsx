@@ -7,9 +7,11 @@ import { C, RADIUS, workTypeColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import BottomSheet from "../ui/BottomSheet";
 import Picker from "../ui/Picker";
+import { PesticideUsageCard } from "../ui/PesticideUsageSummary";
 import { useStore } from "../lib/store";
 import { fetchWeatherForPeriod, type PeriodWeather } from "../lib/weather";
 import { canUseAiFeature, structureVoiceApi, saveAiOutput } from "../lib/ai";
+import { summarizeUsageByCrop } from "../lib/pesticideUsage";
 import { WORK_TEMPLATES, isPesticideWorkType, calcWorkMinutes } from "../lib/types";
 
 // ─── クイック作業記録（src/App.tsx showQuickReport + addReport の移植・実データ）─
@@ -20,15 +22,18 @@ import { WORK_TEMPLATES, isPesticideWorkType, calcWorkMinutes } from "../lib/typ
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** 使用状況の「FAMIC 作物名を設定する」から管理タブ（作物）への導線 */
+  onGoManageCrops?: () => void;
 }
 
 const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
 const toTimeStr = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
-export default function QuickReportSheet({ open, onClose }: Props) {
+export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Props) {
   const {
-    currentUser, users, crops, fields, pesticides, workCategories,
+    currentUser, users, crops, fields, pesticides, reports, workCategories,
     wxAuto, wxLoading, weatherCoords, addReport, quickReportDraft,
+    pRegs, loadSavedRegistrations,
   } = useStore();
 
   const [date, setDate] = useState(() => toDateStr(new Date()));
@@ -78,6 +83,13 @@ export default function QuickReportSheet({ open, onClose }: Props) {
     }
     setDate(toDateStr(new Date())); // コピー時は日付を今日に（Web版と同一）
   }, [open, quickReportDraft]);
+
+  // 農薬を選んだら保存済みの適用情報を引いて使用回数の判定に使う（Web版と同一）。
+  // 重複取得の抑止は store 側（regFetchedRef）が持つ
+  useEffect(() => {
+    if (selectedPesticides.length === 0) return;
+    void loadSavedRegistrations(selectedPesticides);
+  }, [selectedPesticides, loadSavedRegistrations]);
 
   // 開始・終了時刻が揃ったら圃場（なければ設定座標）の気象を自動取得（Web版と同一）
   useEffect(() => {
@@ -412,6 +424,38 @@ export default function QuickReportSheet({ open, onClose }: Props) {
                     })}
                   </View>
                 )}
+
+                {/* 選択中の農薬 × 選択中の作物の使用状況（Web版と同一）。記録は事後入力なので
+                    散布前の抑止にはならないが、超過に気づいて出荷判断・次回以降の計画に反映
+                    できるようにする。既定は要点のみ（compact）で、詳細は行タップで展開する */}
+                {selectedPesticides.length > 0 && (() => {
+                  const crop = crops.find(c => c.id === cropId);
+                  if (!crop) {
+                    return (
+                      <View style={{ backgroundColor: C.well, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 }}>
+                        <Text style={{ fontSize: 12, color: C.textSub, lineHeight: 18 }}>
+                          作物が未選択のため、農薬の使用回数は判定できません。作物を選ぶと作付けごとの使用実績を表示します。
+                        </Text>
+                      </View>
+                    );
+                  }
+                  return selectedPesticides.map(id => {
+                    const p = pesticides.find(x => x.id === id);
+                    if (!p) return null;
+                    return (
+                      <PesticideUsageCard
+                        key={id}
+                        title={`${p.name} の使用状況`}
+                        compact
+                        summaries={summarizeUsageByCrop({
+                          pesticideId: id, crops: [crop], reports,
+                          registrations: pRegs[id] ?? [],
+                        })}
+                        onSetupCrop={onGoManageCrops}
+                      />
+                    );
+                  });
+                })()}
               </>
             )}
 

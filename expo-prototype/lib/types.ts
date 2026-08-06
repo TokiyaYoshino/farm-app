@@ -9,6 +9,9 @@ export interface User {
 export interface Crop {
   id: number; name: string; start_date: string;
   last_work_date?: string; target_yield?: number;
+  // FAMIC 登録適用部の作物名（例: 南高梅 → うめ）との手動紐付け。
+  // 未設定なら農薬の使用回数は「判定不可」として扱う（自動マッチングはしない）
+  famic_crop_name?: string | null;
 }
 export interface Field { id: number; name: string; lat: number | null; lng: number | null }
 export interface AppSettings { id: number; location_name: string; lat: number; lng: number }
@@ -16,6 +19,22 @@ export interface WorkCategory { id: number; name: string; unit: string | null }
 export interface Pesticide {
   id: string; name: string; type: string | null;
   dilution_rate?: string | null; notes?: string | null;
+  registration_no?: string | null; master_id?: string | null;
+}
+// FAMIC 農薬登録情報の適用行（Web版 src/App.tsx と同一。値は原文のまま正規化しない）
+export interface PesticideRegistration {
+  id?: string;
+  pesticide_id?: string;
+  registration_no: string;
+  product_name: string;
+  crop_name: string;
+  pest_name: string;
+  dilution: string;
+  usage_timing: string;
+  usage_count: string;
+  total_count: string;
+  application: string;
+  raw?: Record<string, string>;
 }
 export interface PesticideMaster {
   id: string; reg_no: string; name: string; type: string | null;

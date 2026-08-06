@@ -211,7 +211,7 @@ function Root() {
       {tab === "home" && <HomeScreen onGoReport={() => setTab("report")} onQuickReport={() => openQuickReport()} />}
       {tab === "report" && <ReportScreen />}
       {tab === "analytics" && (analyticsSubTab === "report" ? <AnalyticsScreen /> : <GanttScreen />)}
-      {tab === "manage" && <ManageScreen subTab={manageSubTab} />}
+      {tab === "manage" && <ManageScreen subTab={manageSubTab} onGoCrops={() => setManageSubTab("crops")} />}
 
       {/* FAB（記録） */}
       <Pressable
@@ -241,7 +241,11 @@ function Root() {
         })}
       </View>
 
-      <QuickReportSheet open={quickReportOpen} onClose={closeQuickReport} />
+      <QuickReportSheet
+        open={quickReportOpen}
+        onClose={closeQuickReport}
+        onGoManageCrops={() => { closeQuickReport(); setTab("manage"); setManageSubTab("crops"); }}
+      />
       <NotificationsSheet
         open={showNotifs}
         onClose={() => setShowNotifs(false)}
