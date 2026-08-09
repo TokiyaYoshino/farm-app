@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2E7D32" />
+    <meta name="description" content="農作業レポート（kishu-farm）のサポート・お問い合わせ" />
+    <link rel="icon" type="image/svg+xml" href="/app-icon.svg" />
+    <title>サポート — 農作業レポート</title>
+    <style>
+      :root {
+        --bg: #f5f5f6;
+        --card: #fff;
+        --ink: #2e7d32;
+        --text: #1a1c1e;
+        --text-sub: #5a5f65;
+        --hairline: #ebebed;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 16px 64px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+        line-height: 1.85;
+        font-size: 15px;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        background: var(--card);
+        border-radius: 20px;
+        padding: 32px 28px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+      }
+      h1 { font-size: 22px; letter-spacing: -0.4px; margin: 0 0 4px; }
+      .updated { color: var(--text-sub); font-size: 13px; margin: 0 0 28px; }
+      h2 {
+        font-size: 16px;
+        margin: 32px 0 8px;
+        padding-top: 20px;
+        border-top: 1px solid var(--hairline);
+      }
+      h2:first-of-type { border-top: none; padding-top: 0; margin-top: 24px; }
+      p, li { color: var(--text); }
+      ul { padding-left: 20px; margin: 8px 0; }
+      li { margin-bottom: 6px; }
+      dl { margin: 8px 0; }
+      dt { font-weight: 700; margin-top: 14px; }
+      dd { margin: 2px 0 0; padding-left: 0; color: var(--text-sub); }
+      a { color: var(--ink); }
+      .note {
+        background: #f0f7f0;
+        border-radius: 14px;
+        padding: 14px 16px;
+        font-size: 14px;
+        color: var(--text-sub);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>サポート</h1>
+      <p class="updated">農作業レポート（kishu-farm）</p>
+
+      <p>
+        農作業レポートは、農場の作業記録・予定管理・分析を行う業務用アプリです。
+        利用は運営者から発行されたアカウントを持つ農場関係者に限られます。
+        アプリの操作方法や不具合、アカウントに関するお問い合わせは以下の連絡先までご連絡ください。
+      </p>
+
+      <h2>お問い合わせ先</h2>
+      <!--
+        TODO（申請前に要記入）: 運営者の正式名称と問い合わせ先メールアドレス。
+        App Store Connect のサポートURLとして提出するため、
+        連絡の取れる実在のアドレスを記載すること（審査で確認される）。
+      -->
+      <div class="note">
+        運営者: <!-- 正式名称を記入 --><br />
+        お問い合わせ先: <!-- 連絡用メールアドレスを記入 --><br />
+        対応時間: 平日 9:00〜18:00（土日祝を除く）
+      </div>
+
+      <h2>よくある質問</h2>
+      <dl>
+        <dt>アカウントはどこで発行してもらえますか？</dt>
+        <dd>
+          本アプリは一般ユーザーの自由登録には対応していません。所属する農場の管理者にお問い合わせください。
+        </dd>
+
+        <dt>ログインできない・パスワードを忘れた</dt>
+        <dd>
+          農場の管理者、または上記のお問い合わせ先までご連絡ください。本人確認の上、対応します。
+        </dd>
+
+        <dt>位置情報や写真、通知の許可を変更したい</dt>
+        <dd>
+          端末の設定アプリからいつでも許可・不許可を変更できます。不許可にした場合、該当する機能（圃場の位置登録、写真添付、通知）が利用できなくなります。
+        </dd>
+
+        <dt>AI機能（画像診断・防除助言など）の回答が正しくない</dt>
+        <dd>
+          AIの回答は参考情報であり、最終判断は農薬のラベル表示や登録情報など公的な情報に基づいて行ってください。
+          誤りに気づいた場合は、お問い合わせ先までご連絡いただけると改善に役立ちます。
+        </dd>
+
+        <dt>データを削除・退会したい</dt>
+        <dd>
+          農場の管理者、または上記のお問い合わせ先までご連絡ください。詳細は
+          <a href="/privacy">プライバシーポリシー</a>の「保存期間」「利用者の権利」をご確認ください。
+        </dd>
+
+        <dt>不具合を見つけた・要望がある</dt>
+        <dd>
+          発生日時・端末の種類（iPhone/Android/PC）・操作内容を添えて、お問い合わせ先までご連絡ください。
+        </dd>
+      </dl>
+
+      <h2>関連情報</h2>
+      <ul>
+        <li><a href="/privacy">プライバシーポリシー</a></li>
+      </ul>
+    </main>
+  </body>
+</html>

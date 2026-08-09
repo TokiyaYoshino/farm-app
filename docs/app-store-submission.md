@@ -10,8 +10,9 @@ TestFlight 配信まで）。本書は公開審査に出すための入力項目
 
 1. **RLS の実ポリシー化** — `docs/rls-rollout.md`。現状 `allow_all` のため、
    anon キーを知っていれば他組織のデータが読める。**公開前に必須**
-2. **プライバシーポリシーの運営者情報** — `public/privacy.html` の TODO コメント箇所に
-   正式名称と連絡用メールアドレスを記入する。審査で連絡先の実在性が見られる
+2. **プライバシーポリシー・サポートページの運営者情報** — `public/privacy.html` と
+   `public/support.html` の TODO コメント箇所に正式名称と連絡用メールアドレスを記入する。
+   審査で連絡先の実在性が見られる
 3. **Vercel Production の `OPENAI_API_KEY`** — Development のみ設定されている疑いがある。
    本番のAI機能（アプリは本番APIを叩く）が動かないと審査で機能不全と判断されうる
 
@@ -81,6 +82,8 @@ npx eas-cli submit --platform ios --latest
 - カテゴリ: ビジネス（または仕事効率化）
 - プライバシーポリシーURL: `https://kishu-farm.vercel.app/privacy`
   （独自ドメイン運用中なら `https://kishufarm.com/privacy`）
+- サポートURL: `https://kishu-farm.vercel.app/support`
+  （独自ドメイン運用中なら `https://kishufarm.com/support`）
 
 ### スクリーンショット（必須）
 6.7インチ（iPhone 15 Pro Max 等）が最低1セット必要。
