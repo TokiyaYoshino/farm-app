@@ -124,13 +124,20 @@ cd expo-prototype && node scripts/test-advice-match.mjs      # 29 passed
 npx tsc --noEmit && npx expo export --platform ios           # 3.57 MB
 ```
 
+**2026-08-10 に本番で稼働開始**（マイグレーション2本を適用・`main` にマージ）。実測:
+
+- `crop=キャベツ` / `start_date=2026-06-20` で POST → 200。やること3件、
+  **`work_type` は3件すべて語彙に完全一致（`施肥` / `防除` / `除草`）＝ `unmatchable` ゼロ。**
+  設計時に最大の未知としていた「語彙にどれだけ当たるか」は、一般的な作業名では当たる
+- 1回 ¥0.07（$0.00044）
+- `registrationFacts` は 0 件、`limits` に「作物名が紐付いていないため薬剤の使用可否は判断していません」。
+  紐付け未実施なので**設計どおりの縮退**
+
 **未検証**:
-- `scripts/migrations/2026-08-10-crop-advisor.sql` が**未適用**。適用まで保存が全て失敗する
-  （回答は表示されるが「保存できませんでした」と出て溜まらない）
-- `api/advise.ts` が**未デプロイ**（`main` に無い）。Vercel は git push で反映されるので、
-  push するまでアプリからは呼べない。なお `/api/advise` が 405 を返すのは根拠にならない
-  （`vercel.json` の catch-all rewrite により存在しないパスも 405 になる）
-- `organizations` に kishu の行が実在するかは**SQL Editor でのみ確定できる**（上記 check SQL）
+- `crops.famic_crop_name` の紐付けが**未実行**（7件すべて `null`）。層2（農薬）は常に空。
+  **本番データ更新なので承認が必要**
+- 実機での動作（スレッドの読み込み・保存・dismiss）
+- `work_type` の命中率は上記1回のみ。専門的・作物固有の作業名（摘芯・芽かき等）で語彙外に落ちる可能性は残る
 - 実 OpenAI キーでの出力品質（ローカルに `OPENAI_API_KEY` が無いためスタブ検証のみ）。
   とくに `work_type` が語彙にどれだけ当たるかは実測していない。当たらなければ `unmatchable` が
   増える（安全側に倒れるが、照合の価値は下がる）

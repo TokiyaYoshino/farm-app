@@ -1,0 +1,1177 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>farm-app 記録入力モック v3 — 既存仕様を全部引き継いだ上でモード切替</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  body{background:#E5E5E7;font-family:-apple-system,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;padding:26px 20px 60px;color:#1A1C1E;}
+  h1{font-size:20px;font-weight:700;max-width:1240px;margin:0 auto 8px;}
+  .lead{font-size:13px;color:#66696E;max-width:1240px;margin:0 auto 10px;line-height:1.7;}
+  .lead b{color:#1A1C1E;}
+  h2{font-size:15px;font-weight:700;max-width:1240px;margin:36px auto 14px;padding-top:18px;border-top:1px solid #D3D3D6;}
+  h2 span{font-weight:500;color:#66696E;font-size:13px;}
+  .grid{max-width:1240px;margin:0 auto;display:flex;gap:24px;flex-wrap:wrap;}
+  .col{display:flex;flex-direction:column;gap:10px;width:342px;}
+  .tag{font-size:13px;font-weight:700;}
+  .tag .n{display:inline-block;background:#1A1C1E;color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;margin-right:6px;vertical-align:1px;}
+  .sub{font-size:11.5px;color:#66696E;line-height:1.6;min-height:58px;}
+  .sub .good{color:#2E7D32;font-weight:600;}
+  .sub .bad{color:#D4453C;font-weight:600;}
+  .sub code{background:#DEDEE1;border-radius:3px;padding:0 4px;font-size:10.5px;font-family:ui-monospace,Menlo,monospace;}
+
+  :root{
+    --bg:#F5F5F6; --well:#EFEFF1; --card:#FFFFFF;
+    --ink:#2E7D32; --inkPress:#256628; --inkSoft:#E4F0E4;
+    --text:#1A1C1E; --sub:#66696E; --muted:#9EA1A6; --hair:#EBEBED;
+    --danger:#D4453C; --dangerBg:#FBEBEA;
+    --warning:#DD8A0A; --warningBg:#FBF1DF;
+    --info:#3773E1; --infoBg:#E7EEFC; --pest:#7B1FA2; --pestBg:#F3E9F8; --temp:#E07020;
+  }
+  .c-harvest{--wfg:#2E7D32;--wbg:#E4F0E4;} .c-fert{--wfg:#8D6E1F;--wbg:#F5EFDD;}
+  .c-pest{--wfg:#7B1FA2;--wbg:#F3E9F8;}   .c-seed{--wfg:#2E7D32;--wbg:#E4F0E4;}
+  .c-water{--wfg:#3773E1;--wbg:#E7EEFC;}  .c-mow{--wfg:#5C7A2E;--wbg:#EAF0DD;}
+  .c-prune{--wfg:#B15A2E;--wbg:#F6E7DD;}  .c-other{--wfg:#66696E;--wbg:#EFEFF1;}
+
+  .phone{width:342px;background:var(--card);border-radius:34px;border:8px solid #fff;box-shadow:0 12px 40px rgba(16,17,20,.16);overflow:hidden;}
+  .screen{height:742px;display:flex;flex-direction:column;background:var(--card);}
+  .sheethead{display:flex;align-items:center;justify-content:space-between;padding:13px 16px 10px;border-bottom:1px solid var(--hair);flex-shrink:0;gap:8px;}
+  .sheethead .t{font-size:18px;font-weight:700;letter-spacing:-.02em;}
+  .body{flex:1;overflow:hidden;padding:0 14px;}
+  .foot{flex-shrink:0;padding:9px 14px 18px;border-top:1px solid var(--hair);background:var(--card);}
+  .x{width:33px;height:33px;border-radius:999px;background:var(--well);display:flex;align-items:center;justify-content:center;color:var(--sub);flex-shrink:0;}
+  .scrollcue{text-align:center;font-size:10px;color:var(--muted);padding:5px 0 0;}
+
+  svg{stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  svg.i{width:20px;height:20px;flex-shrink:0;display:block;}
+  svg.i.lg{width:26px;height:26px;stroke-width:1.9;}
+  svg.i.sm{width:15px;height:15px;}
+  svg.i.xs{width:12.5px;height:12.5px;}
+
+  .topbar{display:flex;align-items:center;gap:8px;margin:10px 0 0;}
+  .datepill{display:flex;align-items:center;gap:6px;background:var(--well);border-radius:999px;
+            padding:8px 12px;font-size:13.5px;font-weight:700;color:var(--text);flex-shrink:0;}
+  .datepill .c{color:var(--muted);display:flex;}
+  .wxmini{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--sub);min-width:0;}
+  .wxmini b{color:var(--text);font-weight:700;}
+  .wxmini .isun{color:var(--warning);} .wxmini .idrop{color:var(--info);} .wxmini .itmp{color:var(--temp);}
+  .wxmini .a{font-size:10px;color:var(--muted);white-space:nowrap;}
+
+  .mic{display:flex;align-items:center;gap:10px;background:var(--inkSoft);border-radius:15px;padding:11px 13px;margin-top:10px;}
+  .mic .b{width:38px;height:38px;border-radius:999px;background:var(--ink);color:#fff;display:flex;
+          align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 6px rgba(46,125,50,.30);}
+  .mic .tx{flex:1;min-width:0;}
+  .mic .tx .m{font-size:14px;font-weight:700;color:var(--ink);}
+  .mic .tx .s{font-size:10.5px;color:var(--ink);opacity:.72;margin-top:2px;}
+  .orline{display:flex;align-items:center;gap:9px;margin:10px 2px 0;}
+  .orline .l{flex:1;height:1px;background:var(--hair);}
+  .orline .t{font-size:10.5px;font-weight:600;color:var(--muted);}
+
+  .lbl{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--sub);margin:10px 2px 5px;}
+  .lbl .o{font-size:10px;font-weight:600;color:var(--muted);background:var(--well);border-radius:4px;padding:1px 5px;}
+  .lbl .rq{font-size:10px;font-weight:700;color:var(--danger);background:var(--dangerBg);border-radius:4px;padding:1px 5px;}
+  .lbl .au{font-size:10px;font-weight:600;color:var(--ink);background:var(--inkSoft);border-radius:4px;padding:1px 5px;}
+  .lbl .mi{margin-left:auto;display:flex;align-items:center;gap:3px;font-size:10px;font-weight:500;color:var(--muted);}
+  .hrow{display:flex;gap:6px;overflow:hidden;padding:1px 0;}
+
+  .usual{flex-shrink:0;display:flex;align-items:center;gap:8px;background:var(--well);border-radius:13px;
+         padding:9px 12px 9px 10px;border:2px solid transparent;max-width:210px;}
+  .usual .ic{color:var(--wfg,var(--sub));display:flex;flex-shrink:0;}
+  .usual .tx .m{font-size:13.5px;font-weight:700;white-space:nowrap;}
+  .usual .tx .s{font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap;}
+  .usual.on{background:var(--inkSoft);border-color:var(--ink);}
+  .usual.on .tx .m{color:var(--ink);} .usual.on .tx .s{color:var(--ink);opacity:.75;}
+
+  .pill{flex-shrink:0;min-height:42px;padding:0 13px;border-radius:999px;background:var(--well);
+        display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--text);
+        border:2px solid transparent;white-space:nowrap;}
+  .pill .cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .pill .ic{color:var(--sub);display:flex;}
+  .pill .u{font-size:10.5px;color:var(--muted);font-weight:600;}
+  .pill.on{background:var(--wbg,var(--inkSoft));border-color:var(--wfg,var(--ink));color:var(--wfg,var(--ink));}
+  .pill.on .ic{color:var(--wfg,var(--ink));} .pill.on .u{color:var(--wfg,var(--ink));opacity:.7;}
+  .pill.hl{box-shadow:0 0 0 3px rgba(46,125,50,.16);}
+
+  /* 数量＋単位（単位も編集できる＝既存仕様） */
+  .qty{display:flex;align-items:center;gap:7px;}
+  .qty .pm{width:44px;height:46px;border-radius:13px;background:var(--well);display:flex;
+           align-items:center;justify-content:center;flex-shrink:0;}
+  .qty .pm svg{width:20px;height:20px;stroke-width:2.4;}
+  .qty .f{flex:1;height:46px;border-radius:13px;background:#fff;border:1.5px solid var(--hair);
+          display:flex;align-items:baseline;justify-content:center;gap:4px;}
+  .qty .f.on{border:2px solid var(--ink);}
+  .qty .f .num{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .qty .f .num.e{color:var(--muted);}
+  .qty .f .u{font-size:12.5px;font-weight:600;color:var(--sub);}
+  .qty .unit{width:64px;height:46px;border-radius:13px;background:#fff;border:1.5px dashed #CFD0D3;
+             display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;gap:1px;}
+  .qty .unit .v{font-size:14px;font-weight:700;}
+  .qty .unit .k{font-size:9px;color:var(--muted);}
+
+  .more{display:flex;align-items:center;gap:7px;background:var(--well);border-radius:13px;
+        padding:12px 13px;margin-top:12px;font-size:13px;font-weight:700;color:var(--sub);}
+  .more .ch{margin-left:auto;color:var(--muted);display:flex;}
+  .wellbox{background:var(--well);border-radius:15px;padding:7px;margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+  .wrow{background:#fff;border-radius:11px;padding:9px 12px;display:flex;align-items:center;gap:9px;
+        box-shadow:0 1px 2px rgba(16,17,20,.05);}
+  .wrow .k{font-size:11px;color:var(--muted);font-weight:600;width:48px;flex-shrink:0;}
+  .wrow .v{font-size:13.5px;font-weight:600;flex:1;min-width:0;}
+  .wrow .v.ph{color:var(--muted);font-weight:400;}
+  .wrow .ch{color:var(--muted);display:flex;}
+  .wrow .tilde{font-size:11px;color:var(--muted);}
+
+  .pwx{display:flex;align-items:center;gap:7px;background:var(--well);border-radius:12px;
+       padding:8px 11px;margin-top:7px;font-size:11.5px;color:var(--sub);flex-wrap:wrap;}
+  .pwx b{color:var(--text);font-weight:700;font-size:12px;}
+  .pwx .a{margin-left:auto;font-size:10px;color:var(--muted);}
+
+  .aibtn{display:flex;align-items:center;justify-content:center;gap:6px;background:var(--inkSoft);
+         border-radius:999px;min-height:38px;margin-top:7px;font-size:12.5px;font-weight:700;color:var(--ink);}
+
+  .save{width:100%;min-height:52px;border-radius:999px;background:var(--ink);color:#fff;
+        display:flex;align-items:center;justify-content:center;gap:8px;font-size:16.5px;font-weight:700;
+        box-shadow:0 3px 10px rgba(46,125,50,.30);}
+  .save svg{stroke-width:2.6;}
+  .save.dis{background:#C8CACC;box-shadow:none;}
+  .save.big{min-height:62px;font-size:19px;}
+  .echo{text-align:center;font-size:11px;color:var(--muted);margin-bottom:6px;}
+  .echo b{color:var(--text);font-weight:700;}
+
+  /* 写真 */
+  .photo{display:flex;gap:7px;}
+  .photo .p{flex:1;min-height:46px;border-radius:13px;background:var(--well);display:flex;
+            align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;color:var(--text);}
+  .photo .p .ic{color:var(--sub);display:flex;}
+  .thumb{position:relative;margin-top:5px;height:96px;border-radius:13px;background:#DCDEE0;
+         display:flex;align-items:center;justify-content:center;color:#A9ACB0;overflow:hidden;}
+  .thumb .del{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);border-radius:999px;
+              color:#fff;font-size:10.5px;font-weight:600;padding:4px 9px;display:flex;align-items:center;gap:4px;}
+
+  /* 農薬 */
+  .pchk{background:#fff;border-radius:13px;border:1.5px solid var(--hair);padding:3px 11px;margin-top:5px;}
+  .pchk .r{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--hair);}
+  .pchk .r:last-child{border-bottom:none;}
+  .pchk .box{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--hair);flex-shrink:0;
+             display:flex;align-items:center;justify-content:center;background:#fff;}
+  .pchk .box.on{background:var(--pest);border-color:var(--pest);color:#fff;}
+  .pchk .nm{font-size:13.5px;font-weight:600;flex:1;}
+  .pchk .ty{font-size:10.5px;color:var(--muted);}
+  .pamt{margin:0 0 8px 29px;background:var(--well);border-radius:10px;padding:8px 11px;
+        display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;}
+  .pamt .k{font-size:10px;color:var(--muted);font-weight:600;}
+  .usage{background:#fff;border-radius:14px;border:1.5px solid var(--hair);padding:11px 12px;margin-top:8px;}
+  .usage .hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;}
+  .usage .hd .ch{margin-left:auto;color:var(--muted);display:flex;}
+  .usage .bar{height:7px;border-radius:999px;background:var(--well);margin-top:9px;overflow:hidden;}
+  .usage .bar i{display:block;height:100%;border-radius:999px;background:var(--warning);width:66%;}
+  .usage .mt{display:flex;align-items:center;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--sub);}
+  .usage .mt b{color:var(--text);font-weight:700;}
+  .warn{background:var(--warningBg);border-radius:14px;padding:11px 12px;margin-top:8px;}
+  .warn .hd{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#8A5600;}
+  .warn .bd{font-size:11.5px;color:#8A5600;margin-top:4px;line-height:1.55;}
+  .info{background:var(--well);border-radius:13px;padding:10px 12px;margin-top:6px;
+        font-size:11.5px;color:var(--sub);line-height:1.6;}
+  .info b{color:var(--text);font-weight:700;}
+
+  /* 音声 */
+  .listen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 26px;}
+  .listen .ring{width:112px;height:112px;border-radius:999px;background:var(--inkSoft);display:flex;
+                align-items:center;justify-content:center;color:var(--ink);box-shadow:0 0 0 13px rgba(46,125,50,.07);}
+  .listen .ring svg{width:44px;height:44px;stroke-width:1.9;}
+  .listen .st{font-size:12.5px;font-weight:700;color:var(--ink);margin-top:24px;}
+  .listen .tr{font-size:19px;font-weight:700;line-height:1.55;text-align:center;margin-top:13px;}
+  .listen .tr .dim{color:var(--muted);}
+  .listen .hint{font-size:11px;color:var(--muted);margin-top:19px;text-align:center;line-height:1.7;}
+  .stopbtn{width:100%;min-height:52px;border-radius:999px;background:#fff;border:1.5px solid var(--hair);
+           display:flex;align-items:center;justify-content:center;gap:8px;font-size:15.5px;font-weight:700;}
+  .aibar{display:flex;align-items:center;gap:8px;background:var(--inkSoft);border-radius:13px;padding:10px 12px;margin-top:10px;}
+  .aibar .ic{color:var(--ink);display:flex;flex-shrink:0;}
+  .aibar .tx{flex:1;font-size:11.5px;color:var(--ink);line-height:1.5;}
+  .aibar .tx b{font-weight:700;}
+  .said{background:var(--well);border-radius:11px;padding:8px 11px;margin-top:7px;font-size:11.5px;color:var(--sub);line-height:1.5;}
+  .said b{color:var(--text);font-weight:600;}
+
+  /* かんたんモード */
+  .tiles{display:flex;flex-wrap:wrap;gap:9px;}
+  .tile{flex:1 1 calc(50% - 5px);min-height:74px;border-radius:16px;background:var(--well);
+        border:2.5px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:4px;font-size:16px;font-weight:700;padding:8px 6px;position:relative;}
+  .tile.w3{flex:1 1 calc(33.333% - 6px);}
+  .tile.full{flex:1 1 100%;flex-direction:row;gap:9px;min-height:58px;}
+  .tile .ic{color:var(--sub);}
+  .tile .cap{font-size:11px;font-weight:500;color:var(--muted);}
+  .tile.on{background:var(--wbg,var(--inkSoft));border-color:var(--wfg,var(--ink));color:var(--wfg,var(--ink));}
+  .tile.on .ic{color:var(--wfg,var(--ink));}
+  .tile.on .mark{position:absolute;top:6px;right:7px;display:block;}
+  .tile .mark{display:none;}
+  .tile.row2{flex-direction:row;gap:8px;}
+  .tile .cdot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+  .q{font-size:17px;font-weight:700;margin:15px 2px 8px;display:flex;align-items:center;gap:7px;}
+  .q .rq{font-size:11px;font-weight:700;color:var(--danger);background:var(--dangerBg);border-radius:5px;padding:2px 6px;}
+  .q .o{font-size:11px;font-weight:600;color:var(--muted);background:var(--well);border-radius:5px;padding:2px 6px;}
+  .micbig{display:flex;align-items:center;gap:12px;background:var(--inkSoft);border-radius:19px;padding:14px 15px;margin-top:11px;}
+  .micbig .b{width:54px;height:54px;border-radius:999px;background:var(--ink);color:#fff;display:flex;
+             align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 9px rgba(46,125,50,.32);}
+  .micbig .b svg{width:27px;height:27px;}
+  .micbig .tx .m{font-size:17.5px;font-weight:700;color:var(--ink);}
+  .micbig .tx .s{font-size:11px;color:var(--ink);opacity:.72;margin-top:3px;}
+  .step{display:flex;align-items:center;gap:10px;}
+  .step .pm{width:66px;height:66px;border-radius:18px;background:var(--well);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .step .pm svg{width:27px;height:27px;stroke-width:2.4;}
+  .step .val{flex:1;height:66px;border-radius:18px;background:#fff;border:2.5px solid var(--ink);
+             display:flex;align-items:baseline;justify-content:center;gap:5px;}
+  .step .val .num{font-size:31px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .step .val .u{font-size:14px;font-weight:600;color:var(--sub);}
+  .stepcap{display:flex;gap:10px;margin-top:3px;}
+  .stepcap span{width:66px;text-align:center;font-size:10px;color:var(--muted);}
+  .stepcap span.mid{flex:1;width:auto;}
+
+  /* 設定画面 */
+  .apphead{background:#fff;border-bottom:1px solid var(--hair);padding:13px 16px;display:flex;
+           align-items:center;justify-content:space-between;flex-shrink:0;}
+  .apphead .t{font-size:16px;font-weight:700;}
+  .apphead .ic{display:flex;gap:7px;}
+  .apphead .ic div{width:33px;height:33px;border-radius:999px;background:var(--well);display:flex;
+                   align-items:center;justify-content:center;color:var(--sub);}
+  .subtabs{display:flex;background:#fff;border-bottom:1px solid var(--hair);flex-shrink:0;}
+  .subtabs div{flex:1;text-align:center;padding:10px 0;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2.5px solid transparent;}
+  .subtabs div.on{color:var(--ink);font-weight:700;border-bottom-color:var(--ink);}
+  .setbody{flex:1;background:var(--bg);padding:14px;overflow:hidden;}
+  .sechd{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;margin:4px 3px 8px;}
+  .setcard{background:#fff;border-radius:18px;box-shadow:0 2px 8px rgba(16,17,20,.06);overflow:hidden;}
+  .setrow{display:flex;align-items:center;gap:11px;padding:13px 14px;border-bottom:1px solid var(--hair);}
+  .setrow:last-child{border-bottom:none;}
+  .setrow .ic{color:var(--sub);display:flex;flex-shrink:0;}
+  .setrow .tx{flex:1;min-width:0;}
+  .setrow .tx .m{font-size:14.5px;font-weight:700;}
+  .setrow .tx .s{font-size:11px;color:var(--sub);margin-top:3px;line-height:1.5;}
+  .sw{width:48px;height:30px;border-radius:999px;background:var(--ink);flex-shrink:0;position:relative;}
+  .sw i{position:absolute;top:2.5px;right:2.5px;width:25px;height:25px;border-radius:999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  .sw.off{background:#D3D4D7;} .sw.off i{right:auto;left:2.5px;}
+  .preview{background:var(--inkSoft);border-radius:14px;padding:11px 12px;margin-top:9px;
+           font-size:11.5px;color:var(--ink);line-height:1.6;}
+  .preview b{font-weight:700;}
+  .nav{display:flex;background:#fff;border-top:1px solid var(--hair);flex-shrink:0;}
+  .nav div{flex:1;padding:9px 0 11px;display:flex;flex-direction:column;align-items:center;gap:3px;
+           font-size:10px;font-weight:500;color:var(--muted);}
+  .nav div.on{color:var(--ink);font-weight:700;}
+
+  .note{max-width:1240px;margin:16px auto 0;background:#fff;border-radius:14px;padding:16px 18px;
+         font-size:12.5px;line-height:1.8;color:#3B3E42;box-shadow:0 1px 3px rgba(16,17,20,.06);}
+  .note b{color:#1A1C1E;}
+  .note ul{margin:6px 0 0 18px;} .note li{margin-bottom:4px;}
+  .note code{background:#F1F1F3;border-radius:4px;padding:1px 5px;font-size:11.5px;font-family:ui-monospace,Menlo,monospace;}
+  .note table{border-collapse:collapse;margin-top:10px;width:100%;}
+  .note th,.note td{border-bottom:1px solid #EBEBED;padding:7px 9px;text-align:left;font-size:12px;vertical-align:top;}
+  .note th{font-weight:700;color:#66696E;font-size:11px;}
+  .ok{color:#2E7D32;font-weight:700;}
+  .hd2{color:#DD8A0A;font-weight:700;}
+  .ng{color:#D4453C;font-weight:700;}
+</style>
+</head>
+<body>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-basket" viewBox="0 0 24 24"><path d="m15 11-1 9"/><path d="m19 11-4-7"/><path d="M2 11h20"/><path d="m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4"/><path d="M4.5 15.5h15"/><path d="m5 11 4-7"/><path d="m9 11 1 9"/></symbol>
+  <symbol id="i-droplets" viewBox="0 0 24 24"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></symbol>
+  <symbol id="i-sprout" viewBox="0 0 24 24"><path d="M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3"/><path d="M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4"/><path d="M5 21h14"/></symbol>
+  <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></symbol>
+  <symbol id="i-spray" viewBox="0 0 24 24"><path d="M3 3h.01"/><path d="M7 5h.01"/><path d="M11 7h.01"/><path d="M3 7h.01"/><path d="M7 9h.01"/><path d="M3 11h.01"/><rect width="4" height="4" x="15" y="5"/><path d="m19 9 2 2v10c0 .6-.4 1-1 1h-6c-.6 0-1-.4-1-1V11l2-2"/><path d="m13 14 8-2"/><path d="m13 19 8-2"/></symbol>
+  <symbol id="i-wheat" viewBox="0 0 24 24"><path d="M2 22 16 8"/><path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4Z"/><path d="M11.47 17.47 13 19l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L5 19l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/><path d="M15.47 13.47 17 15l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L9 15l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/><path d="M19.47 9.47 21 11l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L13 11l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect width="6" height="13" x="9" y="2" rx="3"/></symbol>
+  <symbol id="i-waves" viewBox="0 0 24 24"><path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-droplet" viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></symbol>
+  <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></symbol>
+  <symbol id="i-mappin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/><circle cx="12" cy="13" r="3"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-chevright" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-chevdown" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M14 17H5"/><path d="M19 7h-9"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.58 16.5h12.85"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+</svg>
+
+<h1>記録入力モック v3 — 既存仕様を全部引き継いだ上でモード切替</h1>
+<p class="lead">
+  v2 で落としていた項目（<b>単位の自由入力・作業区分マスタ・土壌pH・農薬ごとの散布量・使用状況カード・期間天気・写真</b>）を全部戻しました。
+  <b>入力できる内容は現行 <code>QuickReportSheet</code> と完全に同じ</b>で、DBに入る列も同じ。変わるのは<b>並べ方と押しやすさ、そしてモード切替</b>だけです。<br>
+  <b>通常モード</b>＝法人・複数人運営の既定（全機能・最短2タップ）。<b>かんたんモード</b>＝設定でONにすると同じ画面が大きくなり任意項目が隠れる（<b>機能は消えない</b>）。
+</p>
+
+<div class="note" style="margin-top:0">
+  <b>既存仕様の引き継ぎチェック</b>（<code>QuickReportSheet.tsx</code> の全入力項目・全ロジック）
+  <table>
+    <tr><th style="width:150px">既存の項目・挙動</th><th style="width:80px">DB列</th><th>通常モードでの置き場所</th><th style="width:150px">かんたんモード</th></tr>
+    <tr><td>日付（DateTimePicker）</td><td><code>date</code></td><td>最上部の日付ピル。<b>タップで同じ DateTimePicker</b>。既定＝今日</td><td>そのまま（既定＝今日）</td></tr>
+    <tr><td>天気 自動取得</td><td><code>weather</code> <code>temp</code> <code>humidity</code> <code>rain</code></td><td>日付の右に1行で圧縮（現行はカード1枚）</td><td>非表示（値は入る）</td></tr>
+    <tr><td>作物</td><td><code>crop_id</code></td><td>ピル行（横スクロール）。<b>ピッカー廃止で1タップ</b></td><td>大タイル</td></tr>
+    <tr><td>圃場</td><td><code>field</code></td><td>ピル行</td><td>大タイル</td></tr>
+    <tr><td>作業の種類<br><span style="color:#66696E">作業区分マスタ優先／無ければ WORK_TEMPLATES</span></td><td><code>work_type</code> <code>work_category_id</code></td><td>ピル行。<b>マスタがあればマスタ名＋単位を表示</b>（P-3）</td><td>大タイル</td></tr>
+    <tr><td>実績数量</td><td><code>quantity</code> <code>quantity_value</code></td><td>−／＋ステッパー＋直接入力も可</td><td>大ステッパー</td></tr>
+    <tr><td><b>単位（自由入力）</b></td><td><code>quantity_unit</code></td><td><b>数量の右に単位枠を残す</b>。マスタの <code>unit</code> で自動補完、タップで編集</td><td>マスタ単位を表示のみ</td></tr>
+    <tr><td><code>showQuantity</code> の出し分け</td><td>—</td><td>そのまま（マスタありで単位なしなら数量欄を出さない）</td><td>同じ</td></tr>
+    <tr><td>作業者（viewer除外）</td><td><code>user_id</code></td><td>任意項目の well 内。既定＝自分</td><td>非表示（＝自分）</td></tr>
+    <tr><td>作業時刻 開始／終了</td><td><code>work_start</code> <code>work_end</code> <code>work_minutes</code></td><td>任意項目の well 内。同じ DateTimePicker</td><td>非表示</td></tr>
+    <tr><td>期間天気の自動取得＋表示</td><td>上記の天気列を上書き</td><td>時刻が揃うと well の下に表示（現行と同じ）</td><td>非表示</td></tr>
+    <tr><td>メモ ＋ キーボード音声入力</td><td><code>note</code></td><td>任意項目の well 内</td><td>非表示（音声入力から入る）</td></tr>
+    <tr><td>メモをAIでフォームに反映</td><td>—</td><td><b>上部の「話して入れる」に昇格</b>＋メモ欄の下にも残す</td><td>上部の大ボタン</td></tr>
+    <tr><td>写真</td><td>Storage</td><td>任意項目の下（現行は常時表示・場所だけ移動）</td><td>非表示</td></tr>
+    <tr><td>使用農薬 複数選択</td><td><code>pesticides_used</code> <code>pesticide_id</code></td><td><b>防除時に常時表示</b>（現行はアコーディオン内＝到達しにくい）</td><td><b>拡大して表示</b></td></tr>
+    <tr><td>農薬ごとの散布量</td><td><code>pesticide_amount</code></td><td>選択した農薬の直下に入力欄（現行と同じ）</td><td>大きい入力</td></tr>
+    <tr><td>使用状況カード（FAMIC回数）</td><td>—</td><td>そのまま <code>PesticideUsageCard compact</code></td><td><b>そのまま表示</b>（法令のため隠さない）</td></tr>
+    <tr><td>作物未選択時の判定不可メッセージ</td><td>—</td><td>そのまま</td><td>そのまま</td></tr>
+    <tr><td>農薬0件時のメッセージ</td><td>—</td><td>そのまま</td><td>そのまま</td></tr>
+    <tr><td>土壌pH（施肥のみ）</td><td><code>soil_ph</code></td><td>作業＝施肥のとき数量の下に表示（P-2）</td><td>表示（キーボード必要なので±も付ける）</td></tr>
+    <tr><td>ドラフト（コピーして作成・タイマー終了）</td><td>—</td><td>そのまま。<b>時刻入りなら任意項目を開いた状態で出す</b>（D-1）</td><td>同じ</td></tr>
+    <tr><td>天気の取得中／取得失敗の表示</td><td>—</td><td>1行の中で「取得中...」「天気を取得できませんでした」（X-1）。<b>失敗しても保存は止めない</b></td><td>非表示</td></tr>
+    <tr><td>地名 <code>weatherCoords.name</code>（未取得は <code>...</code>）</td><td>—</td><td>天気1行の左に表示（X-1）</td><td>非表示</td></tr>
+    <tr><td>農薬の種類ラベル <code>p.type</code></td><td>—</td><td>農薬行の右端に表示（P-1）</td><td>省略（名前のみ）</td></tr>
+    <tr><td>FAMIC作物名 未設定の導線 <code>onGoManageCrops</code></td><td>—</td><td>使用状況カード内のまま。管理›作物へ遷移（X-1）</td><td>そのまま</td></tr>
+    <tr><td>写真の削除ボタン</td><td>—</td><td>サムネ右上（N-3）。現行と同じ</td><td>非表示</td></tr>
+    <tr><td>作業種別を変えたら農薬選択をクリア</td><td>—</td><td>そのまま（防除以外を選んだ瞬間に <code>selectedPesticides</code>/<code>pesticideAmounts</code> を空に）</td><td>同じ</td></tr>
+    <tr><td>保存後の <code>resetForm</code> ＋シートを閉じる</td><td>—</td><td>そのまま</td><td>同じ</td></tr>
+    <tr><td><code>submitting</code> 中のラベル「登録中...」</td><td>—</td><td>そのまま（X-1）</td><td>同じ</td></tr>
+    <tr><td>登録／エラー Alert</td><td>—</td><td>そのまま <code>addReport</code>・「登録に失敗しました」</td><td>同じ</td></tr>
+    <tr><td><b>現行フォームそのもの</b></td><td>—</td><td><b>残す。</b>「現行の詳細フォームで入力」から開く（X-1）</td><td>—</td></tr>
+  </table>
+  <b class="bad">今回1つだけ増える入力手段</b>：写真で<b>「写真をとる」（カメラ起動）</b>を追加（現行はライブラリ選択のみ）。既存の選択も残すので削除はありません。
+  <b><span class="ok">追加はするが削除はしない</span></b>：新規は「いつもの作業」チップと音声の昇格だけ。既存の入力手段（DateTimePicker・単位の自由入力・メモのAI反映ボタン）は<b>すべて残ります</b>。
+</div>
+
+<h2>通常モード <span>── 法人・複数人運営の既定。現行と同じ全項目が入る</span></h2>
+<div class="grid">
+
+  <div class="col">
+    <div class="tag"><span class="n">N-1</span>開いた直後</div>
+    <div class="sub">音声とフォームが<span class="good">同時に見えている</span>。日付・作物・圃場は前回値。<span class="good">作業を1タップ→保存の2タップで完了</span>。天気は現行のカード1枚を1行に圧縮して、入力欄を上に上げた。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="topbar">
+          <div class="datepill"><svg class="i sm"><use href="#i-calendar"/></svg>今日 8/9（土）<span class="c"><svg class="i xs"><use href="#i-chevdown"/></svg></span></div>
+          <div class="wxmini">
+            <svg class="i sm isun"><use href="#i-sun"/></svg><b>晴れ</b>
+            <svg class="i sm itmp"><use href="#i-thermo"/></svg>32°C
+            <svg class="i sm idrop"><use href="#i-droplet"/></svg>60%
+          </div>
+        </div>
+
+        <div class="mic">
+          <div class="b"><svg class="i"><use href="#i-mic"/></svg></div>
+          <div class="tx">
+            <div class="m">話して入れる</div>
+            <div class="s">「山手畑の南高梅、20キロとれた」</div>
+          </div>
+        </div>
+
+        <div class="orline"><div class="l"></div><div class="t">または えらぶ</div><div class="l"></div></div>
+
+        <div class="lbl">いつもの作業 <span class="au">新規</span></div>
+        <div class="hrow">
+          <div class="usual c-harvest">
+            <div class="ic"><svg class="i lg"><use href="#i-basket"/></svg></div>
+            <div class="tx"><div class="m">南高梅・山手畑・収穫</div><div class="s">先月5回</div></div>
+          </div>
+          <div class="usual c-water">
+            <div class="ic"><svg class="i lg"><use href="#i-droplets"/></svg></div>
+            <div class="tx"><div class="m">南高梅・川沿</div><div class="s">先月3回</div></div>
+          </div>
+        </div>
+
+        <div class="lbl">作物</div>
+        <div class="hrow">
+          <div class="pill on"><span class="cdot" style="background:#43A047"></span>南高梅</div>
+          <div class="pill"><span class="cdot" style="background:#C98A2E"></span>古城梅</div>
+          <div class="pill"><span class="cdot" style="background:#C1662F"></span>温州み</div>
+        </div>
+
+        <div class="lbl">圃場</div>
+        <div class="hrow">
+          <div class="pill on">山手畑</div>
+          <div class="pill">川沿い畑</div>
+          <div class="pill">上段畑</div>
+        </div>
+
+        <div class="lbl">作業の種類 <span class="rq">必須</span></div>
+        <div class="hrow">
+          <div class="pill c-harvest"><span class="ic"><svg class="i sm"><use href="#i-basket"/></svg></span>収穫</div>
+          <div class="pill c-water"><span class="ic"><svg class="i sm"><use href="#i-droplets"/></svg></span>灌水</div>
+          <div class="pill c-fert"><span class="ic"><svg class="i sm"><use href="#i-sprout"/></svg></span>施肥</div>
+          <div class="pill c-pest"><span class="ic"><svg class="i sm"><use href="#i-spray"/></svg></span>防除</div>
+        </div>
+        <div class="info" style="margin-top:6px">横にスワイプで 剪定・草刈り・その他。<b>選択肢が最初から見えている</b>のが現行ピッカーとの違い。</div>
+
+        <div class="more">
+          <svg class="i sm"><use href="#i-plus"/></svg>作業者・時刻・メモ・写真
+          <div class="ch"><svg class="i sm"><use href="#i-chevdown"/></svg></div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="echo">あと <b>作業の種類</b> を選ぶだけ</div>
+        <div class="save dis"><svg class="i"><use href="#i-check"/></svg>記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">N-2</span>「いつもの作業」を1タップ</div>
+    <div class="sub">作物・圃場・作業が一度に確定し、下のピル行にも反映される（<span class="good">何が起きたか見える</span>）。単位はマスタから自動、<span class="good">単位枠をタップすれば現行どおり自由入力もできる</span>。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="topbar">
+          <div class="datepill"><svg class="i sm"><use href="#i-calendar"/></svg>今日 8/9（土）<span class="c"><svg class="i xs"><use href="#i-chevdown"/></svg></span></div>
+          <div class="wxmini">
+            <svg class="i sm isun"><use href="#i-sun"/></svg><b>晴れ</b>
+            <svg class="i sm itmp"><use href="#i-thermo"/></svg>32°C
+            <svg class="i sm idrop"><use href="#i-droplet"/></svg>60%
+          </div>
+        </div>
+
+        <div class="mic">
+          <div class="b"><svg class="i"><use href="#i-mic"/></svg></div>
+          <div class="tx">
+            <div class="m">話して入れる</div>
+            <div class="s">「山手畑の南高梅、20キロとれた」</div>
+          </div>
+        </div>
+
+        <div class="orline"><div class="l"></div><div class="t">または えらぶ</div><div class="l"></div></div>
+
+        <div class="lbl">いつもの作業</div>
+        <div class="hrow">
+          <div class="usual on" style="max-width:100%">
+            <div class="ic" style="color:#2E7D32"><svg class="i lg"><use href="#i-basket"/></svg></div>
+            <div class="tx"><div class="m">南高梅・山手畑・収穫</div><div class="s">下に反映しました</div></div>
+          </div>
+        </div>
+
+        <div class="lbl">作物</div>
+        <div class="hrow">
+          <div class="pill on hl"><span class="cdot" style="background:#43A047"></span>南高梅</div>
+          <div class="pill"><span class="cdot" style="background:#C98A2E"></span>古城梅</div>
+          <div class="pill"><span class="cdot" style="background:#C1662F"></span>温州み</div>
+        </div>
+
+        <div class="lbl">圃場</div>
+        <div class="hrow">
+          <div class="pill on hl">山手畑</div>
+          <div class="pill">川沿い畑</div>
+          <div class="pill">上段畑</div>
+        </div>
+
+        <div class="lbl">作業の種類 <span class="rq">必須</span></div>
+        <div class="hrow">
+          <div class="pill c-harvest on hl"><span class="ic"><svg class="i sm"><use href="#i-basket"/></svg></span>収穫</div>
+          <div class="pill c-water"><span class="ic"><svg class="i sm"><use href="#i-droplets"/></svg></span>灌水</div>
+          <div class="pill c-fert"><span class="ic"><svg class="i sm"><use href="#i-sprout"/></svg></span>施肥</div>
+        </div>
+
+        <div class="lbl">実績数量 <span class="o">任意</span></div>
+        <div class="qty">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="f on"><span class="num">20</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+          <div class="unit"><div class="v">kg</div><div class="k">単位</div></div>
+        </div>
+
+        <div class="scrollcue">▾ 作業者・時刻・メモ・写真 は下につづきます</div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>南高梅</b>・<b>山手畑</b>・<b>収穫 20kg</b>（今日）</div>
+        <div class="save"><svg class="i"><use href="#i-check"/></svg>記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">N-3</span>任意項目を開いた（現行の詳細と同じ中身）</div>
+    <div class="sub">作業者・時刻・メモ・写真。<span class="good">現行アコーディオンの中身をそのまま well 行に移植</span>。時刻が揃うと期間天気が自動で出るのも現行と同じ。メモのAI反映ボタンも残す。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="lbl" style="margin-top:11px">実績数量 <span class="o">任意</span></div>
+        <div class="qty">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="f on"><span class="num">20</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+          <div class="unit"><div class="v">kg</div><div class="k">単位</div></div>
+        </div>
+
+        <div class="more" style="background:var(--inkSoft);color:var(--ink)">
+          <svg class="i sm"><use href="#i-minus"/></svg>作業者・時刻・メモ・写真
+          <div class="ch" style="color:var(--ink)"><svg class="i sm" style="transform:rotate(180deg)"><use href="#i-chevdown"/></svg></div>
+        </div>
+
+        <div class="wellbox">
+          <div class="wrow">
+            <div class="k">作業者</div>
+            <div class="v">吉野 常也</div>
+            <div class="ch"><svg class="i sm"><use href="#i-chevdown"/></svg></div>
+          </div>
+          <div class="wrow">
+            <div class="k">時刻</div>
+            <div class="v">8:00</div>
+            <div class="tilde">〜</div>
+            <div class="v">11:30</div>
+            <div class="ch"><svg class="i sm"><use href="#i-clock"/></svg></div>
+          </div>
+          <div class="wrow">
+            <div class="k">メモ</div>
+            <div class="v ph">作業の内容・気づいたこと</div>
+            <div class="ch"><svg class="i sm"><use href="#i-mic"/></svg></div>
+          </div>
+        </div>
+
+        <div class="pwx">
+          <b>くもり</b> 29°C 湿度72% 雨量0.5mm
+          <span class="a">自動取得</span>
+        </div>
+
+        <div class="aibtn"><svg class="i xs"><use href="#i-sparkles"/></svg>メモをAIでフォームに反映</div>
+
+        <div class="lbl">写真 <span class="o">任意</span></div>
+        <div class="photo">
+          <div class="p"><span class="ic"><svg class="i sm"><use href="#i-camera"/></svg></span>写真をとる</div>
+          <div class="p"><span class="ic"><svg class="i sm"><use href="#i-image"/></svg></span>選ぶ</div>
+        </div>
+        <div class="thumb">
+          <svg class="i lg"><use href="#i-image"/></svg>
+          <div class="del"><svg class="i xs"><use href="#i-x"/></svg>削除</div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>南高梅</b>・<b>山手畑</b>・<b>収穫 20kg</b>（今日 8:00〜11:30）</div>
+        <div class="save"><svg class="i"><use href="#i-check"/></svg>記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+
+<h2>条件付きで出る項目 <span>── 現行の出し分けロジックをそのまま維持</span></h2>
+<div class="grid">
+
+  <div class="col">
+    <div class="tag"><span class="n">P-1</span>防除：農薬＋散布量＋使用状況</div>
+    <div class="sub"><code>isPesticideWorkType</code> で出す条件は現行と同じ。<span class="good">違いはアコーディオンの中から出して常時表示にしたこと</span> — 法令記録が「詳細を入力」の奥にあるのは危険なので。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="lbl" style="margin-top:11px">作業の種類 <span class="rq">必須</span></div>
+        <div class="hrow">
+          <div class="pill c-pest on hl"><span class="ic"><svg class="i sm"><use href="#i-spray"/></svg></span>防除</div>
+          <div class="pill c-harvest"><span class="ic"><svg class="i sm"><use href="#i-basket"/></svg></span>収穫</div>
+          <div class="pill c-fert"><span class="ic"><svg class="i sm"><use href="#i-sprout"/></svg></span>施肥</div>
+        </div>
+
+        <div class="lbl">使用農薬 <span class="o">任意</span></div>
+        <div class="pchk">
+          <div class="r">
+            <div class="box on"><svg class="i xs"><use href="#i-check"/></svg></div>
+            <div class="nm">ベンレート水和剤</div>
+            <div class="ty">殺菌剤</div>
+          </div>
+        </div>
+        <div class="pamt"><span class="k">散布量</span>100 L</div>
+        <div class="pchk" style="margin-top:0">
+          <div class="r">
+            <div class="box"></div>
+            <div class="nm">ジマンダイセン水和剤</div>
+            <div class="ty">殺菌剤</div>
+          </div>
+          <div class="r">
+            <div class="box"></div>
+            <div class="nm">スミチオン乳剤</div>
+            <div class="ty">殺虫剤</div>
+          </div>
+        </div>
+
+        <div class="usage">
+          <div class="hd">
+            <svg class="i sm" style="color:var(--pest)"><use href="#i-shield"/></svg>
+            ベンレート水和剤 の使用状況
+            <div class="ch"><svg class="i sm"><use href="#i-chevdown"/></svg></div>
+          </div>
+          <div class="bar"><i></i></div>
+          <div class="mt"><span>南高梅（うめ）</span><span><b>2</b> / 3回</span></div>
+        </div>
+
+        <div class="warn">
+          <div class="hd"><svg class="i sm"><use href="#i-alert"/></svg>あと1回で上限です</div>
+          <div class="bd">うめ／黒星病の登録は <b>総使用回数3回まで</b>。</div>
+        </div>
+
+        <div class="info" style="margin-top:8px">
+          判定できない場合の文言は現行のまま。<b>「FAMIC 作物名を設定する」</b>から管理›作物へ飛べる導線も維持。
+        </div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>南高梅</b>・<b>山手畑</b>・<b>防除</b>（ベンレート 100L）</div>
+        <div class="save"><svg class="i"><use href="#i-check"/></svg>記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">P-2</span>施肥：土壌pH</div>
+    <div class="sub"><code>workType === "施肥"</code> のときだけ出る条件は現行と同じ。<span class="good">現行は数値キーボードだけだったので ± も付けた</span>（0.1刻み）。キーボードでの直接入力も残す。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="lbl" style="margin-top:11px">作業の種類 <span class="rq">必須</span></div>
+        <div class="hrow">
+          <div class="pill c-fert on hl"><span class="ic"><svg class="i sm"><use href="#i-sprout"/></svg></span>施肥</div>
+          <div class="pill c-harvest"><span class="ic"><svg class="i sm"><use href="#i-basket"/></svg></span>収穫</div>
+          <div class="pill c-water"><span class="ic"><svg class="i sm"><use href="#i-droplets"/></svg></span>灌水</div>
+        </div>
+
+        <div class="lbl">実績数量 <span class="o">任意</span></div>
+        <div class="qty">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="f on"><span class="num">40</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+          <div class="unit"><div class="v">kg</div><div class="k">単位</div></div>
+        </div>
+
+        <div class="lbl"><svg class="i xs"><use href="#i-flask"/></svg>土壌pH <span class="o">任意</span></div>
+        <div class="qty">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="f on"><span class="num">6.5</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+          <div class="unit" style="border-style:solid;border-color:var(--hair)"><div class="v" style="font-size:11px;color:var(--muted)">0.1</div><div class="k">刻み</div></div>
+        </div>
+        <div class="info">枠を長押しすると<b>キーボードで直接入力</b>できます（現行と同じ）。</div>
+
+        <div class="more">
+          <svg class="i sm"><use href="#i-plus"/></svg>作業者・時刻・メモ・写真
+          <div class="ch"><svg class="i sm"><use href="#i-chevdown"/></svg></div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>南高梅</b>・<b>山手畑</b>・<b>施肥 40kg</b>（pH 6.5）</div>
+        <div class="save"><svg class="i"><use href="#i-check"/></svg>記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">P-3</span>作業区分マスタがある組織</div>
+    <div class="sub"><code>workCategories</code> が登録済みなら<span class="good">マスタ名がピルになり単位も自動</span>（<code>WORK_TEMPLATES</code> は使わない）。<code>showQuantity</code> の判定も現行のまま — 単位が無い区分では数量欄が出ない。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="lbl" style="margin-top:11px">作業の種類 <span class="o">組織のマスタ</span> <span class="rq">必須</span></div>
+        <div class="hrow">
+          <div class="pill c-harvest on hl">梅もぎ<span class="u">kg</span></div>
+          <div class="pill c-mow">下草刈り</div>
+          <div class="pill c-fert">元肥<span class="u">kg</span></div>
+        </div>
+        <div class="hrow" style="margin-top:6px">
+          <div class="pill c-pest">黒星防除<span class="u">L</span></div>
+          <div class="pill c-prune">整枝</div>
+          <div class="pill c-other">出荷準備</div>
+        </div>
+        <div class="info">単位はマスタの <b>unit</b> から自動で入ります。上書きしたいときは単位枠をタップ。</div>
+
+        <div class="lbl">実績数量 <span class="o">任意</span></div>
+        <div class="qty">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="f on"><span class="num">20</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+          <div class="unit"><div class="v">kg</div><div class="k">自動</div></div>
+        </div>
+
+        <div class="lbl" style="color:var(--muted)">「下草刈り」を選んだ場合</div>
+        <div class="info" style="margin-top:0">マスタに単位が無い区分なので、<b>数量欄そのものが出ません</b>（<code>showQuantity</code> の現行判定と同じ）。</div>
+
+        <div class="more">
+          <svg class="i sm"><use href="#i-plus"/></svg>作業者・時刻・メモ・写真
+          <div class="ch"><svg class="i sm"><use href="#i-chevdown"/></svg></div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>南高梅</b>・<b>山手畑</b>・<b>梅もぎ 20kg</b>（今日）</div>
+        <div class="save"><svg class="i"><use href="#i-check"/></svg>記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">X-1</span>空状態・失敗・登録中（現行の文言そのまま）</div>
+    <div class="sub">現行にあって v2 で描いていなかった<span class="good">例外系を全部この1枚に集約</span>。文言は <code>QuickReportSheet.tsx</code> のまま変えない。<span class="good">最下段に現行フォームへの導線</span>を置き、既存画面も残す。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="lbl" style="margin-top:11px">天気 ①取得中（<code>wxLoading</code>）</div>
+        <div class="topbar">
+          <div class="datepill"><svg class="i sm"><use href="#i-calendar"/></svg>今日 8/9（土）<span class="c"><svg class="i xs"><use href="#i-chevdown"/></svg></span></div>
+          <div class="wxmini"><svg class="i sm"><use href="#i-mappin"/></svg>田辺市 · <span style="color:var(--muted)">取得中...</span></div>
+        </div>
+        <div class="lbl">天気 ②失敗（<code>wxAuto</code> が null）</div>
+        <div class="topbar">
+          <div class="datepill"><svg class="i sm"><use href="#i-calendar"/></svg>今日 8/9（土）<span class="c"><svg class="i xs"><use href="#i-chevdown"/></svg></span></div>
+          <div class="wxmini"><svg class="i sm"><use href="#i-mappin"/></svg><span style="color:var(--muted)">天気を取得できませんでした</span></div>
+        </div>
+        <div class="info" style="margin-top:6px">地名は現行どおり <code>weatherCoords?.name ?? "..."</code>。失敗しても<b>入力と保存は止めない</b>（現行と同じ）。</div>
+
+        <div class="lbl">農薬が0件の組織</div>
+        <div class="info" style="margin-top:0">登録済みの農薬がありません</div>
+
+        <div class="lbl">農薬を選んだが作物が未選択</div>
+        <div class="info" style="margin-top:0">作物が未選択のため、農薬の使用回数は判定できません。作物を選ぶと作付けごとの使用実績を表示します。</div>
+
+        <div class="lbl">FAMIC 作物名が未設定</div>
+        <div class="warn">
+          <div class="hd"><svg class="i sm"><use href="#i-alert"/></svg>使用回数を判定できません</div>
+          <div class="bd">南高梅に FAMIC 作物名が未設定です。<b style="color:var(--ink)">FAMIC 作物名を設定する ›</b></div>
+        </div>
+        <div class="info" style="margin-top:6px"><code>onGoManageCrops</code> で シートを閉じて 管理›作物 へ（現行と同一）。</div>
+
+        <div class="more" style="margin-top:11px">
+          <svg class="i sm"><use href="#i-sliders"/></svg>現行の詳細フォームで入力
+          <div class="ch"><svg class="i sm"><use href="#i-chevright"/></svg></div>
+        </div>
+        <div class="info" style="margin-top:6px">既存 <code>QuickReportSheet</code> は<b>消さずに残す</b>。慣れた人はこちらから従来どおり入力できる。</div>
+      </div>
+      <div class="foot">
+        <div class="echo">保存中は現行どおりボタンが <b>登録中...</b> に変わり、失敗は <b>Alert「登録に失敗しました」</b></div>
+        <div class="save" style="opacity:.55"><svg class="i"><use href="#i-check"/></svg>登録中...</div>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+
+<h2>音声で入れる場合／ドラフト <span>── 既存の structure-voice・コピーして作成・タイマーをそのまま</span></h2>
+<div class="grid">
+
+  <div class="col">
+    <div class="tag"><span class="n">V-1</span>話している最中</div>
+    <div class="sub">項目の順番を覚えず<span class="good">思いついた順に言える</span>。文字起こしはiOS標準キーボードの音声入力（現行と同じ）なので<span class="good">追加依存ゼロ</span>。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">話して入れる</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="listen">
+        <div class="ring"><svg><use href="#i-waves"/></svg></div>
+        <div class="st">聞いています…</div>
+        <div class="tr">山手畑の南高梅、<br>20キロとれた<span class="dim"> …</span></div>
+        <div class="hint">作物・圃場・作業・数量・単位・<br>農薬・pH・時刻を まとめて話せます</div>
+      </div>
+      <div class="foot">
+        <div class="stopbtn"><svg class="i"><use href="#i-check"/></svg>話しおわった</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">V-2</span>AIが振り分けた直後</div>
+    <div class="sub"><span class="good">同じフォームに戻って入った所が光る</span>。専用の確認画面を作らないので間違いをその場で押して直せる。<code>structureVoiceApi</code> が返す<span class="good">農薬・単位・pHも現行どおり全部反映</span>。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="aibar">
+          <div class="ic"><svg class="i"><use href="#i-sparkles"/></svg></div>
+          <div class="tx"><b>話した内容から入れました。</b>ちがう所は押して直せます</div>
+        </div>
+        <div class="said">「<b>山手畑の南高梅、20キロとれた</b>」</div>
+
+        <div class="lbl">作物</div>
+        <div class="hrow">
+          <div class="pill on hl"><span class="cdot" style="background:#43A047"></span>南高梅</div>
+          <div class="pill"><span class="cdot" style="background:#C98A2E"></span>古城梅</div>
+          <div class="pill"><span class="cdot" style="background:#C1662F"></span>温州み</div>
+        </div>
+
+        <div class="lbl">圃場</div>
+        <div class="hrow">
+          <div class="pill on hl">山手畑</div>
+          <div class="pill">川沿い畑</div>
+          <div class="pill">上段畑</div>
+        </div>
+
+        <div class="lbl">作業の種類 <span class="rq">必須</span></div>
+        <div class="hrow">
+          <div class="pill c-harvest on hl"><span class="ic"><svg class="i sm"><use href="#i-basket"/></svg></span>収穫</div>
+          <div class="pill c-water"><span class="ic"><svg class="i sm"><use href="#i-droplets"/></svg></span>灌水</div>
+          <div class="pill c-fert"><span class="ic"><svg class="i sm"><use href="#i-sprout"/></svg></span>施肥</div>
+        </div>
+
+        <div class="lbl">実績数量</div>
+        <div class="qty">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="f on" style="box-shadow:0 0 0 3px rgba(46,125,50,.16)"><span class="num">20</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+          <div class="unit" style="border-color:var(--ink);border-style:solid"><div class="v" style="color:var(--ink)">kg</div><div class="k">AI</div></div>
+        </div>
+
+        <div class="more">
+          <svg class="i sm"><use href="#i-plus"/></svg>作業者・時刻・メモ・写真
+          <div class="ch"><svg class="i sm"><use href="#i-chevdown"/></svg></div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>南高梅</b>・<b>山手畑</b>・<b>収穫 20kg</b>（今日）</div>
+        <div class="save"><svg class="i"><use href="#i-check"/></svg>記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">D-1</span>ドラフト（コピー／タイマー終了）</div>
+    <div class="sub">現行の <code>quickReportDraft</code> をそのまま。<span class="good">時刻が入っているので任意項目を開いた状態で出す</span>（現行の <code>setExpanded(true)</code> と同じ）。日付は今日に。<span class="good">どこから来たかを上部に表示</span>して混乱を防ぐ。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t">作業を記録</div>
+        <div class="x"><svg class="i sm"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="aibar" style="background:var(--infoBg)">
+          <div class="ic" style="color:var(--info)"><svg class="i"><use href="#i-clock"/></svg></div>
+          <div class="tx" style="color:#2A55A8"><b>タイマーの記録から作成中。</b>時刻が入っています</div>
+        </div>
+
+        <div class="lbl">作業の種類 <span class="rq">必須</span></div>
+        <div class="hrow">
+          <div class="pill c-harvest on hl"><span class="ic"><svg class="i sm"><use href="#i-basket"/></svg></span>収穫</div>
+          <div class="pill c-water"><span class="ic"><svg class="i sm"><use href="#i-droplets"/></svg></span>灌水</div>
+          <div class="pill c-fert"><span class="ic"><svg class="i sm"><use href="#i-sprout"/></svg></span>施肥</div>
+        </div>
+
+        <div class="lbl">実績数量 <span class="o">任意</span></div>
+        <div class="qty">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="f"><span class="num e">--</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+          <div class="unit"><div class="v">kg</div><div class="k">単位</div></div>
+        </div>
+
+        <div class="more" style="background:var(--inkSoft);color:var(--ink)">
+          <svg class="i sm"><use href="#i-minus"/></svg>作業者・時刻・メモ・写真
+          <div class="ch" style="color:var(--ink)"><svg class="i sm" style="transform:rotate(180deg)"><use href="#i-chevdown"/></svg></div>
+        </div>
+        <div class="wellbox">
+          <div class="wrow">
+            <div class="k">作業者</div>
+            <div class="v">吉野 常也</div>
+            <div class="ch"><svg class="i sm"><use href="#i-chevdown"/></svg></div>
+          </div>
+          <div class="wrow" style="box-shadow:0 0 0 2px rgba(55,115,225,.18)">
+            <div class="k">時刻</div>
+            <div class="v">8:12</div>
+            <div class="tilde">〜</div>
+            <div class="v">11:47</div>
+            <div class="ch"><svg class="i sm"><use href="#i-clock"/></svg></div>
+          </div>
+        </div>
+        <div class="pwx">
+          <b>晴れ</b> 31°C 湿度65%
+          <span class="a">自動取得</span>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>収穫</b>（今日 8:12〜11:47 · 3時間35分）</div>
+        <div class="save"><svg class="i"><use href="#i-check"/></svg>記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+
+<h2>かんたんモード <span>── 同じ画面が大きくなり任意項目が隠れるだけ。入力できる内容は変わらない</span></h2>
+<div class="grid">
+
+  <div class="col">
+    <div class="tag"><span class="n">E-1</span>かんたんモード ON</div>
+    <div class="sub">ピル行→大タイル、ラベル→質問文。<span class="good">隠れるのは任意項目だけ</span>（作業者＝自分・時刻・メモ・写真）。<span class="good">OFFにすれば全部戻る</span>ので機能は失われない。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t" style="font-size:21px">作業を記録</div>
+        <div class="x" style="width:38px;height:38px"><svg class="i"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="micbig">
+          <div class="b"><svg><use href="#i-mic"/></svg></div>
+          <div class="tx">
+            <div class="m">話して入れる</div>
+            <div class="s">「南高梅を20キロとった」</div>
+          </div>
+        </div>
+
+        <div class="orline" style="margin-top:13px"><div class="l"></div><div class="t" style="font-size:12px">または えらぶ</div><div class="l"></div></div>
+
+        <div class="q" style="margin-top:13px">いつもの作業</div>
+        <div class="tiles">
+          <div class="tile full c-harvest">
+            <span class="ic"><svg class="i lg"><use href="#i-basket"/></svg></span>南高梅・山手畑・収穫
+          </div>
+        </div>
+
+        <div class="q">なにをした？ <span class="rq">必須</span></div>
+        <div class="tiles">
+          <div class="tile c-harvest on"><span class="ic"><svg class="i lg"><use href="#i-basket"/></svg></span>収穫<svg class="i sm mark"><use href="#i-check"/></svg></div>
+          <div class="tile c-water"><span class="ic"><svg class="i lg"><use href="#i-droplets"/></svg></span>灌水</div>
+          <div class="tile c-fert"><span class="ic"><svg class="i lg"><use href="#i-sprout"/></svg></span>施肥</div>
+          <div class="tile c-prune"><span class="ic"><svg class="i lg"><use href="#i-scissors"/></svg></span>剪定</div>
+          <div class="tile c-mow"><span class="ic"><svg class="i lg"><use href="#i-leaf"/></svg></span>草刈り</div>
+          <div class="tile c-pest"><span class="ic"><svg class="i lg"><use href="#i-spray"/></svg></span>防除</div>
+        </div>
+        <div class="scrollcue">▾ 下に 作物・畑・量 がつづきます</div>
+      </div>
+      <div class="foot">
+        <div class="save big"><svg class="i lg"><use href="#i-check"/></svg>これで記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">E-2</span>かんたんモード（つづき）</div>
+    <div class="sub">量は大きいステッパーで<span class="good">キーボードが一度も出ない</span>。単位はマスタ由来の表示のみ（編集は通常モードで）。<span class="good">日付は今日固定・変更は「きのう」ボタンで</span>。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t" style="font-size:21px">作業を記録</div>
+        <div class="x" style="width:38px;height:38px"><svg class="i"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="q" style="margin-top:13px">どの作物？</div>
+        <div class="tiles">
+          <div class="tile row2 on"><span class="cdot" style="background:#43A047"></span>南高梅<svg class="i sm mark"><use href="#i-check"/></svg></div>
+          <div class="tile row2"><span class="cdot" style="background:#C98A2E"></span>古城梅</div>
+          <div class="tile row2"><span class="cdot" style="background:#C1662F"></span>温州みかん</div>
+          <div class="tile row2"><span class="cdot" style="background:#7B4BA8"></span>八朔</div>
+        </div>
+
+        <div class="q">どの畑？</div>
+        <div class="tiles">
+          <div class="tile w3 on">山手畑<svg class="i sm mark"><use href="#i-check"/></svg></div>
+          <div class="tile w3">川沿い畑</div>
+          <div class="tile w3">上段畑</div>
+        </div>
+
+        <div class="q">とれた量 <span class="o">なくてもOK</span></div>
+        <div class="step">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="val"><span class="num">20</span><span class="u">kg</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+        </div>
+        <div class="stepcap"><span>5へらす</span><span class="mid"></span><span>5ふやす</span></div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>南高梅</b>・<b>山手畑</b>・<b>収穫 20kg</b></div>
+        <div class="save big"><svg class="i lg"><use href="#i-check"/></svg>これで記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col">
+    <div class="tag"><span class="n">E-3</span>かんたんモードでも防除は省略しない</div>
+    <div class="sub">農薬・散布量・使用状況カードは<span class="bad">法令記録なので隠さない</span>。むしろ拡大する。<span class="good">「簡単にする＝法令項目を隠す」にはしない</span>という例外。</div>
+    <div class="phone"><div class="screen">
+      <div class="sheethead">
+        <div class="t" style="font-size:21px">作業を記録</div>
+        <div class="x" style="width:38px;height:38px"><svg class="i"><use href="#i-x"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="q" style="margin-top:13px">なにをした？ <span class="rq">必須</span></div>
+        <div class="tiles">
+          <div class="tile c-harvest"><span class="ic"><svg class="i lg"><use href="#i-basket"/></svg></span>収穫</div>
+          <div class="tile c-pest on"><span class="ic"><svg class="i lg"><use href="#i-spray"/></svg></span>防除<svg class="i sm mark"><use href="#i-check"/></svg></div>
+        </div>
+
+        <div class="q">つかった農薬</div>
+        <div class="tiles">
+          <div class="tile full c-pest on">
+            <span class="ic"><svg class="i"><use href="#i-shield"/></svg></span>ベンレート水和剤
+            <svg class="i sm mark"><use href="#i-check"/></svg>
+          </div>
+        </div>
+
+        <div class="warn" style="margin-top:11px">
+          <div class="hd" style="font-size:14.5px"><svg class="i sm"><use href="#i-alert"/></svg>今シーズン 2回目です</div>
+          <div class="bd" style="font-size:12.5px">うめ／黒星病は <b>3回まで</b>。あと1回です。</div>
+        </div>
+
+        <div class="q">まいた量</div>
+        <div class="step">
+          <div class="pm"><svg><use href="#i-minus"/></svg></div>
+          <div class="val"><span class="num">100</span><span class="u">L</span></div>
+          <div class="pm"><svg><use href="#i-plus"/></svg></div>
+        </div>
+        <div class="stepcap"><span>10へらす</span><span class="mid"></span><span>10ふやす</span></div>
+      </div>
+      <div class="foot">
+        <div class="echo"><b>防除</b>・ベンレート 100L</div>
+        <div class="save big"><svg class="i lg"><use href="#i-check"/></svg>これで記録する</div>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+
+<h2>設定画面 <span>── 管理タブに「設定」サブタブを新設（現状どこにも設定画面が無い）</span></h2>
+<div class="grid">
+
+  <div class="col">
+    <div class="tag"><span class="n">S-1</span>管理 › 設定</div>
+    <div class="sub">現状 <code>screens/</code> に設定画面が存在せず、ヘッダーの人アイコンのシートにログアウトしか無い。<span class="good">管理タブの4番目のサブタブとして常設</span>する（作物・圃場・農薬と並ぶ）。</div>
+    <div class="phone"><div class="screen">
+      <div class="apphead">
+        <div class="t">管理</div>
+        <div class="ic">
+          <div><svg class="i sm"><use href="#i-bell"/></svg></div>
+          <div><svg class="i sm"><use href="#i-user"/></svg></div>
+        </div>
+      </div>
+      <div class="subtabs">
+        <div>作物</div><div>圃場</div><div>農薬</div><div class="on">設定</div>
+      </div>
+      <div class="setbody">
+        <div class="sechd">この端末の設定</div>
+        <div class="setcard">
+          <div class="setrow">
+            <div class="ic" style="color:var(--ink)"><svg class="i lg"><use href="#i-sliders"/></svg></div>
+            <div class="tx">
+              <div class="m">かんたんモード</div>
+              <div class="s">文字とボタンを大きくし、任意の項目を隠します。<b>記録できる内容は変わりません</b></div>
+            </div>
+            <div class="sw"><i></i></div>
+          </div>
+          <div class="setrow">
+            <div class="ic"><svg class="i lg"><use href="#i-mic"/></svg></div>
+            <div class="tx">
+              <div class="m">開いたら音声から</div>
+              <div class="s">記録を開くと すぐに話せる状態にします</div>
+            </div>
+            <div class="sw off"><i></i></div>
+          </div>
+          <div class="setrow">
+            <div class="ic"><svg class="i lg"><use href="#i-copy"/></svg></div>
+            <div class="tx">
+              <div class="m">前回の内容を引き継ぐ</div>
+              <div class="s">作物・圃場を前回のまま開きます</div>
+            </div>
+            <div class="sw"><i></i></div>
+          </div>
+        </div>
+        <div class="preview">
+          かんたんモードは<b>この端末だけ</b>に効きます。作業者に貸す端末でONにしてください。<b>役割（管理者／作業者）では切り替わりません。</b>
+        </div>
+
+        <div class="sechd" style="margin-top:15px">アカウント</div>
+        <div class="setcard">
+          <div class="setrow">
+            <div class="ic"><svg class="i lg"><use href="#i-user"/></svg></div>
+            <div class="tx">
+              <div class="m">吉野 常也</div>
+              <div class="s">管理者</div>
+            </div>
+            <div class="ic"><svg class="i sm"><use href="#i-chevright"/></svg></div>
+          </div>
+          <div class="setrow">
+            <div class="ic" style="color:var(--danger)"><svg class="i lg"><use href="#i-logout"/></svg></div>
+            <div class="tx"><div class="m" style="color:var(--danger)">ログアウト</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="nav">
+        <div><svg class="i"><use href="#i-home"/></svg>ホーム</div>
+        <div><svg class="i"><use href="#i-edit"/></svg>記録</div>
+        <div><svg class="i"><use href="#i-chart"/></svg>分析</div>
+        <div class="on"><svg class="i"><use href="#i-settings"/></svg>管理</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col" style="width:auto;flex:1;min-width:342px;">
+    <div class="tag">設定の置き場所について</div>
+    <div class="note" style="margin:0;">
+      <b>管理タブのサブタブにした理由</b>
+      <ul>
+        <li>現状 <code>App.tsx:198</code> の管理サブタブは 作物／圃場／農薬 の3つ。<b>4つ目を足すだけ</b>で新しいナビゲーションは要らない</li>
+        <li>ヘッダーの人アイコンのシート（<code>App.tsx:262</code>）は「ログアウト」用の小さい 0.4 高さのシート。トグルを増やすと窮屈で、<b>設定を探す場所として想像しにくい</b></li>
+        <li>ボトムナビに5つ目のタブを足すのは、<code>CLAUDE.md</code> の1画面1主操作の方針に対して重すぎる</li>
+        <li>人アイコンのシートには<b>「設定をひらく」の1行だけ追加</b>して、管理›設定へ飛ばす（両方から到達できる）</li>
+      </ul>
+      <b>role で自動判定しない理由</b>
+      <ul>
+        <li><code>Role = "admin" | "worker" | "viewer"</code> は権限であって年齢や慣れではない。<b>70歳の管理者も25歳の作業者もいる</b></li>
+        <li>端末ごとの <code>AsyncStorage</code> にする。既に <code>notifSeen_${userId}</code> で同じ仕組みを使用（<code>store.tsx:645</code>）</li>
+        <li>共有端末を作業者に貸すとき、管理者が引き渡し時に1回ONにする運用</li>
+      </ul>
+      <b>「前回の内容を引き継ぐ」を足した理由</b>
+      <ul>
+        <li>現行の初期値は <code>crops[0]</code> / <code>fields[0]</code>（<code>QuickReportSheet.tsx:64</code>）＝<b>いつも先頭</b>。1日に何件も入れる人には毎回選び直しになる</li>
+        <li>ONで前回値を初期表示。<b>既定ON</b>にするが、複数圃場を行き来する人はOFFにできる</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<div class="note">
+  <b>実装まとめ</b>
+  <table>
+    <tr><th>やること</th><th>内容</th><th style="width:70px">新規</th></tr>
+    <tr><td><code>screens/SimpleReportSheet.tsx</code></td><td>本体。<b>現行 QuickReportSheet の state・submit ペイロード・useEffect をそのまま流用</b>し、描画だけ差し替え。<code>easy</code> フラグで寸法とラベルを分岐</td><td>中</td></tr>
+    <tr><td><code>ui/PillRow.tsx</code></td><td>横スクロール＋選択状態のピル行。作物・圃場・作業で共用</td><td>小</td></tr>
+    <tr><td><code>ui/WorkIcon.tsx</code></td><td><code>react-native-svg</code>（既存依存）で lucide のパスを描く。Feather に無い6種のため</td><td>小</td></tr>
+    <tr><td><code>ui/Stepper.tsx</code></td><td>−／＋と長押し連続増減。数量・pH・散布量で共用。<b>長押しでキーボード入力に切替</b></td><td>小</td></tr>
+    <tr><td>いつもの作業</td><td>既存 <code>reports</code> から <code>(crop_id, field, work_type)</code> の頻度上位3件。<b>DB変更なし</b></td><td>小</td></tr>
+    <tr><td>音声の導線</td><td><code>structureVoiceApi</code> は実装済み。最上段に出して結果をピル行に反映するだけ</td><td>なし</td></tr>
+    <tr><td><code>screens/SettingsScreen.tsx</code></td><td>管理タブの4つ目のサブタブ。<code>AsyncStorage</code> の3トグル＋アカウント</td><td>小</td></tr>
+    <tr><td><code>lib/store.tsx</code></td><td><code>easyMode</code> / <code>voiceFirst</code> / <code>keepLastInput</code> を Provider に追加（AsyncStorage 永続化）</td><td>小</td></tr>
+    <tr><td>現行 <code>QuickReportSheet</code></td><td><b>残す。</b>「詳しく入力」から開く。<code>CLAUDE.md</code> の「既存機能を削除しない」に沿う</td><td>変更なし</td></tr>
+  </table>
+  <b>DBスキーマ変更・新規API・新規課金なし。</b>入る列は現行と同一なので、Web版・分析・AI日報・使用回数判定はすべてそのまま動きます。
+</div>
+
+</body>
+</html>
