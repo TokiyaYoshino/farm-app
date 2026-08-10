@@ -73,6 +73,28 @@ export interface Project {
   created_by?: number; created_at: string; color?: string;
 }
 
+// 作物ごとの相談スレッド（農業エージェント）の1発言。
+// scripts/migrations/2026-08-10-crop-advisor.sql の crop_advice_messages と同じ列名。
+// assistant 行には「何を根拠に言われたか」（出典・限界・FAMIC原文）を併せて保存する
+// —— 後から読み返したときに、目安と公的情報の区別が失われないようにするため。
+export interface CropAdviceMessage {
+  id: string;
+  crop_id: number;
+  role: "user" | "assistant";
+  content: string;
+  sources?: string[] | null;
+  limits?: string[] | null;
+  registration_facts?: {
+    productName: string; cropName: string; pestName: string; dilution: string;
+    usageTiming: string; usageCount: string; totalCount: string; application: string;
+    hasBlankLimit: boolean;
+  }[] | null;
+  model?: string | null;
+  cost_usd?: number | null;
+  created_by?: number | null;
+  created_at: string;
+}
+
 export const WORK_TEMPLATES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り", "剪定", "その他"];
 
 // 農薬散布系の作業区分か（Web版と同一の判定）

@@ -6,7 +6,7 @@ import Btn from "../ui/Btn";
 import { useStore } from "../lib/store";
 import { canUseAiFeature } from "../lib/ai";
 import FieldMapSheet from "./FieldMapSheet";
-import { PestAdviceSheet } from "./AiSheets";
+import { PestAdviceSheet, AdviseSheet } from "./AiSheets";
 
 // ─── ダッシュボード（src/App.tsx tab==="home" ブロックの移植・実データ）───
 interface Props {
@@ -26,6 +26,7 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
   } = useStore();
   const [showMap, setShowMap] = useState(false);
   const [showPestAdvice, setShowPestAdvice] = useState(false);
+  const [showAdvise, setShowAdvise] = useState(false);
 
   // 作業タイマーの経過秒（Web版 workElapsed と同一の1秒更新）
   const [elapsed, setElapsed] = useState(0);
@@ -183,6 +184,22 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
         )}
       </View>
 
+      {/* 作物の相談（予定が空でも・記録が無くても使える導線）。
+          「今日の予定」の直後に置く：予定が無いときにここで詰まるのが本来の課題。
+          やりとりは作付けごとに残り、助言した作業は作業記録と照合される */}
+      {canUseAiFeature("nextActionAdvice") && (
+        <Pressable onPress={() => setShowAdvise(true)} style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Feather name="message-circle" size={16} color={C.ink} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>作物のことを相談する</Text>
+            <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+              「これどうしたらいい？」に答えます。相談は作付けごとに残り、やることは記録と照合されます
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={16} color={C.textMuted} />
+        </Pressable>
+      )}
+
       {/* 新着コメント */}
       {feed.length > 0 && (
         <View style={{ backgroundColor: C.card, ...SHADOW.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12 }}>
@@ -226,6 +243,7 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
 
       <FieldMapSheet open={showMap} onClose={() => setShowMap(false)} />
       <PestAdviceSheet open={showPestAdvice} onClose={() => setShowPestAdvice(false)} />
+      <AdviseSheet open={showAdvise} onClose={() => setShowAdvise(false)} />
     </ScrollView>
   );
 }

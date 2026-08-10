@@ -10,8 +10,10 @@ import { registerPushToken, unregisterPushToken } from "./push";
 import { fetchCurrentWeather, type CurrentWeather } from "./weather";
 import type {
   User, Crop, Field, Report, Schedule, Comment, Pesticide, PesticideMaster, Project,
-  WorkCategory, AppSettings, PesticideRegistration,
+  WorkCategory, AppSettings, PesticideRegistration, CropAdviceMessage,
 } from "./types";
+import type { AdviceAction } from "./adviceMatch";
+import type { AdviseResult } from "./ai";
 
 // Web版 /api/pesticide-registration（FAMICのZIPにCORSが無くクライアントから直接取得
 // できないための中継）。アプリからも同じVercel APIを叩く。lib/ai.ts と同じ既定。
@@ -92,6 +94,14 @@ interface Store {
   loadComments: (targetType: string, targetId: string) => Promise<Comment[]>;
   addComment: (targetType: string, targetId: string, message: string) => Promise<boolean>;
   editComment: (id: string, message: string) => Promise<boolean>;
+  // 作物ごとの相談スレッド（農業エージェント）。
+  // 全件を fetchAll に積まないのは、作物を開いたときだけ必要で件数が伸び続けるため。
+  loadCropAdvice: (cropId: number) => Promise<{ messages: CropAdviceMessage[]; actions: AdviceAction[] } | null>;
+  // 利用者の質問とAIの返答を1往復ぶんまとめて保存する（やることも同時に切り出す）
+  saveCropAdviceTurn: (cropId: number, question: string, result: AdviseResult)
+    => Promise<{ messages: CropAdviceMessage[]; actions: AdviceAction[] } | null>;
+  // 「やらない」判断。行は消さずに dismissed_at を立てる（判断の履歴になる）
+  dismissAdviceAction: (actionId: string, dismissed: boolean) => Promise<boolean>;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -130,7 +140,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAuthLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setAuthSession(session);
+      // トークン自動更新でも呼ばれる。ここで毎回 setAuthSession すると
+      // オブジェクト同一性が変わって初期ロード useEffect が再実行され、
+      // loading=true → App.tsx の早期 return でツリーごとアンマウントされる
+      // （＝記録フォームの入力途中が消える）。同一ユーザーの更新では state を
+      // 差し替えない。ログイン・ログアウト・ユーザー変更のときだけ差し替える。
+      setAuthSession(prev => {
+        if (prev?.user?.id === session?.user?.id) return prev;
+        return session;
+      });
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -620,6 +638,70 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return !error;
   }, [currentOrganizationId]);
 
+  // ── 作物ごとの相談スレッド（農業エージェント） ──
+  // 発言（crop_advice_messages）と、そこから切り出したやること（crop_advice_actions）。
+  // **照合結果は保存しない**。作業記録は後から追加・修正されるので、実施済みを
+  // 書き込むと実態とずれる。実施したかは lib/adviceMatch.ts で毎回計算する。
+  const loadCropAdvice = useCallback(async (cropId: number) => {
+    if (!currentOrganizationId) return null;
+    const [msgRes, actRes] = await Promise.all([
+      supabase.from("crop_advice_messages").select("*")
+        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+      supabase.from("crop_advice_actions").select("*")
+        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+    ]);
+    if (msgRes.error || actRes.error) return null;
+    return {
+      messages: (msgRes.data ?? []) as CropAdviceMessage[],
+      actions: (actRes.data ?? []) as AdviceAction[],
+    };
+  }, [currentOrganizationId]);
+
+  const saveCropAdviceTurn = useCallback(async (cropId: number, question: string, result: AdviseResult) => {
+    if (!currentOrganizationId) return null;
+    const base = { organization_id: currentOrganizationId, crop_id: cropId, created_by: currentUser?.id ?? null };
+    // 質問と返答を1往復として入れる。返答だけ・質問だけが残るとスレッドが読めなくなるので、
+    // 返答の insert が失敗したら質問も消す
+    const { data: userRow, error: userErr } = await supabase.from("crop_advice_messages")
+      .insert([{ ...base, role: "user", content: question }]).select().single();
+    if (userErr || !userRow) return null;
+
+    const { data: aiRow, error: aiErr } = await supabase.from("crop_advice_messages").insert([{
+      ...base, role: "assistant", content: result.advice.reply,
+      // 出典・限界・FAMIC原文は生成時のものを残す。あとで文言を変えても過去の発言は当時のまま
+      sources: result.sources, limits: result.limits,
+      registration_facts: result.registrationFacts,
+      model: "gpt-4o-mini", usage: result.usage ?? null, cost_usd: result.costUsd ?? null,
+    }]).select().single();
+    if (aiErr || !aiRow) {
+      await supabase.from("crop_advice_messages").delete().eq("id", (userRow as CropAdviceMessage).id);
+      return null;
+    }
+
+    let actions: AdviceAction[] = [];
+    if (result.advice.actions.length > 0) {
+      const { data: actRows } = await supabase.from("crop_advice_actions").insert(
+        result.advice.actions.map(a => ({
+          ...base, message_id: (aiRow as CropAdviceMessage).id,
+          title: a.title, work_type: a.workType,
+          due_from: a.dueFrom, due_to: a.dueTo,
+          when_text: a.when || null, why: a.why || null, sort_order: a.sortOrder,
+        })),
+      ).select();
+      // やることの保存に失敗しても会話は残す（照合できないだけで、助言自体は読める）
+      actions = (actRows ?? []) as AdviceAction[];
+    }
+    return { messages: [userRow as CropAdviceMessage, aiRow as CropAdviceMessage], actions };
+  }, [currentOrganizationId, currentUser]);
+
+  const dismissAdviceAction = useCallback(async (actionId: string, dismissed: boolean): Promise<boolean> => {
+    if (!currentOrganizationId) return false;
+    const { error } = await supabase.from("crop_advice_actions")
+      .update({ dismissed_at: dismissed ? new Date().toISOString() : null })
+      .eq("id", actionId).eq("organization_id", currentOrganizationId);
+    return !error;
+  }, [currentOrganizationId]);
+
   // ── 通知（Web版 myNotifs / notifSeenAt と同一。既読時刻は AsyncStorage に保持） ──
   const [notifSeenAt, setNotifSeenAt] = useState("");
   useEffect(() => {
@@ -696,6 +778,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addPesticide, deletePesticide, searchPesticideMaster,
     pRegs, loadSavedRegistrations, prefetchAllRegistrations, openRegistrations, saveRegistrationsFor,
     loadComments, addComment, editComment,
+    loadCropAdvice, saveCropAdviceTurn, dismissAdviceAction,
   };
 
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;

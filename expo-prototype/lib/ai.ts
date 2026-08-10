@@ -17,6 +17,8 @@ export const AI_FEATURES = {
   recordSearchChat: true,
   pestControlAdvice: true,
   pestDiagnosis: true,
+  // 次にやる作業の相談（api/advise.ts）。記録の検索ではなく知識の補填なので別枠
+  nextActionAdvice: true,
 } as const;
 
 export function canUseAiFeature(feature: keyof typeof AI_FEATURES): boolean {
@@ -33,7 +35,9 @@ export interface DiagnosisResult {
 export async function saveAiOutput(
   organizationId: string | null,
   userId: number | null,
-  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure",
+  // "advice" は api/advise.ts（次にやる作業の助言）。ai_outputs.kind は text で
+  // CHECK 制約が無いのでマイグレーション不要
+  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice",
   payload: {
     reportId?: number | null;
     targetDate?: string | null;
@@ -198,6 +202,77 @@ export const searchChatApi = (question: string, records: string, recordCount: nu
 
 export const pestControlAdviceApi = (forecast: string, lat: number, lng: number) =>
   callApi<{ advice: string; usage?: unknown; costUsd?: number }>("/api/pest-control-advice", { forecast, lat, lng, registrations: [] });
+
+// ── 作物ごとの相談（api/advise.ts / 農業エージェント）──
+// searchChatApi とは目的が違う。あちらは記録の検索（記録に無いことは答えない）で、
+// こちらは知識の補填（記録がゼロでも成立する）。農薬の値は advice の文章ではなく
+// registrationFacts（FAMIC原文）を画面に出す。
+//
+// 会話として続けるため messages（これまでのやりとり）を、前に言ったことを踏まえるため
+// adviceHistory（過去の助言＋照合結果 / lib/adviceMatch.ts が整形）を渡す。
+// 保存先は crop_advice_messages / crop_advice_actions（APIは Supabase に触らない）。
+export interface AdviseRegistrationFact {
+  productName: string;
+  cropName: string;
+  pestName: string;
+  dilution: string;
+  usageTiming: string;
+  usageCount: string;
+  totalCount: string;
+  application: string;
+  hasBlankLimit: boolean;
+}
+/** 助言から切り出した「やること」。そのまま crop_advice_actions に保存する。
+ *  workType は作業記録と突き合わせるキーで、**null は「照合できない」**（未実施ではない）。
+ *  API 側で語彙の完全一致だけを通しているので、ここに来る値はそのまま照合に使える。 */
+export interface AdviseAction {
+  title: string;
+  workType: string | null;
+  when: string;
+  dueFrom: string | null;
+  dueTo: string | null;
+  why: string;
+  sortOrder: number;
+}
+export interface AdviseResult {
+  advice: {
+    /** 利用者への返答（会話文）。これをスレッドの assistant 発言として保存する */
+    reply: string;
+    actions: AdviseAction[];
+    watchPoints: string[];
+    unknowns: string[];
+  };
+  registrationFacts: AdviseRegistrationFact[];
+  sources: string[];
+  limits: string[];
+  usage?: unknown;
+  costUsd?: number;
+}
+export interface AdviseRegistrationInput {
+  product_name?: string;
+  crop_name?: string;
+  pest_name?: string;
+  dilution?: string;
+  usage_timing?: string;
+  usage_count?: string;
+  total_count?: string;
+  application?: string;
+}
+export const adviseApi = (body: {
+  crop: { name: string; famic_crop_name?: string | null; start_date?: string | null };
+  today?: string;
+  forecast?: string;
+  registrations?: AdviseRegistrationInput[];
+  records?: string;
+  question?: string;
+  region?: string;
+  /** これまでのやりとり（古い順）。直近12件までがプロンプトに乗る */
+  messages?: { role: "user" | "assistant"; content: string }[];
+  /** 過去の助言＋作業記録との照合結果（formatAdviceHistoryForPrompt の出力） */
+  adviceHistory?: string;
+  /** 照合に使える作業種別の語彙。渡さないと workType が全て null になる */
+  workTypes?: string[];
+}) => callApi<AdviseResult>("/api/advise", body);
 
 export const diagnoseImageApi = (imageUrl: string, cropName?: string) =>
   callApi<{ diagnosis: DiagnosisResult; usage?: unknown; costUsd?: number }>("/api/diagnose-image", cropName ? { imageUrl, cropName } : { imageUrl });

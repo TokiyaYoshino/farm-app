@@ -9,6 +9,8 @@ import RowMenu from "../ui/RowMenu";
 import PesticideUsageSummary from "../ui/PesticideUsageSummary";
 import { useStore } from "../lib/store";
 import { summarizeUsageByCrop } from "../lib/pesticideUsage";
+import { canUseAiFeature } from "../lib/ai";
+import { AdviseSheet } from "./AiSheets";
 import type { PesticideMaster } from "../lib/types";
 
 // ─── 管理（src/App.tsx tab==="manage" ブロックの移植・実データ）──────────
@@ -49,6 +51,8 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
   // FAMIC 作物名のインライン編集（Web版 editingFamicCropId と同一）
   const [editingFamicCropId, setEditingFamicCropId] = useState<number | null>(null);
   const [famicCropInput, setFamicCropInput] = useState("");
+  // 相談スレッドを開く作付け。作物ごとに溜まるので、作物の行から入れるようにする
+  const [adviseCropId, setAdviseCropId] = useState<number | null>(null);
   // 農薬の適用情報パネル（Web版 pRegOpen / pRegLoading / pRegCandidates と同一）
   const [pRegOpen, setPRegOpen] = useState<string | null>(null);
   const [pRegLoading, setPRegLoading] = useState<string | null>(null);
@@ -338,6 +342,15 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                         )}
                       </View>
                     </View>
+
+                    {/* この作付けの相談スレッド。やりとりと「やること」が作物ごとに溜まる */}
+                    {canUseAiFeature("nextActionAdvice") && (
+                      <Btn variant="soft" size="md" onPress={() => setAdviseCropId(c.id)}
+                        icon={<Feather name="message-circle" size={15} color={C.ink} />}
+                        style={{ marginTop: 12 }}>
+                        この作付けを相談する
+                      </Btn>
+                    )}
                   </>
                 )}
               </View>
@@ -623,6 +636,12 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
           )}
         </>
       )}
+
+      <AdviseSheet
+        open={adviseCropId != null}
+        onClose={() => setAdviseCropId(null)}
+        cropId={adviseCropId ?? undefined}
+      />
 
       {showDatePicker && (
         <DateTimePicker
