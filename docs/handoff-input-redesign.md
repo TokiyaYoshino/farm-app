@@ -96,6 +96,14 @@ cd ~/farm-app/expo-prototype && node scripts/analyze-input-usage.mjs
 
 **入力UIの件とは独立。公開前に塞ぐ必要がある。**
 
+> **2026-08-10 追記（RLS の状態が確定した）。** `jwt_organization_id()` / `jwt_org()` を rpc で叩くと
+> どちらも `PGRST202`（関数が無い）＝ **`2026-08-02-rls-policies.sql` は未適用**で確定。
+> かつ **anon key だけで `users` 5件・`crops` 7件・`reports` 33件・`ai_outputs` 10件・
+> `pesticide_registrations` 78件・`daily_weather` 371件・`work_categories` 6件が素で読める**
+> （`allow_all` ポリシーのため。件数は `Prefer: count=exact` で取得、氏名等は取得していない）。
+> 唯一 `organizations` だけが0件になるが、これは**ポリシーが無いため**であって行が無いからではない（下記訂正）。
+> **RLS 適用が公開前必須という結論は変わらない。**
+
 `org`（レガシー文字列）と `organization_id` のどちらでフィルタするかがテーブルごとにバラバラで、**同一 `organization_id` を共有する別テナント同士が互いのデータを見られる**。
 
 `expo-prototype/lib/store.tsx:151-161`（Web 版 `src/App.tsx:510-519` も同じ構成）:
@@ -330,7 +338,25 @@ npx expo export --platform ios
 - 写真選択から戻ったときに実際に消えないか。**修正1でトークン更新経由は塞げたが、iOS がプロセス自体を落とした場合は修正2の復元動作になる**。どちらの経路を通ったかは実機でしか確認できない
 - 復元バナーの文言・「破棄」の位置が現場で分かるか
 
-## 12. 作物ごとの相談（農業エージェント）（2026-08-10・**実装済み・マイグレーション未適用・未実機検証**）
+## 12. 作物ごとの相談（農業エージェント）（2026-08-10・**実装済み・PR #17 未マージ・マイグレーション未適用・未実機検証**）
+
+> **次のセッションはここだけ読めば再開できる（要約）**
+>
+> コードは完成していてテストも通っている。**動かないのは3つが未実行だから**で、いずれも私（AI）が
+> 実行できない種類のもの。順番に依存関係がある。
+>
+> | # | やること | 誰が | なぜ AI ができないか |
+> |---|---|---|---|
+> | 1 | `2026-08-10-organizations-check.sql` を SQL Editor で実行 | ユーザー | anon key しか無く DDL/RLS 越えの select が打てない |
+> | 2 | `2026-08-10-crop-advisor.sql` を SQL Editor で実行 | ユーザー | 同上。**これをやるまで会話が保存されない** |
+> | 3 | **PR #17 を main にマージ** → Vercel が `api/advise.ts` をデプロイ | ユーザーの承認 → AI が実行可 | 本番デプロイなので承認が必要（分類器にも止められた） |
+> | 4 | `link-famic-crop-names.mjs --apply`（層2が空のままなので） | ユーザーの承認 → AI が実行可 | 本番データ更新 |
+>
+> PR: https://github.com/TokiyaYoshino/farm-app/pull/17（ブランチ `feat/crop-advisor`・コミット `93d8272`）
+> Web アプリ側（`src/` `public/` `vercel.json`）に差分は無く、追加は新規エンドポイント1本のみ。
+>
+> **`/api/advise` が 405 を返すのは「未デプロイ」の根拠にならない。** `vercel.json` の catch-all
+> rewrite により存在しないパスも 405 になる。稼働確認は POST してレスポンス本文を見る。
 
 11章の消失バグに続く2件目。「次にやる作業やデータを迷わない（農業相談者・農業エージェント）」への対応。
 **設計判断の全体は `docs/decisions/20260810-next-action-advice.md`**（ここは差分と残作業だけ）。
@@ -433,7 +459,23 @@ LLM の出力品質は検証対象にしていない。
 
 ### 残っている作業
 
-1. **マイグレーションの適用（これをやるまで溜まらない）**
+**依存関係**: 1 → 2 は順序必須（参照先が無いと insert が落ちる）。3 は独立だが、
+**3 をやらないとアプリから API を呼べない**ので機能自体が動かない。4 は無くても縮退動作する。
+
+1. **`organizations` の実在確認（マイグレーションの前に流す）**
+
+   ```
+   scripts/migrations/2026-08-10-organizations-check.sql   # Supabase SQL Editor で実行
+   ```
+
+   `crop_advice_messages` / `crop_advice_actions` は
+   `organization_id uuid not null references organizations(id)` を持つため、参照先の行が無いと
+   **アプリからの insert が必ず FK 違反で落ちる**。読み取りが主で、欠けていた場合だけ補填する
+   （何度流しても安全）。**新しい UUID を振らず既存の `organization_id` を使う**のが要点
+   ―― 新規に振ると既存データが指す id と一致せず孤児が残る。
+   期待値は「kishu の行は既にあるので補填0行」（理由は 2.6章の訂正）
+
+2. **マイグレーションの適用（これをやるまで溜まらない）**
 
    ```
    scripts/migrations/2026-08-10-crop-advisor.sql   # Supabase SQL Editor で実行
@@ -444,7 +486,19 @@ LLM の出力品質は検証対象にしていない。
    （レガシーの `org` は新規テーブルに持ち込まない）。RLS は `allow_all` で、
    実ポリシー化は `2026-08-02-rls-policies.sql` の一斉適用で行う
 
-2. `famic_crop_name` の手動紐付け（上記の表・**本番データ更新なので要承認**）
+3. **PR #17 を main にマージする（`api/advise.ts` のデプロイ）**
+
+   https://github.com/TokiyaYoshino/farm-app/pull/17 ・ブランチ `feat/crop-advisor` ・コミット `93d8272`
+
+   `api/advise.ts` は `main` に無いので**まだデプロイされていない＝アプリから呼べない**。
+   Vercel は git push で反映される。Web アプリ側に差分は無く追加は新規エンドポイント1本のみなので
+   既存の挙動は変わらないが、**本番デプロイなので承認が必要**（承認があれば AI が実行できる）
+
+4. `famic_crop_name` の手動紐付け（上記の表・**本番データ更新なので要承認**）
+
+   `node scripts/link-famic-crop-names.mjs --apply`。dry-run 済みで7件すべて紐付け可能。
+   ただし**ほうれん草・にんにく・たまねぎは適用のある農薬が1件も無い**ため、紐付けても判定不可のまま
+   （農薬マスタが3件しか無い）
 
 ### 残っている確認
 
