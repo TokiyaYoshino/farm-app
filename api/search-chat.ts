@@ -7,7 +7,7 @@
 // reportsテーブルのスキーマ変更の影響を受けない（generate-report.tsと同じ設計）。
 
 import type { ApiRequest, ApiResponse } from "./types";
-import { requireUser, denied } from "./_auth";
+import { requireUser, denied } from "./_auth.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();

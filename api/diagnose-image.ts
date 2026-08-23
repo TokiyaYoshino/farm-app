@@ -7,7 +7,7 @@
 // （generate-report.ts / search-chat.ts / pest-control-advice.tsと同じ方針）。
 
 import type { ApiRequest, ApiResponse } from "./types";
-import { requireUser, denied } from "./_auth";
+import { requireUser, denied } from "./_auth.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();

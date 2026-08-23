@@ -17,7 +17,7 @@
 //   判断の経緯は docs/decisions/20260823-pest-advice-history.md）。
 
 import type { ApiRequest, ApiResponse } from "./types";
-import { requireUser, denied } from "./_auth";
+import { requireUser, denied } from "./_auth.js";
 
 interface RegistrationInfo {
   product_name?: string;

@@ -18,7 +18,7 @@
 
 import zlib from "node:zlib";
 import type { ApiRequest, ApiResponse } from "./types";
-import { requireUser, denied } from "./_auth";
+import { requireUser, denied } from "./_auth.js";
 
 const FAMIC_INDEX = "https://www.acis.famic.go.jp/ddata/index2.htm";
 const FAMIC_BASE = "https://www.acis.famic.go.jp/ddata/";

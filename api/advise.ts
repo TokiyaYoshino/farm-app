@@ -29,7 +29,7 @@
 // 環境変数: OPENAI_API_KEY（Vercelダッシュボードで設定。リポジトリに書かない）
 
 import type { ApiRequest, ApiResponse } from "./types";
-import { requireUser, denied } from "./_auth";
+import { requireUser, denied } from "./_auth.js";
 
 interface RegistrationInfo {
   product_name?: string;

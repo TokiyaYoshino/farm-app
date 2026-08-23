@@ -1,5 +1,5 @@
 import type { ApiRequest, ApiResponse } from "./types";
-import { requireUser, denied } from "./_auth";
+import { requireUser, denied } from "./_auth.js";
 
 // マルチテナント化: LINE通知先を organizations テーブルの組織別設定から取得できるようにする。
 // organization_id が渡され、かつ organizations テーブル/該当行が存在する場合はそちらを優先し、
