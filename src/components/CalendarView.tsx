@@ -60,6 +60,10 @@ interface Props {
   onLoadComments: (targetType: string, targetId: string) => Promise<Comment[]>;
   onAddComment: (targetType: string, targetId: string, message: string) => Promise<boolean>;
   onEditComment: (id: string, message: string) => Promise<boolean>;
+  /** その日を日報にまとめる。記録が1件以上ある日にだけ導線を出す。
+   *  日報は「その日の記録が目の前にある場所」に置くのが自然で、
+   *  以前は記録一覧のフィルタ行（横スクロールの先）にあり見つからなかった。 */
+  onSummarizeDay?: (date: string) => void;
 }
 
 const css = (o: CSSProperties): CSSProperties => o;
@@ -72,6 +76,7 @@ const shortName = (name: string) => name.slice(0, 2);
 export default function CalendarView({
   reports, schedules, crops, users, pesticides, currentUserId, isAdmin,
   onAddSchedule, onUpdateSchedule, onDeleteSchedule, onDeleteReport, onLoadComments, onAddComment, onEditComment,
+  onSummarizeDay,
 }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const [viewYear, setViewYear]   = useState(() => new Date().getFullYear());
@@ -677,6 +682,21 @@ export default function CalendarView({
                     </button>
                   </div>
                 </div>
+
+                {/* その日を日報にまとめる。記録がある日にだけ出す */}
+                {onSummarizeDay && selectedDate && baseReports.length > 0 && (
+                  <button
+                    onClick={() => onSummarizeDay(selectedDate)}
+                    style={css({
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      width: "100%", background: C.inkSoft, color: C.ink, border: "none",
+                      borderRadius: 999, padding: "11px 14px", fontSize: 13, fontWeight: 700,
+                      cursor: "pointer", marginBottom: 14,
+                    })}
+                  >
+                    この日の{baseReports.length}件を日報にまとめる
+                  </button>
+                )}
 
                 {/* 予定追加フォーム */}
                 {showForm && (

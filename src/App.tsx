@@ -2835,6 +2835,9 @@ export default function App() {
             onLoadComments={loadComments}
             onAddComment={addComment}
             onEditComment={editComment}
+            // 日報は「その日の記録が目の前にある場所」に置く。日付をタップして
+            // その日の記録が並んだ直後が、まとめたくなる瞬間
+            onSummarizeDay={(date) => { setGenDate(date); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
           />
 
           {/* ── 今日の予定 ── */}
