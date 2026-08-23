@@ -339,7 +339,7 @@ export function formatPesticideUsageForPrompt(params: {
     });
 
     if (regs.length > 0) {
-      lines.push("  - 登録適用（FAMIC原文）:");
+      lines.push("  - ラベルの適用内容（原文のまま）:");
       regs.slice(0, maxRows).forEach(r => {
         const detail = [
           r.usage_timing?.trim() && `使用時期 ${r.usage_timing.trim()}`,
@@ -359,10 +359,10 @@ export function formatPesticideUsageForPrompt(params: {
 
   const header = [
     "",
-    "## 農薬の登録上限と使用実績（作付け単位・FAMIC登録情報は原文のまま）",
+    "## 農薬の使える回数と使用実績（作付け単位・ラベルの記載は原文のまま）",
     `集計基準日: ${today}。期間は作付け開始日以降、1年を超える場合は直近1年。`,
     PRODUCT_UNIT_NOTE + LABEL_CHECK_NOTE,
-    "「上限に達していない」ことは使用の可否を意味しない。判定不可の場合は断定しないこと。",
+    "「上限に達していない」ことは使用の可否を意味しない。回数が分からない場合は断定しないこと。",
   ].join("\n");
 
   // 文字数上限に収まるぶんだけ載せる。落とした農薬は件数を明記し、AI が
