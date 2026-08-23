@@ -241,19 +241,27 @@ export function summarizeUsageByCrop(params: {
 // ─── 表示文言（画面とAIプロンプトで同じ言い回しを使う）──────────────
 // 「OK」「安全」「使用可能」と読める文言は絶対に置かない。
 
-/** 判定に対応する警告・注意の文。"under" は事実だけを出すので文を持たない（null）。 */
+/** 判定に対応する警告・注意の文。"under" は事実だけを出すので文を持たない（null）。
+ *
+ *  文言は農家が普段使う言葉だけにする。「FAMIC」「照合」「適用行」「紐付け」といった
+ *  こちらの都合の語を出すと、詰まったときに何をすればいいのか分からなくなる
+ *  （docs/decisions/20260824-plain-language-and-crop-mapping.md）。
+ *  システムの都合ではなく、利用者が何を失うか（使いすぎを見張れない）を書く。 */
 export function verdictMessage(s: UsageSummary): string | null {
-  if (s.verdict === "over") return "総使用回数の上限を超えている可能性があります。";
+  if (s.verdict === "over") return "使える回数を超えているかもしれません。";
   if (s.verdict === "under") return null; // 事実のみ提示する。可否の断定はしない
   switch (s.unknownReason) {
     case "no_famic_crop_name":
-      return "FAMIC 作物名が未設定のため、農薬の使用回数を判定できません。管理タブの作物から設定してください。";
+      return "作物名が未確定なので、使いすぎを見張れません。";
     case "no_registration":
-      return "この農薬の適用情報を取得していないため判定できません。「適用情報を見る」を一度実行してください。";
+      return "この農薬のラベル情報がまだありません。「ラベルの内容を見る」を一度押してください。";
     case "no_matching_row":
-      return "紐付けた FAMIC 作物名に一致する適用行がないため判定できません。製品ラベルの表示を確認してください。";
+      // 「使えない」とは言わない。ラベルが「果樹類」のような括りで書かれていると
+      // 作物名が文字列として一致しないだけで、実際には使えることがある。
+      // 判定できないことと、使えないことは別（判定不可のまま留める）。
+      return "ラベルにこの作物の記載が見つからないので、回数を見張れません。製品ラベルを確認してください。";
     default:
-      return "総使用回数の判定はできません。製品ラベルの表示を確認してください。";
+      return "使える回数が分からないので、見張れません。製品ラベルを確認してください。";
   }
 }
 
@@ -264,11 +272,11 @@ export function periodLabel(s: UsageSummary): string {
 
 /** 総使用回数の原文。複数の適用行が一致したときは並べる。無ければ「記載なし」。 */
 export function limitLabel(s: UsageSummary): string {
-  return s.limitTexts.length > 0 ? s.limitTexts.join(" / ") : "総使用回数の記載なし";
+  return s.limitTexts.length > 0 ? s.limitTexts.join(" / ") : "ラベルに回数の記載なし";
 }
 
 export const PRODUCT_UNIT_NOTE =
-  "商品単位の集計です（同一成分を含む他剤とは合算されません）。";
+  "同じ成分を含む別の農薬とは合わせて数えていません。";
 export const LABEL_CHECK_NOTE =
   "実際の使用時は必ず製品ラベルの表示を確認してください。";
 

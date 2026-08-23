@@ -46,7 +46,7 @@ function VerdictBadge({ verdict }: { verdict: UsageSummary["verdict"] }) {
     return (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: C.well, borderRadius: RADIUS.pill, paddingVertical: 2, paddingHorizontal: 8 }}>
         <Feather name="help-circle" size={11} color={C.textSub} />
-        <Text style={{ fontSize: 11, fontWeight: "700", color: C.textSub }}>判定不可</Text>
+        <Text style={{ fontSize: 11, fontWeight: "700", color: C.textSub }}>見張れません</Text>
       </View>
     );
   }
@@ -89,7 +89,7 @@ function SummaryRow({ s, compact, onSetupCrop }: { s: UsageSummary; compact: boo
 
       {s.verdict === "unknown" && s.unknownReason === "no_famic_crop_name" && onSetupCrop && (
         <Pressable onPress={onSetupCrop} style={{ paddingTop: 4 }}>
-          <Text style={{ color: C.ink, fontSize: 12, fontWeight: "600" }}>FAMIC 作物名を設定する →</Text>
+          <Text style={{ color: C.ink, fontSize: 12, fontWeight: "600" }}>農薬の数え方を選ぶ →</Text>
         </Pressable>
       )}
 
@@ -97,10 +97,10 @@ function SummaryRow({ s, compact, onSetupCrop }: { s: UsageSummary; compact: boo
         <View style={{ marginTop: 4 }}>
           <Text style={metaText}>集計期間: {periodLabel(s)}</Text>
           {!!s.famicCropName && (
-            <Text style={metaText}>FAMIC 作物名: {s.famicCropName}{s.matchedRows > 0 ? `（適用${s.matchedRows}件）` : ""}</Text>
+            <Text style={metaText}>農薬の数え方: {s.famicCropName}{s.matchedRows > 0 ? `（適用${s.matchedRows}件）` : ""}</Text>
           )}
           {s.limitTexts.length > 0 && (
-            <Text style={metaText}>総使用回数 {limitLabel(s)}（FAMIC 原文）</Text>
+            <Text style={metaText}>使える回数 {limitLabel(s)}（ラベル記載）</Text>
           )}
           {s.usedDates.length > 0 && (
             <Text style={metaText}>使用日: {s.usedDates.map(d => d.slice(5).replace("-", "/")).join("、")}</Text>
@@ -113,7 +113,7 @@ function SummaryRow({ s, compact, onSetupCrop }: { s: UsageSummary; compact: boo
 
 export default function PesticideUsageSummary({ summaries, title, compact = false, onSetupCrop }: Props) {
   if (summaries.length === 0) return null;
-  // 気づいてほしい順に並べる: 超過の疑い → 判定不可 → それ以外
+  // 気づいてほしい順に並べる: 超過の疑い → 見張れません → それ以外
   const order: Record<UsageSummary["verdict"], number> = { over: 0, unknown: 1, under: 2 };
   const sorted = [...summaries].sort((a, b) => order[a.verdict] - order[b.verdict]);
 

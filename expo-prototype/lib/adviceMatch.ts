@@ -144,29 +144,31 @@ export function countMatches(matches: ActionMatch[]): MatchCounts {
 }
 
 // ─── 表示文言（画面とAIプロンプトで同じ言い回しを使う）──────────────
+// 「照合」「作業種別」のようなこちらの都合の語は出さない。記録を見て言っている、が
+// 伝わればよい（docs/decisions/20260824-plain-language-and-crop-mapping.md）。
 export function statusLabel(s: MatchStatus): string {
   switch (s) {
-    case "done": return "実施済み";
-    case "pending": return "未実施";
-    case "overdue": return "期限超過";
-    case "unmatchable": return "記録と照合できません";
-    case "dismissed": return "やらないと判断";
+    case "done": return "やった";
+    case "pending": return "まだ";
+    case "overdue": return "期限すぎ";
+    case "unmatchable": return "記録から分かりません";
+    case "dismissed": return "やらない";
   }
 }
 
-/** 照合の根拠を1行で。「何を見てそう言っているか」を必ず出す */
+/** 判断の根拠を1行で。「何を見てそう言っているか」を必ず出す */
 export function matchDetail(m: ActionMatch): string {
-  if (m.status === "dismissed") return "やらないと判断した助言です。";
+  if (m.status === "dismissed") return "やらないことにした作業です。";
   if (m.status === "unmatchable") {
-    return "この助言は作業記録の作業種別に対応していないため、実施したかどうかは記録から判断できません。";
+    return "記録の作業名と結びつかないので、やったかどうかは分かりません。";
   }
-  const period = `${m.windowStart} 以降の記録を照合`;
+  const period = `${m.windowStart} からの記録を確認`;
   if (m.status === "done") {
     const ds = m.matchedReports.map(r => r.date.slice(5).replace("-", "/")).join("、");
     return `${period}：${m.matchedReports.length}件（${ds}）`;
   }
-  const due = m.action.due_to ? `期限 ${m.action.due_to}` : "期限の指定なし";
-  return `${period}：該当なし（${due}）`;
+  const due = m.action.due_to ? `期限 ${m.action.due_to}` : "期限なし";
+  return `${period}：見つかりません（${due}）`;
 }
 
 // ─── AIに渡すための整形 ──────────────────────────────────────
@@ -189,9 +191,10 @@ export function formatAdviceHistoryForPrompt(matches: ActionMatch[], maxItems = 
   const dropped = matches.length - Math.min(matches.length, maxItems);
   return [
     "",
-    "## これまでにこの作付けへ出した助言と、作業記録との照合結果",
-    "同じ助言を繰り返さず、未実施のものは事情を尋ねるか代替を示すこと。",
-    "「記録と照合できません」は未実施を意味しない。実施していないと決めつけないこと。",
+    "## これまでにこの作付けへ出した助言と、作業記録から分かる実施状況",
+    "同じ助言を繰り返さず、「まだ」のものは事情を尋ねるか代替を示すこと。",
+    // statusLabel と同じ語を使う。ここがずれると AI の言うことと画面のバッジが食い違う
+    "「記録から分かりません」は「やっていない」という意味ではない。実施していないと決めつけないこと。",
     ...lines,
     ...(dropped > 0 ? [`（ほか${dropped}件は省略）`] : []),
   ].join("\n");

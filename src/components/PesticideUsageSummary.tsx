@@ -56,7 +56,7 @@ function VerdictBadge({ verdict }: { verdict: UsageSummary["verdict"] }) {
   if (verdict === "unknown") {
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: C.well, color: C.textSub, borderRadius: RADIUS.pill, padding: "2px 8px", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-        <HelpCircle size={11} strokeWidth={2.5} />判定不可
+        <HelpCircle size={11} strokeWidth={2.5} />見張れません
       </span>
     );
   }
@@ -101,16 +101,16 @@ function SummaryRow({ s, compact, onSetupCrop }: { s: UsageSummary; compact: boo
           onClick={onSetupCrop}
           style={{ background: "none", border: "none", padding: "4px 0 0", cursor: "pointer", color: C.ink, fontSize: 12, fontWeight: 600 }}
         >
-          FAMIC 作物名を設定する →
+          農薬の数え方を選ぶ →
         </button>
       )}
 
       {showDetail && (
         <div style={S.meta}>
           <div>集計期間: {periodLabel(s)}</div>
-          {s.famicCropName && <div>FAMIC 作物名: {s.famicCropName}{s.matchedRows > 0 ? `（適用${s.matchedRows}件）` : ""}</div>}
+          {s.famicCropName && <div>農薬の数え方: {s.famicCropName}{s.matchedRows > 0 ? `（ラベル${s.matchedRows}件）` : ""}</div>}
           {s.limitTexts.length > 0 && (
-            <div>総使用回数 {limitLabel(s)}<span style={{ color: C.textMuted }}>（FAMIC 原文）</span></div>
+            <div>使える回数 {limitLabel(s)}<span style={{ color: C.textMuted }}>（ラベル記載）</span></div>
           )}
           {s.usedDates.length > 0 && (
             <div>使用日: {s.usedDates.map(d => d.slice(5).replace("-", "/")).join("、")}</div>
@@ -123,7 +123,7 @@ function SummaryRow({ s, compact, onSetupCrop }: { s: UsageSummary; compact: boo
 
 export default function PesticideUsageSummary({ summaries, title, compact = false, onSetupCrop }: Props) {
   if (summaries.length === 0) return null;
-  // 気づいてほしい順に並べる: 超過の疑い → 判定不可 → それ以外
+  // 気づいてほしい順に並べる: 超過の疑い → 見張れません → それ以外
   const order: Record<UsageSummary["verdict"], number> = { over: 0, unknown: 1, under: 2 };
   const sorted = [...summaries].sort((a, b) => order[a.verdict] - order[b.verdict]);
 

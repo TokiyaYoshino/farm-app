@@ -29,6 +29,7 @@ import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
   type AdviceAction,
 } from "./lib/adviceMatch";
+import { matchCropName, cropNameCandidates } from "./lib/cropAlias";
 import PesticideUsageSummary, { PesticideUsageCard } from "./components/PesticideUsageSummary";
 import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
@@ -370,6 +371,8 @@ export default function App() {
   const [masterResults, setMasterResults] = useState<PesticideMaster[]>([]);
   // 農薬の適用情報（FAMIC 登録適用部）。件数が多くなりうるので展開時に遅延読み込みする
   const [pRegs, setPRegs]               = useState<Record<string, PesticideRegistration[]>>({});
+  // ラベル上の作物名の候補。起動時に読み、農薬パネルを開いたぶんは pRegs 側から足す
+  const [regCropNames, setRegCropNames] = useState<string[]>([]);
   const [pRegOpen, setPRegOpen]         = useState<string | null>(null);
   const [pRegLoading, setPRegLoading]   = useState<string | null>(null);
   const [pRegCandidates, setPRegCandidates] =
@@ -433,7 +436,6 @@ export default function App() {
   const [targetYieldInput, setTargetYieldInput]     = useState("");
   // FAMIC 作物名のインライン編集（管理タブ > 作物）。編集中の作物 id を持つ
   const [editingFamicCropId, setEditingFamicCropId] = useState<number | null>(null);
-  const [famicCropInput, setFamicCropInput]         = useState("");
   const [selectedPesticides, setSelectedPesticides] = useState<string[]>([]);
   const [pesticideAmounts, setPesticideAmounts]     = useState<Record<string, string>>({});
   const [soilPh, setSoilPh]                         = useState("");
@@ -605,6 +607,14 @@ export default function App() {
         const byCrop: Record<number, AdviceAction[]> = {};
         ((acts ?? []) as AdviceAction[]).forEach(a => { (byCrop[a.crop_id] ??= []).push(a); });
         setAdviceCounts(byCrop);
+
+        // 作物名の自動一致に使う候補（＝ラベル上の作物名）。
+        // 適用情報の本体は農薬パネルを開いたときの遅延ロードだが、それを待つと
+        // 「利用者が農薬画面を開くまで自動で当たらない」ことになり、聞かずに済ませる
+        // という目的を果たせない。作物名の列だけなら軽いので起動時に読む。
+        const { data: regNames } = await supabase.from("pesticide_registrations")
+          .select("crop_name").eq("organization_id", organizationId).limit(2000);
+        setRegCropNames(cropNameCandidates(((regNames ?? []) as { crop_name?: string }[]).map(r => r.crop_name ?? "")));
       }
       } catch (e) {
         console.error("Startup error:", e);
@@ -1196,7 +1206,51 @@ export default function App() {
     if (error) { console.error("updateFamicCropName error:", error); return showToast(error.message, "err"); }
     setCrops(prev => prev.map(c => c.id === cropId ? { ...c, famic_crop_name: name } : c));
     setEditingFamicCropId(null);
-    showToast(name ? "FAMIC 作物名を設定しました" : "FAMIC 作物名を解除しました");
+    showToast(name ? `農薬の数え方を「${name}」にしました` : "農薬の数え方を未設定にしました");
+  };
+
+  // ─── 作物名の自動一致 ────────────────────────────────────────
+  // 以前は「農薬ラベル上の名前」を利用者に手入力させ、未設定の理由を76文字で説明していた。
+  // 結果、本番の作付けは全件未設定＝使いすぎチェックが動いていなかった。
+  // 説明を短くするのではなく、聞かずに済ませる（src/lib/cropAlias.ts）。
+  //
+  // 候補は自組織の農薬登録情報に実在する作物名だけ。存在しない名前を設定しても
+  // チェックは動かず「設定したのに見張られない」という最悪の誤解を生むため。
+  const registrationCropNames = useMemo(
+    () => cropNameCandidates([
+      ...regCropNames,
+      ...Object.values(pRegs).flat().map(r => r.crop_name ?? ""),
+    ]),
+    [regCropNames, pRegs],
+  );
+
+  // 候補が揃ったら、未設定の作付けに自動で当てにいく。
+  // 利用者に何も聞かずに済ませるのが目的なので、画面を開いた時点で終わらせる。
+  const autoLinkedRef = useRef(false);
+  useEffect(() => {
+    if (autoLinkedRef.current) return;
+    if (registrationCropNames.length === 0 || crops.length === 0) return;
+    autoLinkedRef.current = true;
+    void autoLinkCropNames(registrationCropNames);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registrationCropNames, crops]);
+
+  /** 未設定の作付けに対して自動で当てる。当たったものだけ保存する（推測では当てない） */
+  const autoLinkCropNames = async (candidates: string[]) => {
+    if (candidates.length === 0 || !currentOrganizationId) return;
+    const targets = crops.filter(c => !c.famic_crop_name);
+    if (targets.length === 0) return;
+    const hits = targets
+      .map(c => ({ c, m: matchCropName(c.name, candidates) }))
+      .filter(x => x.m.confident && x.m.famicCropName);
+    if (hits.length === 0) return;
+    await Promise.all(hits.map(({ c, m }) =>
+      supabase.from("crops").update({ famic_crop_name: m.famicCropName }).eq("id", c.id)
+    ));
+    setCrops(prev => prev.map(c => {
+      const hit = hits.find(h => h.c.id === c.id);
+      return hit ? { ...c, famic_crop_name: hit.m.famicCropName } : c;
+    }));
   };
 
   const handleCopyReport = (report: Report) => {
@@ -3087,10 +3141,10 @@ export default function App() {
                     <input type="date" style={{ ...S.input, maxWidth:"100%" }} value={cForm.start_date} onChange={e => setCForm(f => ({ ...f, start_date:e.target.value }))} />
                     <div style={S.lbl}>目標収穫量（kg/年・任意）</div>
                     <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
-                    <div style={S.lbl}>FAMIC 作物名（任意）</div>
+                    <div style={S.lbl}>農薬の数え方（任意・あとで自動で入ります）</div>
                     <input style={S.input} placeholder="例: うめ（南高梅なら「うめ」）" value={cForm.famic_crop_name} onChange={e => setCForm(f => ({ ...f, famic_crop_name:e.target.value }))} />
                     <div style={{ fontSize:11, color:C.textMuted, marginTop:-8, marginBottom:12, lineHeight:1.6 }}>
-                      農薬登録情報（FAMIC）上の作物名。農薬の総使用回数を照合するのに使います。未設定でも記録はできますが、使用回数の判定はできません。
+                      空のままで大丈夫です。農薬を登録すると自動で入ります。
                     </div>
                     <button style={{ ...S.btn, opacity:submitting?0.7:1 }} onClick={addCrop} disabled={submitting}>
                       {submitting ? <><RefreshCw size={16} strokeWidth={2} />追加中...</> : <><PlusCircle size={16} strokeWidth={2} />作物を追加</>}
@@ -3120,8 +3174,8 @@ export default function App() {
                         <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
                           {c.start_date}{stat?.growDays != null ? ` · ${stat.growDays}日目` : ""}
                           {c.famic_crop_name
-                            ? ` · FAMIC「${c.famic_crop_name}」`
-                            : <span style={{ color:C.warning, fontWeight:600 }}> · FAMIC 作物名 未設定</span>}
+                            ? ` · 農薬の数え方「${c.famic_crop_name}」`
+                            : null}
                         </div>
                       </div>
                     </button>
@@ -3158,33 +3212,57 @@ export default function App() {
 
                       {/* FAMIC 作物名の紐付け（農薬の総使用回数を照合するのに使う）。
                           自動マッチングはしない方針のため、目標収穫量と同じ操作感で手入力させる */}
+                      {/* 農薬の数え方（＝ラベル上の作物名）。
+                          自動で当たっていれば1行だけ出し、警告色は使わない。
+                          当たらなかったときだけ、何を失うかを1行で言って選ばせる。 */}
                       <div style={{ ...S.wellBox, padding:6, marginBottom:12 }}>
                         <div style={{ ...S.wrow, display:"block" }}>
-                          <div style={S.lbl2}>FAMIC 作物名（農薬の使用回数の照合用）</div>
                           {editingFamicCropId === c.id ? (
-                            <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                              <input
-                                autoFocus placeholder="例: うめ"
-                                value={famicCropInput}
-                                onChange={e => setFamicCropInput(e.target.value)}
-                                onKeyDown={e => e.key === "Enter" && updateFamicCropName(c.id, famicCropInput)}
-                                style={{ flex:1, minWidth:0, padding:"6px 11px", borderRadius:RADIUS.pill, border:`1px solid ${C.hairline}`, fontSize:16, background:C.card, color:C.text, boxSizing:"border-box" as const }}
-                              />
-                              <button onClick={() => updateFamicCropName(c.id, famicCropInput)} style={btn("primary", "sm")}>保存</button>
-                              <button onClick={() => setEditingFamicCropId(null)} style={btn("secondary", "sm")}>×</button>
+                            <>
+                              <div style={S.lbl2}>農薬の数え方</div>
+                              <div style={{ fontSize:11, color:C.textMuted, marginTop:2, marginBottom:6, lineHeight:1.6 }}>
+                                南高梅なら「うめ」のように、農薬ラベルに書かれている名前を選びます
+                              </div>
+                              {registrationCropNames.length > 0 ? (
+                                <div style={{ display:"flex", flexWrap:"wrap" as const, gap:6 }}>
+                                  {registrationCropNames.map(n => (
+                                    <button key={n} onClick={() => updateFamicCropName(c.id, n)}
+                                      style={{ ...btn(c.famic_crop_name === n ? "primary" : "secondary", "sm"), flexShrink:0 }}>
+                                      {n}
+                                    </button>
+                                  ))}
+                                  <button onClick={() => updateFamicCropName(c.id, "")} style={btn("tertiary", "sm")}>未設定に戻す</button>
+                                  <button onClick={() => setEditingFamicCropId(null)} style={btn("tertiary", "sm")}>閉じる</button>
+                                </div>
+                              ) : (
+                                <div style={{ fontSize:12, color:C.textSub, lineHeight:1.7 }}>
+                                  先に農薬を登録して「ラベルの内容を見る」を押すと、ここに選べる名前が出ます。
+                                  <button onClick={() => setEditingFamicCropId(null)} style={{ ...btn("tertiary", "sm"), marginTop:6 }}>閉じる</button>
+                                </div>
+                              )}
+                            </>
+                          ) : c.famic_crop_name ? (
+                            <button
+                              onClick={() => { setEditingFamicCropId(c.id); }}
+                              style={{ display:"flex", alignItems:"center", gap:4, fontSize:13, color:C.textSub, background:"none", border:"none", padding:0, cursor:"pointer" }}
+                            >
+                              農薬の数え方：<b style={{ color:C.text }}>{c.famic_crop_name}</b>
+                              <ChevronDown size={13} strokeWidth={2} />
+                            </button>
+                          ) : registrationCropNames.length === 0 ? (
+                            // 候補が1つも無い状態で「選んでください」と言うと、選びに行って
+                            // 空の画面に突き当たる。何をすれば進むのかだけを言う
+                            <div style={{ fontSize:12, color:C.textSub, lineHeight:1.7 }}>
+                              農薬を登録して「適用情報を見る」を押すと、使いすぎを見張れるようになります。
                             </div>
                           ) : (
                             <button
-                              onClick={() => { setFamicCropInput(c.famic_crop_name ?? ""); setEditingFamicCropId(c.id); }}
-                              style={{ fontSize:15, fontWeight:700, color: c.famic_crop_name ? C.text : C.warning, background:"none", border:"none", padding:0, cursor:"pointer", textAlign:"left" as const }}
+                              onClick={() => { setEditingFamicCropId(c.id); }}
+                              style={{ display:"flex", alignItems:"center", gap:4, fontSize:13, color:C.ink, fontWeight:600, background:"none", border:"none", padding:0, cursor:"pointer", textAlign:"left" as const }}
                             >
-                              {c.famic_crop_name || "未設定 — タップして設定"}
+                              農薬の使いすぎを見張るために、登録名を選んでください
+                              <ChevronRight size={13} strokeWidth={2} />
                             </button>
-                          )}
-                          {!c.famic_crop_name && editingFamicCropId !== c.id && (
-                            <div style={{ fontSize:11, color:C.textMuted, marginTop:4, lineHeight:1.6 }}>
-                              FAMIC 作物名が未設定のため、農薬の使用回数を判定できません。農薬登録情報上の作物名（例: 南高梅なら「うめ」）を入れてください。
-                            </div>
                           )}
                         </div>
                       </div>
@@ -3376,7 +3454,7 @@ export default function App() {
                   )}
                 </div>
 
-                {/* 適用情報（FAMIC 農薬登録情報） */}
+                {/* 農薬ラベルの適用内容（農薬登録情報より） */}
                 <button
                   onClick={() => openRegistrations(p)}
                   disabled={pRegLoading === p.id}
@@ -3425,7 +3503,7 @@ export default function App() {
                 {pRegOpen === p.id && pRegs[p.id] && (
                   <div style={{ ...S.wellBox, padding:12, marginTop:8 }}>
                     <div style={{ fontSize:11, color:C.textMuted, marginBottom:10, lineHeight:1.6 }}>
-                      農薬登録第{p.registration_no}号の適用内容（FAMIC 農薬登録情報より）。
+                      農薬登録第{p.registration_no}号のラベル内容です。
                       <strong style={{ color:C.textSub }}>実際の使用時は必ず製品ラベルの表示を確認してください。</strong>
                     </div>
                     {pRegs[p.id].slice(0, 30).map((r, i) => (

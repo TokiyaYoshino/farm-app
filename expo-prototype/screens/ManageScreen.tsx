@@ -237,11 +237,11 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                   <Text style={lblStyle}>目標収穫量（kg/年・任意）</Text>
                   <TextInput style={underlineInput} placeholder="例: 500" placeholderTextColor={C.textMuted} keyboardType="numeric"
                     value={cForm.target_yield} onChangeText={v => setCForm(f => ({ ...f, target_yield: v }))} />
-                  <Text style={lblStyle}>FAMIC 作物名（任意）</Text>
+                  <Text style={lblStyle}>農薬の数え方（任意・あとで自動で入ります）</Text>
                   <TextInput style={[underlineInput, { marginBottom: 6 }]} placeholder="例: うめ（南高梅なら「うめ」）" placeholderTextColor={C.textMuted}
                     value={cForm.famic_crop_name} onChangeText={v => setCForm(f => ({ ...f, famic_crop_name: v }))} />
                   <Text style={{ fontSize: 11, color: C.textMuted, lineHeight: 17, marginBottom: 14 }}>
-                    農薬登録情報（FAMIC）上の作物名。農薬の総使用回数を照合するのに使います。未設定でも記録はできますが、使用回数の判定はできません。
+                    空のままで大丈夫です。農薬を登録すると自動で入ります。
                   </Text>
                   <Btn variant="primary" size="lg" onPress={handleAddCrop} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
                     {submitting ? "追加中..." : "作物を追加"}
@@ -268,8 +268,8 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                       <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
                         {c.start_date}{stat?.growDays != null ? ` · ${stat.growDays}日目` : ""}
                         {c.famic_crop_name
-                          ? ` · FAMIC「${c.famic_crop_name}」`
-                          : <Text style={{ color: C.warning, fontWeight: "600" }}> · FAMIC 作物名 未設定</Text>}
+                          ? ` · 農薬の数え方「${c.famic_crop_name}」`
+                          : null}
                       </Text>
                     </View>
                   </View>
@@ -314,7 +314,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                     <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 6, marginTop: 12 }}>
                       <View style={{ backgroundColor: C.card, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12 }}>
                         <Text style={{ fontSize: 11, fontWeight: "500", color: C.textMuted, marginBottom: 2 }}>
-                          FAMIC 作物名（農薬の使用回数の照合用）
+                          農薬の数え方
                         </Text>
                         {editingFamicCropId === c.id ? (
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
@@ -337,7 +337,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                         )}
                         {!c.famic_crop_name && editingFamicCropId !== c.id && (
                           <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 17 }}>
-                            FAMIC 作物名が未設定のため、農薬の使用回数を判定できません。農薬登録情報上の作物名（例: 南高梅なら「うめ」）を入れてください。
+                            南高梅なら「うめ」のように、農薬ラベルに書かれている名前を選びます
                           </Text>
                         )}
                       </View>
@@ -509,7 +509,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                     <TextInput style={underlineInput} placeholder="例: 1000倍" placeholderTextColor={C.textMuted}
                       value={pForm.dilution_rate} onChangeText={v => setPForm(f => ({ ...f, dilution_rate: v }))} />
                     <Pressable onPress={() => setPManualMode(false)} style={{ marginBottom: 12 }}>
-                      <Text style={{ fontSize: 12, color: C.info, fontWeight: "600" }}>マスタ検索に戻る</Text>
+                      <Text style={{ fontSize: 12, color: C.info, fontWeight: "600" }}>検索から選ぶ</Text>
                     </Pressable>
                   </>
                 )}
@@ -601,7 +601,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                   {pRegOpen === p.id && pRegs[p.id] && (
                     <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 12, marginBottom: 10 }}>
                       <Text style={{ fontSize: 11, color: C.textMuted, marginBottom: 10, lineHeight: 17 }}>
-                        {p.registration_no ? `農薬登録第${p.registration_no}号の適用内容（FAMIC 農薬登録情報より）。` : "FAMIC 農薬登録情報より。"}
+                        {p.registration_no ? `農薬登録第${p.registration_no}号のラベル内容です。` : "農薬ラベルの内容です。"}
                         <Text style={{ color: C.textSub, fontWeight: "700" }}>実際の使用時は必ず製品ラベルの表示を確認してください。</Text>
                       </Text>
                       {pRegs[p.id].length === 0 && (
