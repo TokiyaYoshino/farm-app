@@ -1,0 +1,546 @@
+<title>AI導線の置き直し</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+
+<style>
+  /* ── 注釈層（スタジオの地）。アプリは light 専用のトークン体系なので、
+        このページも意図的に単一テーマで組み、色は全て明示的に塗る ── */
+  :root{
+    --studio:#E5E6E3;      /* 緑にわずかに寄せたグレー。アプリの無彩色カードが浮く */
+    --studio-2:#D8DAD5;
+    --chrome:#2A2D28;      /* 注釈の主文字 */
+    --chrome-sub:#63675E;
+    --chrome-mute:#8D9187;
+    --rule:#CBCEC6;
+    /* ── アプリのトークン（src/ui/tokens.ts と同値）── */
+    --bg:#F5F5F6; --well:#EFEFF1; --card:#FFFFFF;
+    --ink:#2E7D32; --inkSoft:#E4F0E4;
+    --text:#1A1C1E; --textSub:#66696E; --textMuted:#9EA1A6; --hairline:#EBEBED;
+    --danger:#D4453C; --dangerBg:#FBEBEA;
+    --warning:#DD8A0A; --warningBg:#FBF1DF;
+    --info:#3773E1; --infoBg:#E7EEFC;
+    --pest:#7B1FA2; --pestBg:#F3E9F8; --rain:#0288D1;
+    --shadow-card:0 1px 2px rgba(16,17,20,.04), 0 8px 24px rgba(16,17,20,.06);
+    --shadow-pill:0 2px 8px rgba(16,17,20,.10);
+    --sys:-apple-system,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--studio); color:var(--chrome);
+    font-family:"Noto Sans JP",var(--sys); line-height:1.7;
+    padding:40px 20px 80px;
+  }
+  .wrap{max-width:1180px; margin:0 auto;}
+
+  /* ── ヘッダ ── */
+  .eyebrow{
+    font-size:11px; font-weight:700; letter-spacing:.14em;
+    color:var(--chrome-mute); margin:0 0 10px;
+  }
+  h1{
+    font-size:clamp(26px,4vw,38px); font-weight:700; line-height:1.25;
+    margin:0 0 14px; text-wrap:balance; letter-spacing:-.01em;
+  }
+  .lede{
+    font-size:15px; color:var(--chrome-sub); max-width:62ch; margin:0 0 8px;
+  }
+  .lede b{color:var(--chrome); font-weight:700;}
+
+  h2{
+    font-size:19px; font-weight:700; margin:56px 0 6px;
+    padding-top:22px; border-top:1px solid var(--rule); letter-spacing:-.01em;
+  }
+  h2 .n{
+    display:inline-block; font-size:11px; letter-spacing:.12em;
+    color:var(--chrome-mute); margin-right:10px; vertical-align:3px;
+  }
+  .sub{font-size:14px; color:var(--chrome-sub); max-width:62ch; margin:0 0 24px;}
+
+  /* ── 深さの比較表 ── */
+  .tblwrap{overflow-x:auto; margin:0 0 8px;}
+  table{border-collapse:collapse; width:100%; min-width:640px; font-size:13.5px;}
+  th,td{text-align:left; padding:11px 12px; border-bottom:1px solid var(--rule); vertical-align:top;}
+  th{
+    font-size:11px; font-weight:700; letter-spacing:.08em;
+    color:var(--chrome-mute); border-bottom:1.5px solid var(--rule);
+  }
+  td b{font-weight:700;}
+  .path{font-size:12.5px; color:var(--chrome-sub); font-variant-numeric:tabular-nums;}
+  .tag{
+    display:inline-block; font-size:11px; font-weight:700; border-radius:999px;
+    padding:2px 9px; white-space:nowrap;
+  }
+  .t-bad{background:var(--dangerBg); color:var(--danger);}
+  .t-ok{background:var(--inkSoft); color:var(--ink);}
+  .t-new{background:var(--infoBg); color:var(--info);}
+
+  /* ── 原則 ── */
+  .rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin:0 0 8px;}
+  .rule{background:rgba(255,255,255,.55); border-radius:14px; padding:16px 18px;}
+  .rule h3{font-size:14px; font-weight:700; margin:0 0 6px;}
+  .rule p{font-size:13px; color:var(--chrome-sub); margin:0;}
+  .rule .no{color:var(--danger); font-weight:700;}
+
+  /* ── アートボード ── */
+  .boards{display:flex; flex-wrap:wrap; gap:34px; align-items:flex-start;}
+  .board{width:375px; flex:0 0 auto;}
+  .cap{margin:0 0 12px;}
+  .cap .intent{
+    font-size:11px; font-weight:700; letter-spacing:.1em; color:var(--chrome-mute);
+    display:block; margin-bottom:3px;
+  }
+  .cap h3{font-size:16px; font-weight:700; margin:0 0 6px; letter-spacing:-.01em;}
+  .cap p{font-size:12.5px; color:var(--chrome-sub); margin:0;}
+  .cap p + p{margin-top:6px;}
+  .status{margin:10px 0 0;}
+
+  .phone{
+    background:var(--bg); border-radius:30px; overflow:hidden;
+    box-shadow:0 18px 44px rgba(20,24,18,.20); border:7px solid #fff;
+    font-family:var(--sys); color:var(--text); line-height:1.5;
+  }
+  .appbar{
+    background:#fff; padding:13px 16px; display:flex;
+    align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--hairline);
+  }
+  .appbar .t{font-size:16px; font-weight:700;}
+  .avatars{display:flex; gap:8px;}
+  .av{width:26px; height:26px; border-radius:999px; background:var(--well);}
+  .screen{padding:12px; display:flex; flex-direction:column; gap:12px;}
+
+  .c{background:var(--card); border-radius:20px; box-shadow:var(--shadow-card); padding:14px 16px;}
+  .lbl{font-size:11px; color:var(--textMuted); display:flex; align-items:center; gap:5px; margin-bottom:8px;}
+  .big{font-size:15px; font-weight:700;}
+  .big em{font-style:normal; font-size:22px; margin:0 3px;}
+  .meta{font-size:12px; color:var(--textSub); margin-top:3px;}
+
+  .btn{
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    border-radius:999px; font-size:13px; font-weight:700; padding:11px 14px;
+    border:none; width:100%;
+  }
+  .b-soft{background:var(--inkSoft); color:var(--ink);}
+  .b-ter{background:transparent; color:var(--textSub); font-weight:600;}
+  .b-sec{background:#fff; border:1px solid var(--hairline); color:var(--text); font-size:12px; padding:8px 12px; width:auto;}
+  .stack{display:flex; flex-direction:column; gap:6px; margin-top:12px;}
+
+  .hr{height:1px; background:var(--hairline); margin:12px -16px;}
+  .row{display:flex; align-items:center; gap:10px; padding:10px 0;}
+  .row + .row{border-top:1px solid var(--hairline);}
+  .dot{width:9px; height:9px; border-radius:999px; flex:0 0 auto;}
+  .row .nm{font-size:13.5px; font-weight:700; flex:1; min-width:0;}
+  .row .sm{font-size:11.5px; color:var(--textMuted);}
+  .badge{
+    font-size:11px; font-weight:700; border-radius:999px; padding:3px 9px;
+    background:var(--warningBg); color:var(--warning); white-space:nowrap;
+  }
+  .badge.done{background:var(--inkSoft); color:var(--ink);}
+  .chev{color:var(--textMuted); font-size:15px;}
+
+  .search{
+    background:#fff; border-radius:20px; box-shadow:var(--shadow-card);
+    padding:12px 14px; font-size:14px; color:var(--text);
+    display:flex; align-items:center; gap:9px;
+  }
+  .search .ph{color:var(--textMuted);}
+  .chips{display:flex; gap:7px; overflow:hidden;}
+  .chip{
+    background:var(--well); border-radius:999px; padding:6px 11px;
+    font-size:11.5px; color:var(--textSub); white-space:nowrap;
+  }
+  .ask{
+    background:var(--inkSoft); border-radius:20px; box-shadow:var(--shadow-card);
+    padding:12px 14px; display:flex; gap:9px; align-items:flex-start;
+    font-size:12.5px; line-height:1.55;
+  }
+  .ask.quiet{background:#fff;}
+  .ask b{font-weight:700;}
+  .photo{
+    height:96px; border-radius:14px; margin-top:10px;
+    background:linear-gradient(150deg,#7C9A5E,#5E7A44 55%,#48603A);
+  }
+  .util{display:flex; gap:7px; flex-wrap:wrap; align-items:center; justify-content:flex-end;}
+  .util .cnt{font-size:11.5px; color:var(--textMuted); margin-right:auto;}
+
+  .thread{display:flex; flex-direction:column; gap:9px;}
+  .bub{border-radius:14px; padding:9px 12px; font-size:12.5px; line-height:1.6; max-width:86%;}
+  .bub.me{background:var(--ink); color:#fff; align-self:flex-end;}
+  .bub.ai{background:var(--well); color:var(--text);}
+  .todo{background:var(--well); border-radius:14px; padding:11px 12px;}
+  .todo .ti{display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700;}
+  .todo .tw{font-size:11px; color:var(--textSub); margin-top:3px;}
+  .fact{background:#fff; border-radius:10px; padding:9px 11px; margin-top:8px; font-size:11px; color:var(--textSub); line-height:1.6;}
+  .fact b{color:var(--pest); font-weight:700; display:block; margin-bottom:2px; font-size:11.5px;}
+
+  .nav{
+    background:#fff; border-top:1px solid var(--hairline);
+    display:flex; padding:9px 0 13px;
+  }
+  .nav div{flex:1; text-align:center; font-size:10.5px; color:var(--textMuted);}
+  .nav div.on{color:var(--ink); font-weight:700;}
+  .nav .ic{
+    display:block; width:19px; height:19px; margin:0 auto 4px;
+    border-radius:5px; background:var(--well);
+  }
+  .nav div.on .ic{background:var(--inkSoft);}
+
+  .fab{
+    position:relative; margin:-46px 12px 0 auto; width:fit-content;
+    background:var(--ink); color:#fff; border-radius:999px;
+    padding:13px 20px; font-size:14px; font-weight:700;
+    box-shadow:var(--shadow-pill); z-index:2;
+  }
+
+  .callout{
+    background:var(--warningBg); border-radius:14px; padding:14px 16px;
+    font-size:13.5px; color:#6B4708; margin:22px 0 0; line-height:1.7;
+  }
+  .callout b{color:#503505;}
+
+  .ol{font-size:14px; color:var(--chrome-sub); padding-left:1.25em; margin:0;}
+  .ol li{margin-bottom:9px;}
+  .ol b{color:var(--chrome);}
+
+  @media (max-width:820px){
+    .boards{gap:26px;}
+    .board{width:100%; max-width:375px;}
+  }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">ノウレコ / 情報設計</p>
+  <h1>AI機能を「探させる」のをやめる</h1>
+  <p class="lede">
+    機能はどれも競合レビュー調査から作ったのに、使われている実感がない。原因は機能の有無ではなく
+    <b>置き場所</b>だった。3つのAI機能は「タブを開く → 表示を切り替える → 横スクロールする」の先にあり、
+    375px幅では画面外に消えていた。
+  </p>
+  <p class="lede">
+    NN/g の Amazon Rufus 調査が同じ失敗を記録している。利用者はAI機能があると期待していないため気づかない
+    ——「正直まったく気づかなかった。すごく役立つのに完全に見落とした」。失敗要因は
+    <b>非標準の位置・意味の伝わらないラベル・密なページへの埋没</b>で、ノウレコの3機能は3つとも該当していた。
+  </p>
+
+  <h2><span class="n">01</span>導線の深さ</h2>
+  <p class="sub">記録タブの既定表示はカレンダーなので、一覧側の機能はさらに1手遠い。</p>
+  <div class="tblwrap">
+    <table>
+      <tr>
+        <th>機能</th><th>改修前の到達手順</th><th>置き直し先</th><th>状態</th>
+      </tr>
+      <tr>
+        <td><b>音声メモ</b></td>
+        <td class="path">記録フォームのメモ欄に内蔵</td>
+        <td>そのまま（文脈に埋まっている理想形）</td>
+        <td><span class="tag t-ok">元から良い</span></td>
+      </tr>
+      <tr>
+        <td><b>次の散布はいつ？</b></td>
+        <td class="path">天気カード内の小さなリンク</td>
+        <td>ホーム「今日の一手」</td>
+        <td><span class="tag t-ok">実装済み</span></td>
+      </tr>
+      <tr>
+        <td><b>記録に聞く</b></td>
+        <td class="path">記録タブ → 一覧に切替 → 横スクロール</td>
+        <td>検索窓の文脈（0件のとき前に出る）</td>
+        <td><span class="tag t-ok">実装済み</span></td>
+      </tr>
+      <tr>
+        <td><b>写真で診断</b></td>
+        <td class="path">記録タブ → 一覧に切替 → 横スクロール</td>
+        <td>写真の直下 ＋ ホーム</td>
+        <td><span class="tag t-ok">実装済み</span></td>
+      </tr>
+      <tr>
+        <td><b>日報にまとめる</b></td>
+        <td class="path">記録タブ → 一覧に切替 → 横スクロール</td>
+        <td>カレンダーで日を選んだ場所</td>
+        <td><span class="tag t-new">本モックの提案</span></td>
+      </tr>
+      <tr>
+        <td><b>農業エージェント</b></td>
+        <td class="path">Web版に存在しない（アプリのみ）</td>
+        <td>ホーム「作付け中」から作物ごとに</td>
+        <td><span class="tag t-new">本モックの提案</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <h2><span class="n">02</span>置き直しの原則</h2>
+  <p class="sub">調査で一貫していたのは「AIを独立させるほど、わざわざ行く場所になって使われない」だった。</p>
+  <div class="rules">
+    <div class="rule">
+      <h3><span class="no">✗</span> AIタブは作らない</h3>
+      <p>1か所に集めるのは直感的だが逆効果。独立したチャット窓として後付けせず、既存の画面に文脈として埋め込む。5タブ目は既存4タブの認知負荷も上げる。</p>
+    </div>
+    <div class="rule">
+      <h3>意図が生まれる場所に置く</h3>
+      <p>検索して見つからなかった瞬間が、記録をAIに聞きたい瞬間そのもの。「この葉なんだろう」と思うのは写真を見ている瞬間で、フィルタ行を探している瞬間ではない。</p>
+    </div>
+    <div class="rule">
+      <h3>技術ではなく用事で名づける</h3>
+      <p>「AI検索」ではなく「記録に聞く」。「AI画像診断」ではなく「写真で病害虫を調べる」。何が起きるかがラベルだけで分かる状態にする。</p>
+    </div>
+  </div>
+
+  <h2><span class="n">03</span>画面</h2>
+  <p class="sub">画面内はアプリのトークン（<code>src/ui/tokens.ts</code>）どおり。375px 実寸。</p>
+
+  <div class="boards">
+
+    <!-- ───────── ホーム ───────── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">意図 — 今日どうする？</span>
+        <h3>ホーム</h3>
+        <p>先読みして助言する機能はすべてここ。<b>「前回の散布から3日」はAPIを呼ばずに自分の記録から出す</b>——押す前に「このアプリは自分の農場を把握している」と伝わることが、汎用の生成AIとの唯一の差になる。</p>
+        <p>「作付け中」は<b>エージェントの居場所</b>。作物は農家が日常的に考える単位なので、一覧としても自然に開かれる。「やること2」は助言したのに記録が無い件数で、放置できない引きになる。</p>
+        <p class="status"><span class="tag t-ok">今日の一手：実装済み</span> <span class="tag t-new">作付け中：提案</span></p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">農作業レポート</span><span class="avatars"><span class="av"></span><span class="av"></span></span></div>
+        <div class="screen">
+
+          <div class="c" style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:30px;font-weight:700;line-height:1;">32°</span>
+            <span style="font-size:13px;color:var(--textSub);flex:1;">晴れ · 亀岡</span>
+            <span style="font-size:12px;color:var(--textSub);">70% · 0.3mm</span>
+          </div>
+
+          <div class="c">
+            <div class="lbl">◈ 今日の一手</div>
+            <div class="big">前回の散布から <em>3</em> 日</div>
+            <div class="meta">08-20 · ほうれん草・C圃場 · 農薬の記録なし</div>
+            <div class="stack">
+              <div class="btn b-soft">次の散布はいつ？</div>
+              <div class="btn b-ter">写真で病害虫を調べる</div>
+            </div>
+          </div>
+
+          <div class="c">
+            <div class="lbl">◈ 作付け中 — 相談できます</div>
+            <div class="row" style="padding-top:2px;">
+              <span class="dot" style="background:#C08A2E;"></span>
+              <span class="nm">ほうれん草 <span class="sm">· C圃場</span><br><span class="sm">播種から45日</span></span>
+              <span class="badge">やること2</span><span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background:#7B1FA2;"></span>
+              <span class="nm">にんにく <span class="sm">· D圃場</span><br><span class="sm">播種から120日</span></span>
+              <span class="badge done">実施済み</span><span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background:#2E7D32;"></span>
+              <span class="nm">ぶどう <span class="sm">· A圃場</span><br><span class="sm">相談はまだありません</span></span>
+              <span class="chev">›</span>
+            </div>
+          </div>
+
+          <div class="c">
+            <div class="lbl">◈ 今日の予定</div>
+            <div class="meta" style="margin:0;">予定はありません</div>
+          </div>
+
+        </div>
+        <div class="fab">＋ 記録</div>
+        <div class="nav">
+          <div class="on"><span class="ic"></span>ホーム</div>
+          <div><span class="ic"></span>記録</div>
+          <div><span class="ic"></span>分析</div>
+          <div><span class="ic"></span>管理</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────── 記録・一覧 ───────── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">意図 — 去年いつ撒いた？／この症状は？</span>
+        <h3>記録 — 一覧</h3>
+        <p>探す機能は<b>探している場所</b>に置く。検索語を入れたときだけ「記録に聞いてみる」が出て、<b>0件のときは淡色を敷いて前に出る</b>。見つからなかった瞬間に、探させずに差し出す。</p>
+        <p>診断は写真の直下。残ったボタン行は性質の同じ出力系2つだけにして折り返し、<b>横スクロールを解消</b>した。</p>
+        <p class="status"><span class="tag t-ok">実装済み</span></p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">作業記録</span><span class="avatars"><span class="av"></span><span class="av"></span></span></div>
+        <div class="screen">
+
+          <div style="display:flex;gap:8px;">
+            <div class="btn b-sec" style="flex:1;justify-content:center;">カレンダー</div>
+            <div class="btn" style="flex:1;background:var(--ink);color:#fff;font-size:12px;padding:8px 12px;">記録一覧</div>
+          </div>
+
+          <div class="search"><span class="ph">◌</span><span>ほうれん草</span></div>
+          <div class="chips"><span class="chip">作物：すべて</span><span class="chip">圃場：すべて</span><span class="chip">作業：すべて</span></div>
+
+          <div class="util">
+            <span class="cnt">4件の記録</span>
+            <span class="btn b-sec">日報にまとめる</span>
+            <span class="btn b-sec">帳票出力</span>
+          </div>
+
+          <div class="ask quiet">
+            <span style="color:var(--ink);">▤</span>
+            <span>「ほうれん草」について<b>記録に聞いてみる</b></span>
+          </div>
+
+          <div class="c" style="padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="dot" style="background:#C08A2E;"></span>
+              <span style="font-weight:700;font-size:14px;">ほうれん草</span>
+              <span class="sm">· C圃場</span>
+              <span style="margin-left:auto;font-size:11px;color:var(--textMuted);">08-20</span>
+            </div>
+            <div class="hr"></div>
+            <div style="font-size:12px;color:var(--textMuted);">100kg · 中川 · 晴れ 31°C</div>
+            <div class="photo"></div>
+            <div class="btn b-ter" style="margin-top:6px;font-size:12px;">この写真で病害虫を調べる</div>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <span class="btn b-sec" style="flex:1;justify-content:center;">詳細を見る</span>
+              <span class="btn b-soft" style="flex:1;font-size:12px;padding:8px 12px;">コピーして作成</span>
+            </div>
+          </div>
+
+        </div>
+        <div class="nav">
+          <div><span class="ic"></span>ホーム</div>
+          <div class="on"><span class="ic"></span>記録</div>
+          <div><span class="ic"></span>分析</div>
+          <div><span class="ic"></span>管理</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────── 記録・カレンダー ───────── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">意図 — 今日の作業をまとめたい</span>
+        <h3>記録 — カレンダー</h3>
+        <p>日報は「その日の記録が目の前にある場所」に置く。日付をタップして<b>その日の記録が並んだ直後</b>が、まとめたくなる瞬間。フィルタ行に置く理由はどこにもなかった。</p>
+        <p>記録タブの既定表示はカレンダーなので、<b>切替なしで到達できる</b>——これまでの「切替＋横スクロール」の2手が消える。</p>
+        <p class="status"><span class="tag t-new">提案</span></p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">作業記録</span><span class="avatars"><span class="av"></span><span class="av"></span></span></div>
+        <div class="screen">
+
+          <div style="display:flex;gap:8px;">
+            <div class="btn" style="flex:1;background:var(--ink);color:#fff;font-size:12px;padding:8px 12px;">カレンダー</div>
+            <div class="btn b-sec" style="flex:1;justify-content:center;">記録一覧</div>
+          </div>
+
+          <div class="c" style="padding:12px;">
+            <div style="display:flex;justify-content:center;align-items:center;gap:14px;font-size:14px;font-weight:700;margin-bottom:10px;">
+              ‹ <span>2026年8月</span> ›
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:11px;text-align:center;color:var(--textMuted);">
+              <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:12px;text-align:center;margin-top:5px;font-variant-numeric:tabular-nums;">
+              <span style="padding:7px 0;color:var(--textMuted);">16</span>
+              <span style="padding:7px 0;">17</span><span style="padding:7px 0;">18</span><span style="padding:7px 0;">19</span>
+              <span style="padding:7px 0;background:var(--inkSoft);border-radius:9px;font-weight:700;color:var(--ink);">20</span>
+              <span style="padding:7px 0;">21</span><span style="padding:7px 0;color:var(--info);">22</span>
+            </div>
+          </div>
+
+          <div class="c">
+            <div class="lbl">◈ 8月20日の記録 — 2件</div>
+            <div class="row" style="padding-top:2px;">
+              <span class="dot" style="background:#C08A2E;"></span>
+              <span class="nm">ほうれん草 <span class="sm">· 農薬散布</span></span><span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background:#2E7D32;"></span>
+              <span class="nm">ぶどう <span class="sm">· 草刈り</span></span><span class="chev">›</span>
+            </div>
+            <div class="stack">
+              <div class="btn b-soft">この日を日報にまとめる</div>
+            </div>
+          </div>
+
+        </div>
+        <div class="nav">
+          <div><span class="ic"></span>ホーム</div>
+          <div class="on"><span class="ic"></span>記録</div>
+          <div><span class="ic"></span>分析</div>
+          <div><span class="ic"></span>管理</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────── エージェント ───────── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">意図 — この作付け、これからどうする？</span>
+        <h3>作付けの相談（Web版・新規）</h3>
+        <p>最強の差別化がWeb版に存在しない欠落を埋める。<code>api/advise.ts</code> は共通なのでUIの新規実装だけで済む。</p>
+        <p>要点は<b>助言が作業記録と照合されること</b>。「未実施」と「照合できない」を混ぜず、農薬の数値はAIに書かせず<b>登録情報の原文</b>を別枠で出す。言ったことの実施を追えなければ、ただのチャットになる。</p>
+        <p class="status"><span class="tag t-new">提案</span></p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">ほうれん草 · C圃場</span><span class="avatars"><span class="av"></span></span></div>
+        <div class="screen">
+
+          <div class="c">
+            <div class="lbl">◈ やること — 記録と照合しています</div>
+            <div class="todo">
+              <div class="ti"><span style="color:var(--warning);">●</span>追肥する</div>
+              <div class="tw">今週中（〜08/26）· 未実施 — 08/12以降に「施肥」の記録なし</div>
+            </div>
+            <div class="todo" style="margin-top:7px;">
+              <div class="ti"><span style="color:var(--ink);">✓</span>防除する</div>
+              <div class="tw">実施済み — 08/20 の「農薬散布」と一致</div>
+            </div>
+            <div class="todo" style="margin-top:7px;">
+              <div class="ti"><span style="color:var(--textMuted);">—</span>芽かき</div>
+              <div class="tw">記録と照合できません（未実施とは限りません）</div>
+            </div>
+          </div>
+
+          <div class="c">
+            <div class="thread">
+              <div class="bub me">そろそろ追肥したほうがいい？</div>
+              <div class="bub ai">播種から45日、生育中期にあたります。前回の施肥から日数が空いているので追肥の検討時期です。ただし時期の目安は産地・品種で変わるため、地域の栽培暦を優先してください。</div>
+            </div>
+            <div class="fact">
+              <b>登録のある農薬（登録情報の原文）</b>
+              サンケイ石灰硫黄合剤 / うめ · 希釈 200倍 / 使用時期 記載なし（判定不可）<br>
+              本剤の使用回数 記載なし（判定不可）
+            </div>
+          </div>
+
+          <div class="search"><span class="ph">◌</span><span class="ph">この作付けについて聞く</span></div>
+
+        </div>
+        <div class="nav">
+          <div><span class="ic"></span>ホーム</div>
+          <div><span class="ic"></span>記録</div>
+          <div><span class="ic"></span>分析</div>
+          <div><span class="ic"></span>管理</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="callout">
+    <b>効果は今のところ測れない。</b>
+    AI機能の実行履歴（<code>ai_outputs</code>）は全11件がすべて開発時の動作確認で、比較する母数がない。
+    導線の改善が実際に使用を増やすかは、現場で入力する人が増えてから判定する——
+    本番のユーザー5人は全員 admin で、worker は0人のまま。
+  </div>
+
+  <h2><span class="n">04</span>実装の順</h2>
+  <ol class="ol">
+    <li><b>記録一覧のリスト化</b> — 個別カード33枚（1件167px・全長5,875px＝画面7.2個分）を、1枚のカードに区切り線の行へ。<code>CLAUDE.md</code> が既に「理想」と明記している形の未消化分で、2〜3画面に縮む。</li>
+    <li><b>作付け中カード＋エージェントのWeb移植</b> — 差別化がアプリ側にしか無い欠落を埋める。APIは共通。</li>
+    <li><b>日報をカレンダーの日付へ</b> — 単独では効果が小さいので、カレンダー側の日付選択と併せて実装する。</li>
+    <li><b>マネタイズ導線</b> — 無料枠の上限に達した瞬間＝価値を体験し切った瞬間に置く。料金ページに置くのは弱い。ただし課金軸そのものが再検討中のため、その決着が先。</li>
+  </ol>
+
+</div>
