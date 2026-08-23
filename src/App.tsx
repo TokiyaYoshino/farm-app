@@ -384,7 +384,7 @@ export default function App() {
   const [showUserPicker, setShowUserPicker] = useState(false);
   const [showNotifs, setShowNotifs]       = useState(false);
   const [notifSeenAt, setNotifSeenAt]     = useState<string>("");  // ISO文字列。ユーザー切替時にlocalStorageから読む
-  const [toast, setToast]                 = useState<{ msg: string; type: "ok"|"err" } | null>(null);
+  const [toast, setToast]                 = useState<{ msg: string; type: "ok"|"err"|"warn" } | null>(null);
   const [loading, setLoading]             = useState(true);
   const [wxLoading, setWxLoading]         = useState(true);
   const [wxAuto, setWxAuto]               = useState<WeatherInfo | null>(null);
@@ -714,9 +714,11 @@ export default function App() {
       .catch(() => setPeriodWeather(null));
   }, [rForm.work_start, rForm.work_end, rForm.date, rForm.field]);
 
-  const showToast = (msg: string, type: "ok"|"err" = "ok") => {
+  // "warn" は失敗ではないが読ませたいもの（例: 保存はできたが使いすぎを見張れない）。
+  // 2.5秒だと読み切れないので長めに出す
+  const showToast = (msg: string, type: "ok"|"err"|"warn" = "ok") => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), type === "err" ? 5000 : 2500);
+    setTimeout(() => setToast(null), type === "ok" ? 2500 : 5000);
   };
 
   // ─── ログイン ────────────────────────────────────────────
@@ -840,7 +842,16 @@ export default function App() {
       setPesticideAmounts({});
       setSoilPh("");
       setPeriodWeather(null);
-      showToast("作業報告を登録しました");
+      // 使いすぎを見張れないことは、作付けカードに常駐させるより
+      // **農薬を記録した瞬間**に言うほうが効く。関係ない場面では黙る
+      // （docs/decisions/20260824-plain-language-and-crop-mapping.md）。
+      const savedCrop = crops.find(c => c.id === rForm.crop_id);
+      const usedPesticide = selectedPesticides.length > 0;
+      if (usedPesticide && savedCrop && !savedCrop.famic_crop_name) {
+        showToast(`登録しました。${savedCrop.name}は農薬の数え方が未設定なので、使いすぎは見張っていません`, "warn");
+      } else {
+        showToast("作業報告を登録しました");
+      }
       setTab("home");
 
       // LINE グループに通知（失敗しても報告登録には影響させない）
@@ -5055,14 +5066,14 @@ export default function App() {
       {toast && (
         <div style={{
           position:"fixed", bottom:90, left:"50%", transform:"translateX(-50%)",
-          background: toast.type === "err" ? C.danger : C.primary,
+          background: toast.type === "err" ? C.danger : toast.type === "warn" ? C.warning : C.primary,
           color:"#fff", padding:"10px 14px 10px 18px", borderRadius:16, fontSize:13, fontWeight:600,
           zIndex:999, maxWidth:"calc(100vw - 32px)", wordBreak:"break-all" as const, boxShadow:"0 4px 16px rgba(0,0,0,0.2)",
           display:"flex", alignItems:"center", gap:8,
         }}>
-          {toast.type === "err"
-            ? <AlertCircle size={15} strokeWidth={2} style={{ flexShrink:0 }} />
-            : <Wind size={15} strokeWidth={2} style={{ flexShrink:0 }} />}
+          {toast.type === "ok"
+            ? <Wind size={15} strokeWidth={2} style={{ flexShrink:0 }} />
+            : <AlertCircle size={15} strokeWidth={2} style={{ flexShrink:0 }} />}
           <span style={{ flex:1 }}>{toast.msg}</span>
           <button onClick={() => setToast(null)} style={{ background:"rgba(255,255,255,0.22)", border:"none", borderRadius:8, padding:"3px 7px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", flexShrink:0, marginLeft:4 }}>
             <X size={13} strokeWidth={2.5} />
