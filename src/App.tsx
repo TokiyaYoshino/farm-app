@@ -24,7 +24,7 @@ import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { harvestQty, excludedHarvestCount } from "./lib/metrics";
-import { summarizeUsageByCrop, formatPesticideUsageForPrompt } from "./lib/pesticideUsage";
+import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt } from "./lib/pesticideUsage";
 import PesticideUsageSummary, { PesticideUsageCard } from "./components/PesticideUsageSummary";
 import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
@@ -1622,12 +1622,15 @@ export default function App() {
       setPestAdviceForecast(forecast);
       // 農薬を選んでいて適用情報を取得済みなら、使用基準の観点も助言に含めてもらう
       const registrations = pestAdvicePesticideId ? (pRegs[pestAdvicePesticideId] ?? []) : [];
+      // 自農場の防除実績。天気だけの助言は汎用の生成AIでもできるので、
+      // 「自分の記録を読んだうえでの助言」にするための中核の材料
+      const sprayHistory = formatSprayHistoryForPrompt({ reports, crops, pesticides });
       const res = await fetch("/api/pest-control-advice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // lat/lng は気象庁の警報を引くためにサーバー側で使う
         // （地域コードの解決に使う国土地理院の逆ジオコーダにCORSが無く、ブラウザから直接叩けないため）
-        body: JSON.stringify({ forecast, lat, lng, registrations }),
+        body: JSON.stringify({ forecast, lat, lng, registrations, sprayHistory }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.advice) {
@@ -2296,7 +2299,7 @@ export default function App() {
                   onClick={openPestAdviceSheet}
                   style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:10 }}
                 >
-                  <Wind size={13} strokeWidth={2} />防除タイミング助言
+                  <Wind size={13} strokeWidth={2} />次の散布はいつ？
                 </button>
               )}
             </div>
@@ -2590,16 +2593,16 @@ export default function App() {
                     <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={{ ...btn("tertiary", "sm"), flexShrink:0 }}>条件をクリア</button>
                   )}
                   <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
-                    <Sparkles size={13} strokeWidth={2} />AI日報
+                    <Sparkles size={13} strokeWidth={2} />日報にまとめる
                   </button>
                   {canUseAiFeature("recordSearchChat") && (
                     <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
-                      <MessageSquare size={13} strokeWidth={2} />AI検索
+                      <MessageSquare size={13} strokeWidth={2} />記録に聞く
                     </button>
                   )}
                   {canUseAiFeature("pestDiagnosis") && (
                     <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
-                      <FlaskConical size={13} strokeWidth={2} />AI画像診断
+                      <FlaskConical size={13} strokeWidth={2} />写真で診断
                     </button>
                   )}
                   <button onClick={() => setShowExportSheet(true)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
@@ -3284,7 +3287,7 @@ export default function App() {
                       disabled={diagLoading}
                       style={{ ...btn("tertiary", "sm"), width:"100%", opacity:diagLoading ? 0.6 : 1 }}
                     >
-                      <FlaskConical size={13} strokeWidth={2} />{diagLoading ? "診断中…" : diagResult ? "もう一度診断" : "AI画像診断"}
+                      <FlaskConical size={13} strokeWidth={2} />{diagLoading ? "診断中…" : diagResult ? "もう一度診断" : "写真で病害虫を絞り込む"}
                     </button>
                   </div>
                 )}
@@ -4224,7 +4227,7 @@ export default function App() {
       <BottomSheet open={showReportGenSheet} onClose={() => setShowReportGenSheet(false)}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <Sparkles size={17} strokeWidth={2} color={C.ink} />AI日報を生成
+            <Sparkles size={17} strokeWidth={2} color={C.ink} />その日の作業を日報にまとめる
           </div>
 
           <div style={S.wellBox}>
@@ -4265,7 +4268,14 @@ export default function App() {
       <BottomSheet open={showPestAdviceSheet} onClose={() => setShowPestAdviceSheet(false)}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <Wind size={17} strokeWidth={2} color={C.ink} />防除タイミング助言
+            <Wind size={17} strokeWidth={2} color={C.ink} />次の散布はいつ？
+          </div>
+
+          {/* 「自分の記録を読んだうえでの助言」であることを利用者に伝える。
+              天気だけの助言は汎用の生成AIでもできるので、記録を見ていることが伝わらないと
+              この機能を使う理由が伝わらない（docs/decisions/20260823-pest-advice-history.md） */}
+          <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.7, marginBottom:12 }}>
+            直近7日の実績と今後7日の予報に加えて、<strong style={{ color:C.textSub }}>この農場の防除記録</strong>（前回の散布からの日数・同じ薬剤の繰り返し・昨年同時期）も踏まえて提案します。最終判断は現地の状況と製品ラベルに従ってください。
           </div>
 
           {/* 農薬を選ぶと、その農薬の適用情報（作物・希釈倍数・使用時期・使用回数）も助言の材料に渡る */}
@@ -4331,7 +4341,7 @@ export default function App() {
       <BottomSheet open={showSearchChatSheet} onClose={() => setShowSearchChatSheet(false)}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <MessageSquare size={17} strokeWidth={2} color={C.ink} />AI検索
+            <MessageSquare size={17} strokeWidth={2} color={C.ink} />記録に聞く
           </div>
 
           <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
@@ -4386,7 +4396,7 @@ export default function App() {
       <BottomSheet open={showDiagPhotoSheet} onClose={() => setShowDiagPhotoSheet(false)}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <FlaskConical size={17} strokeWidth={2} color={C.ink} />AI画像診断
+            <FlaskConical size={17} strokeWidth={2} color={C.ink} />写真で病害虫を絞り込む
           </div>
 
           <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>

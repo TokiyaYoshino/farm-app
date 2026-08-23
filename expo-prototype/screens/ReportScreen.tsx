@@ -214,12 +214,12 @@ export default function ReportScreen() {
               {filterActive && (
                 <Btn variant="tertiary" size="sm" onPress={() => { setQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }}>条件をクリア</Btn>
               )}
-              <Btn variant="secondary" size="sm" onPress={() => setAiSheet("report")} icon={<Feather name="star" size={13} color={C.text} />}>AI日報</Btn>
+              <Btn variant="secondary" size="sm" onPress={() => setAiSheet("report")} icon={<Feather name="star" size={13} color={C.text} />}>日報にまとめる</Btn>
               {canUseAiFeature("recordSearchChat") && (
-                <Btn variant="secondary" size="sm" onPress={() => setAiSheet("chat")} icon={<Feather name="message-square" size={13} color={C.text} />}>AI検索</Btn>
+                <Btn variant="secondary" size="sm" onPress={() => setAiSheet("chat")} icon={<Feather name="message-square" size={13} color={C.text} />}>記録に聞く</Btn>
               )}
               {canUseAiFeature("pestDiagnosis") && (
-                <Btn variant="secondary" size="sm" onPress={() => setAiSheet("diag")} icon={<Feather name="camera" size={13} color={C.text} />}>AI画像診断</Btn>
+                <Btn variant="secondary" size="sm" onPress={() => setAiSheet("diag")} icon={<Feather name="camera" size={13} color={C.text} />}>写真で診断</Btn>
               )}
             </ScrollView>
           </View>

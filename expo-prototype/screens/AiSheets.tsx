@@ -13,7 +13,7 @@ import {
   generateReportApi, searchChatApi, pestControlAdviceApi, diagnoseImageApi,
   adviseApi, saveAiOutput, type DiagnosisResult,
 } from "../lib/ai";
-import { formatPesticideUsageForPrompt } from "../lib/pesticideUsage";
+import { formatPesticideUsageForPrompt, formatSprayHistoryForPrompt } from "../lib/pesticideUsage";
 import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
   type AdviceAction, type ActionMatch, type MatchStatus,
@@ -81,7 +81,7 @@ export function DailyReportSheet({ open, onClose }: { open: boolean; onClose: ()
 
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <SheetHeader title="AI日報" onClose={onClose} />
+      <SheetHeader title="その日の作業を日報にまとめる" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         <Text style={lbl}>対象日</Text>
         <Pressable onPress={() => setShowDatePicker(true)} style={{ backgroundColor: C.well, borderRadius: RADIUS.row, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
@@ -146,7 +146,7 @@ export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () 
 
   return (
     <BottomSheet open={open} onClose={onClose} heightRatio={0.85}>
-      <SheetHeader title="AI検索（記録に質問）" onClose={onClose} />
+      <SheetHeader title="記録に聞く" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         {messages.length === 0 && (
           <Text style={{ fontSize: 13, color: C.textMuted, lineHeight: 20, marginBottom: 12 }}>
@@ -200,7 +200,7 @@ export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () 
 // Web版と同一の制約: 1日1回。開くたびに生成すると ai_outputs に重複が溜まるため、
 // 当日ぶんが無いときだけ生成し、あれば保存済みの結果を読み込んで表示する。
 export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { weatherCoords, currentUser } = useStore();
+  const { weatherCoords, currentUser, reports, crops, pesticides } = useStore();
   const organizationId = currentUser?.organization_id ?? null;
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
@@ -240,7 +240,10 @@ export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () 
       const fc = await fetchPestControlForecast(lat, lng);
       if (!fc) { setError("天気予報を取得できませんでした。"); setLoading(false); return; }
       setForecast(fc);
-      const res = await pestControlAdviceApi(fc, lat, lng);
+      // 自農場の防除実績。天気だけの助言は汎用の生成AIでもできるので、
+      // 「自分の記録を読んだうえでの助言」にするための中核の材料
+      const sprayHistory = formatSprayHistoryForPrompt({ reports, crops, pesticides });
+      const res = await pestControlAdviceApi(fc, lat, lng, sprayHistory);
       if (res.ok) {
         setResult(res.data.advice);
         setSavedToday(true);
@@ -259,10 +262,10 @@ export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () 
 
   return (
     <BottomSheet open={open} onClose={onClose} heightRatio={0.85}>
-      <SheetHeader title="防除タイミング助言" onClose={onClose} />
+      <SheetHeader title="次の散布はいつ？" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 19, marginBottom: 12 }}>
-          直近7日の実績と今後7日の予報（{weatherCoords?.name ?? ""}）から、散布に適したタイミングをAIが提案します。最終判断は現地の状況と製品ラベルに従ってください。
+          直近7日の実績と今後7日の予報（{weatherCoords?.name ?? ""}）に加えて、この農場の防除記録（前回の散布からの日数・同じ薬剤の繰り返し・昨年同時期）も踏まえて提案します。最終判断は現地の状況と製品ラベルに従ってください。
         </Text>
         <ErrorText msg={error} />
         {!!result && <ResultBox text={result} />}
@@ -723,7 +726,7 @@ export function PhotoDiagnosisSheet({ open, onClose }: { open: boolean; onClose:
 
   return (
     <BottomSheet open={open} onClose={onClose} heightRatio={0.85}>
-      <SheetHeader title="AI画像診断" onClose={onClose} />
+      <SheetHeader title="写真で病害虫を絞り込む" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 19, marginBottom: 12 }}>
           葉や果実の写真から病害虫の可能性をAIが推定します。

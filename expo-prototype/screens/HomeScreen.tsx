@@ -110,7 +110,7 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
             <Btn variant="tertiary" size="sm" style={{ alignSelf: "stretch", marginTop: 10 }}
               onPress={() => setShowPestAdvice(true)}
               icon={<Feather name="wind" size={13} color={C.textSub} />}>
-              防除タイミング助言
+              次の散布はいつ？
             </Btn>
           )}
         </View>
