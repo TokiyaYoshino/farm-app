@@ -9,6 +9,12 @@
 //
 // 農薬の適用情報（registrations）を渡された場合は、使用基準の範囲内かどうかの観点も助言に含める。
 // ただし最終的に正しいのは製品ラベルの表示であり、この助言を根拠に散布判断をさせてはならない。
+//
+// sprayHistory（その農場自身の防除記録）も受け取る。天気だけを見た助言は汎用の生成AIでも
+// 同じことができるため、それ自体に課金価値は無い。課金できるのは「その農家自身の記録を
+// 読んだうえで答える」部分だけなので、ここが本APIの中核になる
+// （整形は src/lib/pesticideUsage.ts の formatSprayHistoryForPrompt、
+//   判断の経緯は docs/decisions/20260823-pest-advice-history.md）。
 
 import type { ApiRequest, ApiResponse } from "./types";
 
@@ -77,11 +83,13 @@ async function fetchJmaWarnings(areaCode: string): Promise<string | null> {
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { forecast, lat, lng, registrations } = (req.body ?? {}) as {
+  const { forecast, lat, lng, registrations, sprayHistory } = (req.body ?? {}) as {
     forecast?: string;
     lat?: number;
     lng?: number;
     registrations?: RegistrationInfo[];
+    /** その農場自身の防除記録（クライアントで整形済み）。無い場合は省略される */
+    sprayHistory?: string;
   };
   if (!forecast || typeof forecast !== "string" || !forecast.trim()) {
     return res.status(400).json({ error: "forecast required" });
@@ -89,6 +97,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // 実績7日＋予報7日で従来の3日予報より長くなるため上限を引き上げている
   if (forecast.length > 4000) {
     return res.status(400).json({ error: "forecast too long" });
+  }
+  if (typeof sprayHistory === "string" && sprayHistory.length > 6000) {
+    return res.status(400).json({ error: "sprayHistory too long" });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -102,6 +113,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   const hasRegistrations = Array.isArray(registrations) && registrations.length > 0;
+  const hasHistory = typeof sprayHistory === "string" && sprayHistory.trim().length > 0;
 
   const system = [
     "あなたは農場の防除（農薬散布）作業のタイミングを助言するアシスタントです。",
@@ -110,6 +122,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     "強風の日はドリフト（飛散）のリスクがあるため避けるべきであることを踏まえて判断してください。",
     "直近の実績降水が多い場合は、葉が濡れた状態だと薬液の付着が悪くなる点にも触れてください。",
     "予報・実績にない情報（実際の風向きや周辺への影響など）は推測せず言及しないこと。",
+    // 天気だけの助言は汎用の生成AIでも同じことができる。この農場自身の記録を踏まえることが
+    // 本機能の存在理由なので、記録が渡されているときは必ず参照させる
+    hasHistory
+      ? [
+          "「この農場自身の防除記録」が渡されています。**必ずこれを踏まえて助言し、**",
+          "記録に触れるときは「あなたの記録では」と明示して、一般論と区別してください。",
+          "前回散布からの経過日数・同じ商品を繰り返し使っている状況・昨年同時期の防除内容のうち、",
+          "今回の判断に関係するものに触れてください。",
+          "**有効成分・系統（RACコード等）のデータは渡されていません。**",
+          "「同一系統の連用になっている」「系統をローテーションできている/できていない」といった",
+          "系統・成分に基づく判断は断定しないこと。同じ商品名が繰り返されている事実は指摘してよいが、",
+          "それが系統の重複にあたるかは判断材料が無いため、必要なら製品ラベルの有効成分表示で",
+          "確認するよう促すこと。",
+          "記録が無い期間について「散布していない」と断定しないこと（記録し忘れと区別できないため）。",
+        ].join("\n")
+      : [
+          "この農場の防除記録は渡されていません。過去の散布実績・前回の散布日には言及せず、",
+          "天気の観点だけで助言してください（記録を見たかのように書かないこと）。",
+        ].join("\n"),
     hasRegistrations
       ? [
           "農薬の適用情報（登録内容）が渡された場合は、対象作物・希釈倍数・使用時期・使用回数の観点も助言に含めてください。",
@@ -118,11 +149,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           "この助言を根拠に散布を判断してはいけないため）。",
         ].join("\n")
       : "",
-    "全体で300字程度に収めること。",
+    hasHistory ? "全体で400字程度に収めること。" : "全体で300字程度に収めること。",
   ].filter(Boolean).join("\n");
 
   const userParts = ["天気（実績と予報）:", forecast.trim()];
   if (warnings) userParts.push("", "気象庁の警報・注意報:", warnings);
+  if (hasHistory) userParts.push("", sprayHistory!.trim());
   if (hasRegistrations) {
     userParts.push("", "使用予定の農薬の適用情報（農薬登録情報より）:");
     for (const r of registrations!.slice(0, 20)) {

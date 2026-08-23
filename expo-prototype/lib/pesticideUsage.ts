@@ -376,3 +376,185 @@ export function formatPesticideUsageForPrompt(params: {
       : []),
   ].join("\n");
 }
+
+// ─── 天気×防除タイミング助言（api/pest-control-advice.ts）向けの整形 ──────
+//
+// 天気だけを見た助言は汎用の生成AI（ChatGPT等）でも同じことができるため、それ自体に
+// 課金価値は無い。課金できるのは「その農家自身の記録を読んだうえで答える」部分だけなので、
+// 防除助言には必ず自農場の散布実績を渡す（docs/decisions/20260823-pest-advice-history.md）。
+//
+// 有効成分・系統（RACコード等）のデータを farm-app は持っていない。
+// pesticide_registrations は FAMIC 登録適用部（商品 x 作物 x 病害虫の適用行）だけで、
+// 成分の列を取り込んでいないため（api/pesticide-registration.ts の COL 定義を参照）。
+// したがってここで出せるのは商品名の一致による連用までで、「同一系統の連用」は判定できない。
+// summarizeUsage が同一成分の合算をしないのと同じ理由・同じ非対称性で、判定できないものは
+// 判定不可のまま渡し、プロンプト側でも断定を禁じる。
+
+/** 散布履歴の整形に必要なフィールド。App.tsx / expo の Report がそのまま渡る。 */
+export interface SprayReport extends UsageReport {
+  work_type?: string | null;
+  field?: string | null;
+}
+
+/** 防除記録とみなすか。農薬が記録されていれば確実だが、農薬を選ばずに
+ *  作業種別だけ「防除」「農薬散布」と入れた記録も拾う（実データに両方ある）。 */
+export function isSprayReport(r: SprayReport): boolean {
+  if (r.pesticides_used && r.pesticides_used.length > 0) return true;
+  if (r.pesticide_id) return true;
+  return /防除|散布/.test(r.work_type ?? "");
+}
+
+/** その記録で使われた農薬の名称。マスタに無いIDは落とす（推測で名前を作らない）。 */
+function sprayedNames(r: SprayReport, pesticides: { id: string; name: string }[]): string[] {
+  const ids = (r.pesticides_used && r.pesticides_used.length > 0)
+    ? r.pesticides_used.map(u => u.id)
+    : (r.pesticide_id ? [r.pesticide_id] : []);
+  return ids
+    .map(id => pesticides.find(p => p.id === id)?.name)
+    .filter((n): n is string => !!n);
+}
+
+/** 日付のみの加減算。日付だけを扱うので UTC 固定で十分（oneYearBefore と同じ流儀）。 */
+function shiftDays(day: string, days: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** from から to までの日数。パースできなければ null */
+function diffDays(from: string, to: string): number | null {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+
+const monthDay = (d: string): string => d.slice(5).replace("-", "/");
+
+/**
+ * 自農場の防除履歴をプロンプト用に整形する。
+ *
+ * 散布記録が1件も無ければ空文字を返す（呼び出し側はブロックごと省く）。
+ * 「記録が無い」ことを AI に「散布していない」と読ませないため、空のときは
+ * ブロック自体を出さず、プロンプト側で別途その旨を指示する。
+ */
+export function formatSprayHistoryForPrompt(params: {
+  reports: SprayReport[];
+  crops: { id: number; name: string }[];
+  pesticides: { id: string; name: string }[];
+  today?: string;
+  /** 直近の履歴に載せる件数の上限 */
+  maxRecent?: number;
+  /** 昨年同時期とみなす窓（今日の1年前 プラスマイナス この日数） */
+  seasonWindowDays?: number;
+  /** ブロック全体の文字数上限。超過ぶんは節数を明記して打ち切る */
+  maxChars?: number;
+}): string {
+  const today = params.today ?? todayStr();
+  const maxRecent = params.maxRecent ?? 12;
+  const windowDays = params.seasonWindowDays ?? 14;
+  const maxChars = params.maxChars ?? 3000;
+
+  const cropNameOf = (id: number): string =>
+    params.crops.find(c => c.id === id)?.name ?? "作物不明";
+
+  const sprays = params.reports
+    .filter(isSprayReport)
+    .filter(r => r.date <= today) // 未来日の記録は履歴として扱わない
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  if (sprays.length === 0) return "";
+
+  const label = (r: SprayReport): string => {
+    const names = sprayedNames(r, params.pesticides);
+    const where = [cropNameOf(r.crop_id), r.field?.trim()].filter(Boolean).join("・");
+    // 農薬名が取れない記録は明示する（空欄にすると散布内容を想像させる）
+    return `${where}: ${names.length > 0 ? names.join("、") : "農薬の記録なし"}`;
+  };
+
+  const sections: string[] = [];
+
+  // 1) 前回の散布からの経過日数。助言が最も直接的に使う数字
+  const last = sprays[0];
+  const since = diffDays(last.date, today);
+  const sinceLabel = since == null ? "" : since === 0 ? "（本日）" : `（${since}日前）`;
+  sections.push(["### 前回の散布", `${last.date}${sinceLabel} ${label(last)}`].join("\n"));
+
+  // 2) 直近の履歴
+  const recent = sprays.slice(0, maxRecent);
+  sections.push([
+    `### 直近の散布履歴（新しい順・${recent.length}件）`,
+    ...recent.map(r => {
+      const d = diffDays(r.date, today);
+      return `- ${r.date}${d == null ? "" : `（${d}日前）`} ${label(r)}`;
+    }),
+    ...(sprays.length > recent.length
+      ? [`（ほか${sprays.length - recent.length}件は省略。省略ぶんも散布はしている）`]
+      : []),
+  ].join("\n"));
+
+  // 3) 同一商品の繰り返し。系統ではなく商品名の一致であることを見出しで明示する
+  const repeats = new Map<string, { crop: string; product: string; dates: string[] }>();
+  sprays.forEach(r => {
+    sprayedNames(r, params.pesticides).forEach(name => {
+      const key = `${r.crop_id} ${name}`;
+      const hit = repeats.get(key) ?? { crop: cropNameOf(r.crop_id), product: name, dates: [] };
+      hit.dates.push(r.date);
+      repeats.set(key, hit);
+    });
+  });
+  const repeated = Array.from(repeats.values())
+    .filter(x => x.dates.length >= 2)
+    .sort((a, b) => b.dates.length - a.dates.length);
+  if (repeated.length > 0) {
+    sections.push([
+      "### 同じ商品を繰り返し使っている組み合わせ（商品名の一致のみ）",
+      ...repeated.slice(0, 8).map(x =>
+        `- ${x.crop} / ${x.product}: ${x.dates.length}回（${x.dates.slice().sort().map(monthDay).join("、")}）`),
+    ].join("\n"));
+  }
+
+  // 4) 昨年の同時期。果樹は多年生で年間サイクルが繰り返すため、
+  //    去年の同じ頃に何を撒いたかは防除の判断材料になる
+  const anchor = oneYearBefore(today);
+  const from = shiftDays(anchor, -windowDays);
+  const to = shiftDays(anchor, windowDays);
+  const lastSeason = sprays.filter(r => r.date >= from && r.date <= to);
+  sections.push([
+    `### 昨年の同時期（${from} から ${to}）の防除`,
+    ...(lastSeason.length > 0
+      ? lastSeason.map(r => `- ${r.date} ${label(r)}`)
+      : ["- 記録なし（この期間に散布記録が無い。散布しなかったのか記録し忘れたのかは区別できない）"]),
+  ].join("\n"));
+
+  const header = [
+    "",
+    "## この農場自身の防除記録",
+    `集計基準日: ${today}。以下はすべて利用者本人が入力した実績で、一般論ではない。`,
+  ].join("\n");
+
+  const footer = [
+    "注記（この記録から言えないこと）:",
+    `- ${PRODUCT_UNIT_NOTE}有効成分・系統（RACコード等）のデータを持っていないため、`,
+    "  同一系統の連用かどうかはここでは判定していない。",
+    "- 記録に無い散布は把握できない。記録が無いことは散布していないことを意味しない。",
+  ].join("\n");
+
+  // 文字数上限に収まるぶんだけ載せる。落としたことは黙らせない
+  const kept: string[] = [];
+  let used = header.length + footer.length;
+  for (const s of sections) {
+    if (used + s.length + 2 > maxChars) break;
+    kept.push(s);
+    used += s.length + 2;
+  }
+  if (kept.length === 0) return "";
+  const droppedSections = sections.length - kept.length;
+  return [
+    header,
+    ...kept,
+    ...(droppedSections > 0 ? [`（文字数の都合で${droppedSections}節を省略）`] : []),
+    footer,
+  ].join("\n\n");
+}

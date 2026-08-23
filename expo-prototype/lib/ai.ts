@@ -200,8 +200,14 @@ export const generateReportApi = (records: string, date: string) =>
 export const searchChatApi = (question: string, records: string, recordCount: number) =>
   callApi<{ answer: string }>("/api/search-chat", { question, records, recordCount });
 
-export const pestControlAdviceApi = (forecast: string, lat: number, lng: number) =>
-  callApi<{ advice: string; usage?: unknown; costUsd?: number }>("/api/pest-control-advice", { forecast, lat, lng, registrations: [] });
+// sprayHistory はその農場自身の防除記録（lib/pesticideUsage.ts の formatSprayHistoryForPrompt の出力）。
+// 天気だけの助言は汎用の生成AIでもできるため、ここを渡すことが本機能の存在理由になる。
+// 散布記録が無ければ空文字が来るので、その場合は送らない（API側は未指定として扱う）。
+export const pestControlAdviceApi = (forecast: string, lat: number, lng: number, sprayHistory?: string) =>
+  callApi<{ advice: string; usage?: unknown; costUsd?: number }>("/api/pest-control-advice", {
+    forecast, lat, lng, registrations: [],
+    ...(sprayHistory && sprayHistory.trim() ? { sprayHistory } : {}),
+  });
 
 // ── 作物ごとの相談（api/advise.ts / 農業エージェント）──
 // searchChatApi とは目的が違う。あちらは記録の検索（記録に無いことは答えない）で、
