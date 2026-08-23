@@ -52,6 +52,17 @@ const supabase = createClient(
 // ─── 定数 ───────────────────────────────────────────────
 const WORK_TEMPLATES = ["収穫", "施肥", "防除", "播種", "灌水", "草刈り", "剪定", "その他"];
 
+// ─── /api/* 呼び出し用の認証ヘッダ ──────────────────────────────
+// api/_auth.ts が Authorization を必須にしているため、全ての /api/* 呼び出しに付ける。
+// onAuthStateChange でここに写しておき、同期的に読めるようにする
+// （LINE通知のように await できない発火箇所があるため）。
+let apiToken: string | null = null;
+const setApiToken = (t: string | null): void => { apiToken = t; };
+const apiHeaders = (): Record<string, string> => ({
+  "Content-Type": "application/json",
+  ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+});
+
 // ai_outputs.model に残すモデル名。api/*.ts が使うモデルと合わせること
 // （api/generate-report.ts・diagnose-image.ts 等の model 指定が正）。
 const AI_MODEL = "gpt-4o-mini";
@@ -476,10 +487,12 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthSession(session);
+      setApiToken(session?.access_token ?? null);
       setAuthLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setAuthSession(session);
+      setApiToken(session?.access_token ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -667,7 +680,7 @@ export default function App() {
     try {
       const r = await fetch("/api/set-user-auth", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ name, role, login_id, password, org: currentOrg, organization_id: currentOrganizationId }),
       });
       const d = await r.json();
@@ -691,7 +704,7 @@ export default function App() {
     try {
       const r = await fetch("/api/set-user-auth", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ user_id: setAuthTarget.id, login_id: login_id.trim(), password }),
       });
       const d = await r.json();
@@ -799,7 +812,7 @@ export default function App() {
         ];
         fetch("/api/notify-line", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: apiHeaders(),
           body: JSON.stringify({ message: lines.join("\n") }),
         }).catch(e => console.error("LINE notify error:", e));
       }
@@ -965,7 +978,7 @@ export default function App() {
     try {
       const res = await fetch("/api/structure-voice", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({
           transcript:     rForm.note,
           fields:         fields.map(f => f.name),
@@ -1252,7 +1265,7 @@ export default function App() {
   const saveRegistrations = async (p: Pesticide, registrationNo: string): Promise<void> => {
     const res = await fetch("/api/pesticide-registration", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders(),
       body: JSON.stringify({ registrationNo }),
     });
     const d = await res.json().catch(() => ({}));
@@ -1312,7 +1325,7 @@ export default function App() {
       // 登録番号が分からない農薬は、名前から候補を出して選んでもらう
       const res = await fetch("/api/pesticide-registration", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ name: p.name }),
       });
       const d = await res.json().catch(() => ({}));
@@ -1589,7 +1602,7 @@ export default function App() {
     try {
       const res = await fetch("/api/generate-report", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ records, date: genDate }),
       });
       const d = await res.json().catch(() => ({}));
@@ -1627,7 +1640,7 @@ export default function App() {
       const sprayHistory = formatSprayHistoryForPrompt({ reports, crops, pesticides });
       const res = await fetch("/api/pest-control-advice", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         // lat/lng は気象庁の警報を引くためにサーバー側で使う
         // （地域コードの解決に使う国土地理院の逆ジオコーダにCORSが無く、ブラウザから直接叩けないため）
         body: JSON.stringify({ forecast, lat, lng, registrations, sprayHistory }),
@@ -1808,7 +1821,7 @@ export default function App() {
       }
       const res = await fetch("/api/search-chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ question, records, recordCount: count }),
       });
       const d = await res.json().catch(() => ({}));
@@ -1834,7 +1847,7 @@ export default function App() {
       const crop = cropName(report.crop_id);
       const res = await fetch("/api/diagnose-image", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ imageUrl: report.image_url, cropName: crop }),
       });
       const d = await res.json().catch(() => ({}));
@@ -1865,7 +1878,7 @@ export default function App() {
       const imageUrl = await uploadImage(diagPhotoFile);
       const res = await fetch("/api/diagnose-image", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ imageUrl }),
       });
       const d = await res.json().catch(() => ({}));

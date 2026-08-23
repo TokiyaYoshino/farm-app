@@ -7,9 +7,14 @@
 // reportsテーブルのスキーマ変更の影響を受けない（generate-report.tsと同じ設計）。
 
 import type { ApiRequest, ApiResponse } from "./types";
+import { requireUser, denied } from "./_auth";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
+
+  // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
+  const auth = await requireUser(req);
+  if (!auth.ok) return denied(res, auth);
 
   const { question, records, recordCount } = (req.body ?? {}) as { question?: string; records?: string; recordCount?: number };
   if (!question || typeof question !== "string" || !question.trim()) {

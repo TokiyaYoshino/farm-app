@@ -181,9 +181,14 @@ export async function fetchPestControlForecast(lat: number, lng: number): Promis
 // ── API呼び出し（Web版の fetch("/api/...") と同一ボディ） ──
 async function callApi<T>(path: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   try {
+    // api/_auth.ts が Authorization を必須にしているため、ログイン中のトークンを必ず付ける。
+    // 無認証だと OpenAI キーの踏み台にされるため（2026-08-23 に塞いだ）。
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return { ok: false, error: "ログインが必要です。ログインし直してください。" };
     const res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     });
     const d = await res.json().catch(() => ({}));

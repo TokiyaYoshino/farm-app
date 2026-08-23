@@ -1,4 +1,5 @@
 import type { ApiRequest, ApiResponse } from "./types";
+import { requireUser, denied } from "./_auth";
 
 // マルチテナント化: LINE通知先を organizations テーブルの組織別設定から取得できるようにする。
 // organization_id が渡され、かつ organizations テーブル/該当行が存在する場合はそちらを優先し、
@@ -6,6 +7,10 @@ import type { ApiRequest, ApiResponse } from "./types";
 // 詳細: docs/adr-001-multitenancy-and-ai.md
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
+
+  // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
+  const auth = await requireUser(req);
+  if (!auth.ok) return denied(res, auth);
 
   const { message, organization_id } = (req.body ?? {}) as { message?: string; organization_id?: string };
   if (!message) return res.status(400).json({ error: "message required" });

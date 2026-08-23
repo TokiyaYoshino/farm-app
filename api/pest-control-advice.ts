@@ -17,6 +17,7 @@
 //   判断の経緯は docs/decisions/20260823-pest-advice-history.md）。
 
 import type { ApiRequest, ApiResponse } from "./types";
+import { requireUser, denied } from "./_auth";
 
 interface RegistrationInfo {
   product_name?: string;
@@ -82,6 +83,10 @@ async function fetchJmaWarnings(areaCode: string): Promise<string | null> {
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
+
+  // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
+  const auth = await requireUser(req);
+  if (!auth.ok) return denied(res, auth);
 
   const { forecast, lat, lng, registrations, sprayHistory } = (req.body ?? {}) as {
     forecast?: string;

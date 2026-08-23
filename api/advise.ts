@@ -29,6 +29,7 @@
 // 環境変数: OPENAI_API_KEY（Vercelダッシュボードで設定。リポジトリに書かない）
 
 import type { ApiRequest, ApiResponse } from "./types";
+import { requireUser, denied } from "./_auth";
 
 interface RegistrationInfo {
   product_name?: string;
@@ -118,6 +119,10 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
+
+  // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
+  const auth = await requireUser(req);
+  if (!auth.ok) return denied(res, auth);
 
   const { crop, today, forecast, registrations, records, question, region, messages, adviceHistory, workTypes } =
     (req.body ?? {}) as {

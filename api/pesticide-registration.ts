@@ -18,6 +18,7 @@
 
 import zlib from "node:zlib";
 import type { ApiRequest, ApiResponse } from "./types";
+import { requireUser, denied } from "./_auth";
 
 const FAMIC_INDEX = "https://www.acis.famic.go.jp/ddata/index2.htm";
 const FAMIC_BASE = "https://www.acis.famic.go.jp/ddata/";
@@ -140,6 +141,10 @@ function toRow(line: string, headers: string[]) {
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
+
+  // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
+  const auth = await requireUser(req);
+  if (!auth.ok) return denied(res, auth);
 
   const { registrationNo, name } = (req.body ?? {}) as { registrationNo?: string; name?: string };
   const no = typeof registrationNo === "string" ? registrationNo.trim() : "";

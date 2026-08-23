@@ -541,9 +541,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 取得した値は正規化せず原文のまま保持する。最終的に正しいのは製品ラベルの表示
   const saveRegistrationsFor = useCallback(async (p: Pesticide, registrationNo: string): Promise<string | null> => {
     try {
+      // api/_auth.ts が Authorization を必須にしているため付ける（無認証だと踏み台になる）
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${API_BASE}/api/pesticide-registration`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ registrationNo }),
       });
       const d = await res.json().catch(() => ({}));
@@ -598,9 +603,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (p.registration_no) return saveRegistrationsFor(p, p.registration_no);
     // 登録番号が分からない農薬は、名前から候補を出して選んでもらう
     try {
+      // api/_auth.ts が Authorization を必須にしているため付ける（無認証だと踏み台になる）
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${API_BASE}/api/pesticide-registration`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ name: p.name }),
       });
       const d = await res.json().catch(() => ({}));

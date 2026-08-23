@@ -3,6 +3,8 @@
 export interface ApiRequest {
   method?: string;
   body?: Record<string, unknown>;
+  /** 認証（api/_auth.ts）で Authorization を読むために必要。Node のヘッダは小文字化されて入る */
+  headers?: Record<string, string | string[] | undefined>;
 }
 
 export interface ApiResponseValue {
