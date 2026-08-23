@@ -1,6 +1,7 @@
 # RLS実ポリシー化の適用手順（App Store申請前の必須作業）
 
 対象SQL: `scripts/migrations/2026-08-02-rls-policies.sql`
+**＋ `scripts/migrations/2026-08-23-rls-crop-advice.sql`（本体に含まれない2表。手順3-5で実行）**
 背景: `docs/multitenancy-progress.md` の残作業。現在は全テーブル `allow_all` のため、
 anonキーを知っていれば他組織のデータを直接読み書きできる状態。公開前に必ず塞ぐ。
 
@@ -50,13 +51,43 @@ SQL Editor で **2) をテーブル1ブロックずつ**実行する。順番の
 4. `work_categories` → `pesticides_master` → `pesticide_registrations` → `organizations`
    - このタイミングで `scripts/migrations/2026-08-04-device-tokens.sql`（プッシュ通知の
      端末トークン表）も実行してよい。`jwt_organization_id()` に依存するため手順1より後に行う
-5. **最後に `users`**（ログイン画面の login_id→email 解決が匿名selectに依存するため、
+5. **`scripts/migrations/2026-08-23-rls-crop-advice.sql` を実行する（別ファイル・実行必須）**
+   - 農業エージェントの `crop_advice_messages` / `crop_advice_actions` の2表。
+     本体（`2026-08-02-rls-policies.sql`）が書かれた時点でこの2表はまだ存在せず
+     （作成は 2026-08-10）、**本体を全部流してもこの2表だけ `allow_all` のまま残る**
+   - 相談のやりとりが丸ごと入る表で、事業戦略上の差別化の中核（`docs/spec-crop-advice-agent.md`）。
+     ここを取りこぼすと「他組織の相談内容が読める」状態が残る
+   - スモークテスト: アプリで作物の相談スレッドを開き、過去のやりとりが表示されること
+6. **最後に `users`**（ログイン画面の login_id→email 解決が匿名selectに依存するため、
    列制限grantを含むブロックを一気に実行し、直後にログインできることを必ず確認）
-6. Storage の 3) ブロック
+7. Storage の 3) ブロック
 
 各ブロック実行後のスモークテスト: Web版をリロードして該当データが表示されること。
-表示されなくなったら、そのテーブルの新ポリシーを `drop policy` して切り戻し、
-JWTに organization_id が入っているか（手順2）を再確認する。
+
+### 切り戻しの判断基準（迷わないように先に決めておく）
+
+| 症状 | 原因の見当 | 対処 |
+|---|---|---|
+| そのテーブルのデータが**全部消えて見える** | JWT に `organization_id` が無い（手順2の未実施・古いセッション） | まずログアウト→ログイン。直らなければ下記の `drop policy` で切り戻す |
+| **一部だけ**見えない | その行の `organization_id` が NULL か別組織 | ポリシーは正しい。データ側を SQL で確認する（切り戻さない） |
+| ログインできなくなった | `users` のブロック（手順6） | 即座に切り戻す。ログイン不能は全機能停止 |
+
+切り戻しは対象テーブルごとに1文:
+
+```sql
+drop policy if exists <新ポリシー名> on <テーブル名>;
+create policy allow_all on <テーブル名> for all using (true) with check (true);
+```
+
+**1テーブルずつ実行し、そのつど画面を確認すること。** まとめて流すと、どのテーブルで
+壊れたのか切り分けられなくなる（Supabase SQL Editor は複数文をまとめると結果を表示しない）。
+
+### 実行前の確認（2026-08-23 時点の実測）
+
+- JWT に `organization_id` クレームは**まだ入っていない**（ブラウザのセッションを実測して確認済み）。
+  したがって**手順1（Auth Hook）は未実施**であり、ここから始める必要がある
+- `device_tokens` は `2026-08-04-device-tokens.sql` が自前で組織スコープのポリシーを
+  持っているため、本体側での追加対応は不要（確認済み）
 
 ## 4. 越境アクセステスト
 
