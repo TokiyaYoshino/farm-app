@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { createClient } from "@supabase/supabase-js";
 import type { Session as AuthSession } from "@supabase/supabase-js";
@@ -13,7 +13,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
-  Download, FileText, FileSpreadsheet, Sparkles, BookOpen, Pencil,
+  Download, FileText, FileSpreadsheet, Sparkles, BookOpen, Pencil, Sprout,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -25,6 +25,10 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { harvestQty, excludedHarvestCount } from "./lib/metrics";
 import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt, lastSpray } from "./lib/pesticideUsage";
+import {
+  matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
+  type AdviceAction,
+} from "./lib/adviceMatch";
 import PesticideUsageSummary, { PesticideUsageCard } from "./components/PesticideUsageSummary";
 import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
@@ -197,6 +201,36 @@ interface User   { id: number; name: string; role: Role; login_id?: string; auth
 // famic_crop_name は FAMIC 登録適用部の作物名（例: 南高梅 → うめ）との手動紐付け。
 // 未設定なら農薬の使用回数は「判定不可」として扱う（自動マッチングはしない）
 interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; famic_crop_name?: string | null; }
+
+// ─── 作付けの相談（農業エージェント）── crop_advice_messages の1発言
+interface CropAdviceMessage {
+  id: string;
+  crop_id: number;
+  role: "user" | "assistant";
+  content: string;
+  sources?: string[] | null;
+  limits?: string[] | null;
+  registration_facts?: AdviseRegistrationFact[] | null;
+  created_at: string;
+}
+interface AdviseRegistrationFact {
+  productName: string; cropName: string; pestName: string; dilution: string;
+  usageTiming: string; usageCount: string; totalCount: string; application: string;
+  hasBlankLimit: boolean;
+}
+/** api/advise.ts の返り値。workType が null は「照合できない」（未実施ではない） */
+interface AdviseAction {
+  title: string; workType: string | null; when: string;
+  dueFrom: string | null; dueTo: string | null; why: string; sortOrder: number;
+}
+interface AdviseResult {
+  advice: { reply: string; actions: AdviseAction[]; watchPoints: string[]; unknowns: string[] };
+  registrationFacts: AdviseRegistrationFact[];
+  sources: string[];
+  limits: string[];
+  usage?: unknown;
+  costUsd?: number;
+}
 interface Field  { id: number; name: string; lat: number | null; lng: number | null; }
 interface AppSettings { id: number; location_name: string; lat: number; lng: number; }
 interface Session { id: number; user_id: number; field_id: number | null; started_at: string; voice_memo: string; }
@@ -477,6 +511,19 @@ export default function App() {
 
   // AI画像診断（単体・記録作成を介さず写真から直接診断）
   const [showDiagPhotoSheet, setShowDiagPhotoSheet] = useState(false);
+
+  // ─── 作付けの相談（農業エージェント）─────────────────────────
+  // Expo版 AdviseSheet の Web 移植。api/advise.ts は共通なので UI とストア相当だけ。
+  // 照合結果は保存せず毎回計算する（記録は後から増減するため / src/lib/adviceMatch.ts）。
+  const [adviseCropId, setAdviseCropId] = useState<number | null>(null);
+  const [adviseMsgs, setAdviseMsgs] = useState<CropAdviceMessage[]>([]);
+  const [adviseActions, setAdviseActions] = useState<AdviceAction[]>([]);
+  const [adviseInput, setAdviseInput] = useState("");
+  const [adviseLoading, setAdviseLoading] = useState(false);
+  const [adviseThreadLoading, setAdviseThreadLoading] = useState(false);
+  const [adviseError, setAdviseError] = useState("");
+  // 作付けごとの「やること」件数。ホームのバッジに使う（作物を開かなくても分かるように先読み）
+  const [adviceCounts, setAdviceCounts] = useState<Record<number, AdviceAction[]>>({});
   const [diagPhotoFile, setDiagPhotoFile]         = useState<File | null>(null);
   const [diagPhotoPreview, setDiagPhotoPreview]   = useState("");
   const [diagPhotoLoading, setDiagPhotoLoading]   = useState(false);
@@ -551,6 +598,14 @@ export default function App() {
       if (wc) setWorkCategories(wc as WorkCategory[]);
       if (cmts) setAllComments(cmts as Comment[]);
       setLoading(false);
+      // ホームの「やること」バッジ用。件数が伸び続ける表なので上の一括取得には積まない
+      if (organizationId) {
+        const { data: acts } = await supabase.from("crop_advice_actions").select("*")
+          .eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300);
+        const byCrop: Record<number, AdviceAction[]> = {};
+        ((acts ?? []) as AdviceAction[]).forEach(a => { (byCrop[a.crop_id] ??= []).push(a); });
+        setAdviceCounts(byCrop);
+      }
       } catch (e) {
         console.error("Startup error:", e);
         setLoading(false);
@@ -1535,7 +1590,7 @@ export default function App() {
   // AI機能の出力を ai_outputs に残す。分析タブの診断集計とAI履歴の元データになる。
   // 保存の失敗はAI機能自体を止めない（画面に出すことが本体で、保存は付随価値のため）。
   const saveAiOutput = async (
-    kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure",
+    kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice",
     payload: {
       reportId?: number | null;
       targetDate?: string | null;
@@ -1835,6 +1890,202 @@ export default function App() {
     } finally {
       setSearchChatLoading(false);
     }
+  };
+
+  // 照合は毎回計算する（保存しない）。作業記録が後から増えても表示が実態とずれない
+  const adviseMatches = useMemo(
+    () => (adviseCropId == null ? [] : matchActions(adviseActions, reports.filter(r => r.crop_id === adviseCropId))),
+    [adviseActions, reports, adviseCropId],
+  );
+
+  // ─── 作付けの相談（農業エージェント）─────────────────────────
+  // 「次にやる作業が分からない」（競合レビュー唯一の削除理由）への対応。
+  // 記録検索チャットとは目的が違う。あちらは記録の検索（記録に無いことは答えない）で、
+  // こちらは知識の補填（記録がゼロでも成立する）。設計は
+  // docs/decisions/20260810-next-action-advice.md、照合は src/lib/adviceMatch.ts。
+  const loadCropAdvice = async (cropId: number) => {
+    if (!currentOrganizationId) return null;
+    const [msgRes, actRes] = await Promise.all([
+      supabase.from("crop_advice_messages").select("*")
+        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+      supabase.from("crop_advice_actions").select("*")
+        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+    ]);
+    if (msgRes.error || actRes.error) return null;
+    return {
+      messages: (msgRes.data ?? []) as CropAdviceMessage[],
+      actions: (actRes.data ?? []) as AdviceAction[],
+    };
+  };
+
+  // ホームのバッジ用。作物を開かなくても「やること」が何件あるか分かるようにする。
+  // 件数が伸び続ける表なので fetchAll には積まず、ここだけで引く。
+  const loadAdviceCounts = async () => {
+    if (!currentOrganizationId) return;
+    const { data } = await supabase.from("crop_advice_actions").select("*")
+      .eq("organization_id", currentOrganizationId).order("created_at", { ascending: false }).limit(300);
+    const byCrop: Record<number, AdviceAction[]> = {};
+    ((data ?? []) as AdviceAction[]).forEach(a => {
+      (byCrop[a.crop_id] ??= []).push(a);
+    });
+    setAdviceCounts(byCrop);
+  };
+
+  const openAdviseSheet = async (cropId: number) => {
+    setAdviseCropId(cropId);
+    setAdviseMsgs([]); setAdviseActions([]); setAdviseError(""); setAdviseInput("");
+    setAdviseThreadLoading(true);
+    const data = await loadCropAdvice(cropId);
+    if (data) { setAdviseMsgs(data.messages); setAdviseActions(data.actions); }
+    else setAdviseError("これまでの相談を読み込めませんでした。");
+    setAdviseThreadLoading(false);
+  };
+
+  const sendAdvise = async () => {
+    const question = adviseInput.trim();
+    const crop = crops.find(c => c.id === adviseCropId);
+    if (!crop || !question || adviseLoading) return;
+    setAdviseLoading(true); setAdviseError("");
+    // 送信した質問はすぐ画面に出す（保存の成否を待たせない）
+    const pendingId = `pending-${adviseMsgs.length}`;
+    setAdviseMsgs(prev => [...prev, {
+      id: pendingId, crop_id: crop.id, role: "user", content: question,
+      created_at: new Date().toISOString(),
+    }]);
+    setAdviseInput("");
+    try {
+      let forecast: string | undefined;
+      if (weatherCoords) {
+        forecast = await fetchPestControlForecast(weatherCoords.lat, weatherCoords.lng).catch(() => undefined);
+      }
+      // その作付けに紐づく記録だけを渡す。件数ゼロでも成立する
+      const cropReports = reports.filter(r => r.crop_id === crop.id);
+      const records = cropReports.length > 0
+        ? cropReports
+            .slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60)
+            .map(r => [
+              `${r.date} ${r.work_type || "作業不明"}`,
+              r.field ? `圃場:${r.field}` : "",
+              r.quantity ? `数量:${r.quantity}` : "",
+              r.note ? `メモ:${r.note}` : "",
+            ].filter(Boolean).join(" / "))
+            .join("\n").slice(0, 7500)
+        : undefined;
+      // famic_crop_name が未設定なら適用行を1件も送らない。紐付けが無い状態で全行を渡すと、
+      // 他作物の適用情報をこの作付けのものとして提示してしまう
+      const famic = crop.famic_crop_name?.trim() || null;
+      const norm = (s: string) => s.normalize("NFKC").trim().toLowerCase();
+      const registrations = famic
+        ? Object.values(await prefetchAllRegistrations()).flat()
+            .filter(r => norm(r.crop_name ?? "") === norm(famic))
+            .map(r => ({
+              product_name: r.product_name, crop_name: r.crop_name, pest_name: r.pest_name,
+              dilution: r.dilution, usage_timing: r.usage_timing, usage_count: r.usage_count,
+              total_count: r.total_count, application: r.application,
+            }))
+        : [];
+      const workTypeVocab = [...new Set([
+        ...WORK_TEMPLATES.filter(w => w !== "その他"),
+        ...workCategories.map(c => c.name),
+      ].filter(n => n && n.trim() !== ""))];
+
+      const res = await fetch("/api/advise", {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({
+          crop: { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null },
+          today: new Date().toISOString().slice(0, 10),
+          forecast, registrations, records, question, region: weatherCoords?.name,
+          messages: adviseMsgs.map(m => ({ role: m.role, content: m.content })),
+          // 前に出した助言とその実施状況。画面のバッジと同じ matchActions を通すので
+          // AI の言うことと画面が食い違わない
+          adviceHistory: formatAdviceHistoryForPrompt(adviseMatches).slice(0, 6000),
+          workTypes: workTypeVocab,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAdviseError((d as { error?: string }).error || "相談に失敗しました。");
+        setAdviseMsgs(prev => prev.filter(m => m.id !== pendingId));
+        setAdviseInput(question);
+        setAdviseLoading(false);
+        return;
+      }
+      const result = d as AdviseResult;
+      const saved = await saveAdviceTurn(crop.id, question, result);
+      if (saved) {
+        setAdviseMsgs(prev => [...prev.filter(m => m.id !== pendingId), ...saved.messages]);
+        setAdviseActions(prev => [...prev, ...saved.actions]);
+        void loadAdviceCounts();
+      } else {
+        // 保存できなくても回答は見せる（相談自体を無駄にしない）。溜まらないことは明示する
+        setAdviseMsgs(prev => [...prev, {
+          id: `local-${prev.length}`, crop_id: crop.id, role: "assistant",
+          content: result.advice.reply, sources: result.sources, limits: result.limits,
+          registration_facts: result.registrationFacts, created_at: new Date().toISOString(),
+        }]);
+        setAdviseError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
+      }
+      void saveAiOutput("advice", {
+        cropId: crop.id,
+        inputSummary: [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`,
+          `記録:${cropReports.length}件`, `質問:${question}`].join(" / "),
+        outputJson: { advice: result.advice, registrationFacts: result.registrationFacts,
+          sources: result.sources, limits: result.limits },
+        usage: result.usage, costUsd: result.costUsd,
+      });
+    } catch {
+      setAdviseError("通信に失敗しました。");
+      setAdviseMsgs(prev => prev.filter(m => m.id !== pendingId));
+      setAdviseInput(question);
+    }
+    setAdviseLoading(false);
+  };
+
+  // 質問と返答を1往復として入れる。返答だけ・質問だけが残るとスレッドが読めなくなるので、
+  // 返答の insert が失敗したら質問も消す
+  const saveAdviceTurn = async (cropId: number, question: string, result: AdviseResult) => {
+    if (!currentOrganizationId) return null;
+    const base = { organization_id: currentOrganizationId, crop_id: cropId, created_by: currentUser?.id ?? null };
+    const { data: userRow, error: userErr } = await supabase.from("crop_advice_messages")
+      .insert([{ ...base, role: "user", content: question }]).select().single();
+    if (userErr || !userRow) return null;
+    const { data: aiRow, error: aiErr } = await supabase.from("crop_advice_messages").insert([{
+      ...base, role: "assistant", content: result.advice.reply,
+      // 出典・限界・登録情報の原文は生成時のものを残す。あとで文言を変えても過去の発言は当時のまま
+      sources: result.sources, limits: result.limits,
+      registration_facts: result.registrationFacts,
+      model: AI_MODEL, usage: result.usage ?? null, cost_usd: result.costUsd ?? null,
+    }]).select().single();
+    if (aiErr || !aiRow) {
+      await supabase.from("crop_advice_messages").delete().eq("id", (userRow as CropAdviceMessage).id);
+      return null;
+    }
+    let actions: AdviceAction[] = [];
+    if (result.advice.actions.length > 0) {
+      const { data: actRows } = await supabase.from("crop_advice_actions").insert(
+        result.advice.actions.map(a => ({
+          ...base, message_id: (aiRow as CropAdviceMessage).id,
+          title: a.title, work_type: a.workType,
+          due_from: a.dueFrom, due_to: a.dueTo,
+          when_text: a.when || null, why: a.why || null, sort_order: a.sortOrder,
+        })),
+      ).select();
+      // やることの保存に失敗しても会話は残す（照合できないだけで、助言自体は読める）
+      actions = (actRows ?? []) as AdviceAction[];
+    }
+    return { messages: [userRow as CropAdviceMessage, aiRow as CropAdviceMessage], actions };
+  };
+
+  const toggleDismissAction = async (a: AdviceAction) => {
+    const next = a.dismissed_at ? null : new Date().toISOString();
+    setAdviseActions(prev => prev.map(x => x.id === a.id ? { ...x, dismissed_at: next } : x)); // 楽観更新
+    const { error } = await supabase.from("crop_advice_actions")
+      .update({ dismissed_at: next }).eq("id", a.id).eq("organization_id", currentOrganizationId ?? "");
+    if (error) {
+      setAdviseActions(prev => prev.map(x => x.id === a.id ? { ...x, dismissed_at: a.dismissed_at } : x));
+      setAdviseError("更新できませんでした。");
+    } else void loadAdviceCounts();
   };
 
   // ─── 病害虫画像診断 ───────────────────────────────────────
@@ -2362,6 +2613,57 @@ export default function App() {
               </div>
             );
           })()}
+
+          {/* ── 作付け中 ─────────────────────────────────────────
+              農業エージェントの居場所。作物は農家が日常的に考える単位なので、
+              一覧としてそもそも自然に開かれる。そこに「やること」の未実施件数を出すことで、
+              エージェントが「探しに行く機能」ではなく「放置できない通知」になる。
+              件数は保存せず matchActions で毎回計算する（記録は後から増減するため）。 */}
+          {canUseAiFeature("nextActionAdvice") && crops.length > 0 && (
+            <div style={{ background:C.card, borderRadius:RADIUS.card, boxShadow:SHADOW.card, padding:"14px 16px", marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:4, display:"flex", alignItems:"center", gap:5 }}>
+                <Sprout size={12} strokeWidth={2} />作付け中 — 相談できます
+              </div>
+              {crops.map((c, i) => {
+                const acts = adviceCounts[c.id] ?? [];
+                const m = countMatches(matchActions(acts, reports.filter(r => r.crop_id === c.id)));
+                const todo = m.pending + m.overdue;
+                const days = c.start_date
+                  ? Math.round((Date.parse(`${new Date().toISOString().slice(0,10)}T00:00:00Z`) - Date.parse(`${c.start_date}T00:00:00Z`)) / 86400000)
+                  : null;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => openAdviseSheet(c.id)}
+                    style={{
+                      display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const,
+                      background:"none", border:"none", cursor:"pointer",
+                      padding:"10px 0", borderTop: i === 0 ? "none" : `1px solid ${C.hairline}`,
+                    }}
+                  >
+                    <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(c.id), flexShrink:0 }} />
+                    <span style={{ flex:1, minWidth:0 }}>
+                      <span style={{ fontSize:13.5, fontWeight:700, color:C.text }}>{c.name}</span>
+                      <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:1 }}>
+                        {days != null ? `作付けから${days}日` : "作付け日は未設定"}
+                        {acts.length === 0 ? " · 相談はまだありません" : ""}
+                      </span>
+                    </span>
+                    {todo > 0 ? (
+                      <span style={{ fontSize:11, fontWeight:700, borderRadius:999, padding:"3px 9px", background:C.warningBg, color:C.warning, whiteSpace:"nowrap" as const }}>
+                        やること{todo}
+                      </span>
+                    ) : m.done > 0 ? (
+                      <span style={{ fontSize:11, fontWeight:700, borderRadius:999, padding:"3px 9px", background:C.inkSoft, color:C.ink, whiteSpace:"nowrap" as const }}>
+                        実施済み
+                      </span>
+                    ) : null}
+                    <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* 統計カードグリッド */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
@@ -4423,6 +4725,125 @@ export default function App() {
               </button>
             );
           })()}
+        </div>
+      </BottomSheet>
+
+      {/* 作付けの相談（農業エージェント）*/}
+      <BottomSheet open={adviseCropId !== null} onClose={() => setAdviseCropId(null)}>
+        <div style={S.page}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4, display:"flex", alignItems:"center", gap:6 }}>
+            <Sprout size={17} strokeWidth={2} color={C.ink} />
+            {adviseCropId != null ? cropName(adviseCropId) : ""}の相談
+          </div>
+          <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.7, marginBottom:14 }}>
+            作物・作付け日・天気・この農場の記録をもとに答えます。<b style={{ color:C.textSub }}>作業の時期や順序は目安</b>で、公的な栽培基準ではありません。農薬を使うときは必ず製品ラベルを確認してください。
+          </div>
+
+          {/* やること — 記録との照合結果。
+              「未実施」と「照合できません」を混ぜない。混ぜると
+              「やったのに未実施」か「できていないのに見逃す」のどちらかが起きる */}
+          {adviseMatches.length > 0 && (
+            <div style={{ ...S.wellBox, padding:12, marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:8 }}>
+                やること — 作業記録と照合しています
+              </div>
+              {adviseMatches.map(m => {
+                const c = m.status === "done" ? C.ink
+                  : m.status === "overdue" ? C.danger
+                  : m.status === "pending" ? C.warning : C.textMuted;
+                return (
+                  <div key={m.action.id} style={{ background:C.card, borderRadius:12, padding:"10px 12px", marginBottom:6 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                      <span style={{ width:7, height:7, borderRadius:"50%", background:c, flexShrink:0 }} />
+                      <span style={{ fontSize:13, fontWeight:700, color:C.text, flex:1, minWidth:0, textDecoration: m.status === "dismissed" ? "line-through" : "none" }}>
+                        {m.action.title}
+                      </span>
+                      <span style={{ fontSize:11, fontWeight:700, color:c, whiteSpace:"nowrap" as const }}>{statusLabel(m.status)}</span>
+                    </div>
+                    <div style={{ fontSize:11, color:C.textMuted, marginTop:4, lineHeight:1.6 }}>
+                      {m.action.when_text ? `${m.action.when_text} · ` : ""}{matchDetail(m)}
+                    </div>
+                    <button onClick={() => toggleDismissAction(m.action)} style={{ ...btn("tertiary", "sm"), marginTop:4, padding:"4px 8px", fontSize:11 }}>
+                      {m.action.dismissed_at ? "やることに戻す" : "これはやらない"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* スレッド */}
+          {adviseThreadLoading && (
+            <div style={{ fontSize:13, color:C.textMuted, marginBottom:12 }}>これまでの相談を読み込み中…</div>
+          )}
+          {!adviseThreadLoading && adviseMsgs.length === 0 && (
+            <div style={{ fontSize:13, color:C.textMuted, lineHeight:1.8, marginBottom:12 }}>
+              例:「そろそろ追肥したほうがいい？」「今の時期に気をつける病気は？」<br />
+              やりとりはこの作付けに残り、次に相談するとき前回の内容を踏まえて答えます。
+            </div>
+          )}
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
+            {adviseMsgs.map(m => (
+              <div key={m.id} style={{ display:"flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                <div style={{
+                  maxWidth:"88%", borderRadius:14, padding:"9px 12px", fontSize:13, lineHeight:1.7,
+                  background: m.role === "user" ? C.ink : C.well,
+                  color: m.role === "user" ? "#fff" : C.text,
+                  whiteSpace:"pre-wrap" as const,
+                }}>
+                  {m.content}
+                  {/* 農薬の数値はAIの文章ではなく登録情報の原文を表に出す。
+                      文章に混ざった数字を信じさせないため */}
+                  {m.registration_facts && m.registration_facts.length > 0 && (
+                    <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:5 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:C.textSub }}>登録のある農薬（登録情報の原文）</div>
+                      {m.registration_facts.map((f, i) => (
+                        <div key={i} style={{ background:C.card, borderRadius:10, padding:9 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+                            <span style={{ fontSize:12, fontWeight:700, color:C.text, flex:1 }}>{f.productName}</span>
+                            <span style={{ fontSize:10, fontWeight:700, color:C.pesticide, background:C.pesticideBg, borderRadius:999, padding:"2px 8px" }}>{f.pestName}</span>
+                          </div>
+                          <div style={{ fontSize:11, color:C.textSub, lineHeight:1.7 }}>
+                            希釈 {f.dilution} / 使用時期 {f.usageTiming}<br />
+                            本剤の使用回数 {f.usageCount} / 総使用回数 {f.totalCount}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {m.limits && m.limits.length > 0 && (
+                    <div style={{ marginTop:8, fontSize:10.5, color: m.role === "user" ? "rgba(255,255,255,.8)" : C.textMuted, lineHeight:1.7 }}>
+                      {m.limits.map((l, i) => <div key={i}>· {l}</div>)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {adviseLoading && (
+            <div style={{ fontSize:13, color:C.textMuted, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>
+              <RefreshCw size={13} strokeWidth={2} />考えています…
+            </div>
+          )}
+          {adviseError && (
+            <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+              {adviseError}
+            </div>
+          )}
+
+          <div style={{ display:"flex", gap:8 }}>
+            <input
+              value={adviseInput}
+              onChange={e => setAdviseInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAdvise(); } }}
+              placeholder="この作付けについて聞く"
+              style={{ flex:1, minWidth:0, fontSize:16, padding:"11px 14px", borderRadius:999, border:`1px solid ${C.hairline}`, outline:"none", background:C.card, color:C.text }}
+            />
+            <button onClick={sendAdvise} disabled={adviseLoading || !adviseInput.trim()} style={{ ...btn("primary", "md"), opacity: adviseLoading || !adviseInput.trim() ? 0.5 : 1 }}>
+              送信
+            </button>
+          </div>
         </div>
       </BottomSheet>
 

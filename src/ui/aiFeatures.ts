@@ -5,6 +5,8 @@ export const AI_FEATURES = {
   recordSearchChat: true,
   pestControlAdvice: true,
   pestDiagnosis: true,
+  // 作付けごとの相談（api/advise.ts）。記録の検索ではなく知識の補填なので別枠
+  nextActionAdvice: true,
 } as const;
 
 export function canUseAiFeature(feature: keyof typeof AI_FEATURES): boolean {
