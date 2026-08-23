@@ -5,6 +5,7 @@ import { C, SHADOW, RADIUS, workTypeColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import { useStore } from "../lib/store";
 import { canUseAiFeature } from "../lib/ai";
+import { lastSpray } from "../lib/pesticideUsage";
 import FieldMapSheet from "./FieldMapSheet";
 import { PestAdviceSheet, AdviseSheet } from "./AiSheets";
 
@@ -22,6 +23,7 @@ const fmtElapsed = (s: number) => {
 export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
   const {
     reports, schedules, comments, wxAuto, wxLoading, weatherCoords, cropName, userName,
+    crops, pesticides,
     workStartedAt, startWork, stopWork, refreshing, refresh,
   } = useStore();
   const [showMap, setShowMap] = useState(false);
@@ -106,15 +108,50 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
               )}
             </View>
           </View>
-          {canUseAiFeature("pestControlAdvice") && (
-            <Btn variant="tertiary" size="sm" style={{ alignSelf: "stretch", marginTop: 10 }}
-              onPress={() => setShowPestAdvice(true)}
-              icon={<Feather name="wind" size={13} color={C.textSub} />}>
-              次の散布はいつ？
-            </Btn>
-          )}
         </View>
       )}
+
+      {/* ── 今日の一手（Web版 src/App.tsx と同一の設計）──────────────
+          競合調査で残った差別化は「記録する場所とAIに聞く場所が同一プロダクト内に
+          ある」の一点だけ（docs/decisions/20260823-pest-advice-history.md）。
+          その入口が天気カード内の小さなテキストリンクだったため、主役として出す。
+
+          上段の「前回の散布から◯日」はAPIを呼ばずに自分の記録から出している。
+          押す前に「このアプリは自分の農場を把握している」ことが伝わるのが要点。
+          数字は lastSpray() を通し、助言のプロンプトと同じ集計を使う。 */}
+      {canUseAiFeature("pestControlAdvice") && (() => {
+        const ls = lastSpray({ reports, crops, pesticides });
+        return (
+          <View style={{ backgroundColor: C.card, ...SHADOW.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 }}>
+              <Feather name="wind" size={12} color={C.textMuted} />
+              <Text style={{ fontSize: 11, color: C.textMuted }}>今日の一手</Text>
+            </View>
+            {ls ? (
+              <>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: C.text }}>
+                  前回の散布から
+                  <Text style={{ fontSize: 22 }}> {ls.daysSince ?? "—"} </Text>
+                  日
+                </Text>
+                <Text style={{ fontSize: 12, color: C.textSub, marginTop: 3, lineHeight: 19 }}>
+                  {ls.date} · {ls.where}
+                  {ls.products.length > 0 ? ` · ${ls.products.join("、")}` : " · 農薬の記録なし"}
+                </Text>
+              </>
+            ) : (
+              <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 20 }}>
+                まだ防除の記録がありません。記録すると、天気とこれまでの散布実績をあわせて次の散布時期を提案できます。
+              </Text>
+            )}
+            <Btn variant="soft" size="md" style={{ alignSelf: "stretch", marginTop: 12 }}
+              onPress={() => setShowPestAdvice(true)}
+              icon={<Feather name="wind" size={14} color={C.ink} />}>
+              次の散布はいつ？
+            </Btn>
+          </View>
+        );
+      })()}
 
       {/* 統計カードグリッド */}
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
