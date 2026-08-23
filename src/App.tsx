@@ -2349,6 +2349,16 @@ export default function App() {
                 >
                   <Wind size={14} strokeWidth={2} />次の散布はいつ？
                 </button>
+                {/* 記録を作らずに写真だけ調べたい経路。畑で異変に気づくのはホームを開く前後で、
+                    記録一覧のフィルタ行ではない。記録に紐づく写真の診断は一覧・詳細側にある */}
+                {canUseAiFeature("pestDiagnosis") && (
+                  <button
+                    onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }}
+                    style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
+                  >
+                    <FlaskConical size={13} strokeWidth={2} />写真で病害虫を調べる
+                  </button>
+                )}
               </div>
             );
           })()}
@@ -2634,31 +2644,48 @@ export default function App() {
                 </select>
               </div>
 
-              {/* 件数＋クリア＋帳票出力 */}
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, minHeight:28, gap:8 }}>
+              {/* 件数＋出力系。
+                  以前はここに AI 3機能（日報・記録に聞く・写真で診断）が横並びで入っており、
+                  モバイル幅では横スクロールしないと見えなかった。NN/g の AI 発見性の調査
+                  （Amazon Rufus）が指摘するとおり、密な行に埋めると利用者は存在に気づかない。
+                  「記録に聞く」は検索の文脈へ、「写真で診断」は写真の隣へ移し、
+                  ここには性質の同じ出力系2つだけを残して折り返し可能にした。 */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, minHeight:28, gap:8, flexWrap:"wrap" as const }}>
                 <span style={{ fontSize:12, color:C.textMuted, flexShrink:0, whiteSpace:"nowrap" as const }}>{filteredReports.length}件の記録</span>
-                <div style={{ display:"flex", alignItems:"center", gap:8, overflowX:"auto", minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" as const }}>
                   {reportFilterActive && (
                     <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={{ ...btn("tertiary", "sm"), flexShrink:0 }}>条件をクリア</button>
                   )}
                   <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Sparkles size={13} strokeWidth={2} />日報にまとめる
                   </button>
-                  {canUseAiFeature("recordSearchChat") && (
-                    <button onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
-                      <MessageSquare size={13} strokeWidth={2} />記録に聞く
-                    </button>
-                  )}
-                  {canUseAiFeature("pestDiagnosis") && (
-                    <button onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
-                      <FlaskConical size={13} strokeWidth={2} />写真で診断
-                    </button>
-                  )}
                   <button onClick={() => setShowExportSheet(true)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Download size={13} strokeWidth={2} />帳票出力
                   </button>
                 </div>
               </div>
+
+              {/* 記録に聞く（検索の文脈に置く）。
+                  検索して見つからなかった瞬間が、記録をAIに聞きたい瞬間そのもの。
+                  独立したボタンとして探させるより、その場に出したほうが見つかる。 */}
+              {canUseAiFeature("recordSearchChat") && reportQuery.trim() && (
+                <button
+                  onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }}
+                  style={{
+                    display:"flex", alignItems:"center", gap:8, width:"100%", textAlign:"left" as const,
+                    background: filteredReports.length === 0 ? C.inkSoft : C.card,
+                    border:"none", borderRadius:RADIUS.card, boxShadow:SHADOW.card,
+                    padding:"12px 14px", marginBottom:10, cursor:"pointer",
+                  }}
+                >
+                  <MessageSquare size={15} strokeWidth={2} color={C.ink} />
+                  <span style={{ fontSize:13, color:C.text, lineHeight:1.5, minWidth:0 }}>
+                    {filteredReports.length === 0
+                      ? <>見つからないときは<b>記録に聞いてみる</b>（言い回しが違っても探せます）</>
+                      : <>「{reportQuery.trim()}」について<b>記録に聞いてみる</b></>}
+                  </span>
+                </button>
+              )}
 
               {/* 結果 */}
               {filteredReports.length === 0 ? (
@@ -2705,7 +2732,20 @@ export default function App() {
                     </div>
                   )}
                   {r.image_url && (
-                    <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:14, marginTop:10, maxHeight:220, objectFit:"cover", display:"block" }} />
+                    <>
+                      <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:14, marginTop:10, maxHeight:220, objectFit:"cover", display:"block" }} />
+                      {/* 診断は写真の隣に置く。「この葉、なんだろう」と思う瞬間は
+                          写真を見ている瞬間であって、フィルタ行を探している瞬間ではない。
+                          詳細シートにも同じ導線があるが、一覧で写真を見て気づく経路のほうが多い */}
+                      {canUseAiFeature("pestDiagnosis") && (
+                        <button
+                          onClick={() => { setSelectedReport(r); diagnoseImage(r); }}
+                          style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
+                        >
+                          <FlaskConical size={12} strokeWidth={2} />この写真で病害虫を調べる
+                        </button>
+                      )}
+                    </>
                   )}
                   <div style={{ display:"flex", gap:8, marginTop:12 }}>
                     <button onClick={() => setSelectedReport(r)} style={{ ...btn("secondary", "sm"), flex:1 }}>詳細を見る</button>
