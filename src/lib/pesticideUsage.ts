@@ -431,6 +431,47 @@ function diffDays(from: string, to: string): number | null {
 
 const monthDay = (d: string): string => d.slice(5).replace("-", "/");
 
+/** 防除記録を新しい順に並べて返す。未来日は履歴に入れない。
+ *  画面（ホームの「今日の一手」）とAIプロンプトで同じ並び・同じ数字を使うため共有する
+ *  ―― 別々に数えると「画面は3日前・AIは5日前」のような食い違いが起きる。 */
+export function recentSprays(reports: SprayReport[], today?: string): SprayReport[] {
+  const day = today ?? todayStr();
+  return reports
+    .filter(isSprayReport)
+    .filter(r => r.date <= day)
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export interface LastSpray {
+  date: string;
+  /** 今日との差。0 は当日 */
+  daysSince: number | null;
+  /** 「ほうれん草・C圃場」 */
+  where: string;
+  /** 記録されていた農薬名。空配列は「農薬の記録なし」を意味する（捏造しない） */
+  products: string[];
+}
+
+/** 前回の散布。ホームのカードに出す1行ぶんの事実。散布記録が無ければ null */
+export function lastSpray(params: {
+  reports: SprayReport[];
+  crops: { id: number; name: string }[];
+  pesticides: { id: string; name: string }[];
+  today?: string;
+}): LastSpray | null {
+  const today = params.today ?? todayStr();
+  const last = recentSprays(params.reports, today)[0];
+  if (!last) return null;
+  const cropName = params.crops.find(c => c.id === last.crop_id)?.name ?? "作物不明";
+  return {
+    date: last.date,
+    daysSince: diffDays(last.date, today),
+    where: [cropName, last.field?.trim()].filter(Boolean).join("・"),
+    products: sprayedNames(last, params.pesticides),
+  };
+}
+
 /**
  * 自農場の防除履歴をプロンプト用に整形する。
  *
@@ -458,11 +499,8 @@ export function formatSprayHistoryForPrompt(params: {
   const cropNameOf = (id: number): string =>
     params.crops.find(c => c.id === id)?.name ?? "作物不明";
 
-  const sprays = params.reports
-    .filter(isSprayReport)
-    .filter(r => r.date <= today) // 未来日の記録は履歴として扱わない
-    .slice()
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // 画面（ホームの「今日の一手」）と同じ関数を通す。別々に数えると数字が食い違う
+  const sprays = recentSprays(params.reports, today);
 
   if (sprays.length === 0) return "";
 

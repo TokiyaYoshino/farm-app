@@ -24,7 +24,7 @@ import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { harvestQty, excludedHarvestCount } from "./lib/metrics";
-import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt } from "./lib/pesticideUsage";
+import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt, lastSpray } from "./lib/pesticideUsage";
 import PesticideUsageSummary, { PesticideUsageCard } from "./components/PesticideUsageSummary";
 import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
@@ -2307,16 +2307,52 @@ export default function App() {
                   </div>
                 )}
               </div>
-              {canUseAiFeature("pestControlAdvice") && (
-                <button
-                  onClick={openPestAdviceSheet}
-                  style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:10 }}
-                >
-                  <Wind size={13} strokeWidth={2} />次の散布はいつ？
-                </button>
-              )}
             </div>
           ) : null}
+
+          {/* ── 今日の一手 ──────────────────────────────────────
+              競合調査で残った差別化は「記録する場所とAIに聞く場所が同一プロダクト内に
+              ある」の一点だけ（docs/decisions/20260823-pest-advice-history.md）。
+              その入口が天気カード内の小さなテキストリンクだったため、ここに主役として出す。
+
+              上段の「前回の散布から◯日」はAPIを呼ばずに自分の記録から出している。
+              押す前に「このアプリは自分の農場を把握している」ことが伝わるのが要点で、
+              汎用の生成AIとの差はここにしか無い。数字は lastSpray() を通し、
+              助言のプロンプト（formatSprayHistoryForPrompt）と同じ集計を使う
+              ―― 別々に数えると画面とAIの言うことが食い違う。 */}
+          {canUseAiFeature("pestControlAdvice") && (() => {
+            const ls = lastSpray({ reports, crops, pesticides });
+            return (
+              <div style={{ background:C.card, borderRadius:RADIUS.card, padding:"14px 16px", marginBottom:12, boxShadow:SHADOW.card }}>
+                <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:8, display:"flex", alignItems:"center", gap:5 }}>
+                  <Wind size={12} strokeWidth={2} />今日の一手
+                </div>
+                {ls ? (
+                  <>
+                    <div style={{ fontSize:15, fontWeight:700, color:C.text, lineHeight:1.5 }}>
+                      前回の散布から
+                      <span style={{ fontSize:22, margin:"0 3px" }}>{ls.daysSince ?? "—"}</span>日
+                    </div>
+                    <div style={{ fontSize:12, color:C.textSub, marginTop:3, lineHeight:1.6 }}>
+                      {ls.date} · {ls.where}
+                      {ls.products.length > 0 ? ` · ${ls.products.join("、")}` : " · 農薬の記録なし"}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize:13, color:C.textSub, lineHeight:1.6 }}>
+                    まだ防除の記録がありません。記録すると、天気とこれまでの散布実績をあわせて次の散布時期を提案できます。
+                  </div>
+                )}
+                <button
+                  onClick={openPestAdviceSheet}
+                  style={{ ...btn("soft", "md"), width:"100%", marginTop:12 }}
+                >
+                  <Wind size={14} strokeWidth={2} />次の散布はいつ？
+                </button>
+              </div>
+            );
+          })()}
+
           {/* 統計カードグリッド */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
             <div style={{ background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, padding:"14px 16px" }}>
