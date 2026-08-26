@@ -7,6 +7,7 @@
 // 農薬の使用基準（総使用回数など）の遵守は法的義務で、誤った対応づけは
 // 使用者を違反に導く。**似ているから当てる、を絶対に入れない**のがこの機能の生命線。
 import { pathToFileURL } from "node:url";
+import { readFile } from "node:fs/promises";
 
 const { normalizeCropName, matchCropName, cropNameCandidates, CROP_ALIASES } =
   await import(pathToFileURL(new URL("../src/lib/cropAlias.ts", import.meta.url).pathname).href);
@@ -62,6 +63,33 @@ t("空の値を持つ項目が無い", Object.values(CROP_ALIASES).every(v => ty
 t("空のキーが無い", Object.keys(CROP_ALIASES).every(k => k.trim() !== ""));
 t("自分自身へ向く無意味な項目で正規化差が無いものは無い",
   Object.entries(CROP_ALIASES).every(([k, v]) => normalizeCropName(k) !== normalizeCropName(v) || k !== v));
+
+// ── 実在確認 ──────────────────────────────────────────────
+// 別名表の右辺が、農薬登録情報に**実在する登録作物名**であることを確認する。
+// scripts/famic-crop-names.json は FAMIC 登録適用部（2026-08-27 取得・全58,591行）
+// から抽出した作物名 1,323 種を正規化キーで引けるようにしたもの。
+//
+// この検査が要る理由: 実在しない名前を右辺に書くと、当たらないので実害は無いように
+// 見えるが、**実在する別の作物名へ飛ばしてしまう誤りは検出できない**。
+// 実際に「温州みかん → みかん」で踏んだ（どちらも実在するので静かに別作物として数える）。
+console.log("\n実在確認（FAMIC 登録適用部の実データと突き合わせ）:");
+const famic = JSON.parse(
+  await readFile(new URL("./famic-crop-names.json", import.meta.url), "utf8"),
+);
+const missing = Object.entries(CROP_ALIASES)
+  .filter(([, v]) => !famic[normalizeCropName(v)])
+  .map(([k, v]) => `${k}→${v}`);
+t(`全ての別名が実在する登録名を指している（${Object.keys(CROP_ALIASES).length}件）`, missing.length === 0);
+if (missing.length > 0) console.log("      実在しない:", missing.join("、"));
+
+// 総称を入れない（「麦」→大麦/小麦/裸麦のように、どれか1つに決め打ちできないもの）
+t("総称『麦』を単独で載せていない", !("麦" in CROP_ALIASES));
+// 左辺自身が実在する登録名なら、別名は不要どころか有害（別作物へ飛ばしうる）
+const selfExists = Object.keys(CROP_ALIASES)
+  .filter(k => famic[normalizeCropName(k)])
+  .filter(k => normalizeCropName(CROP_ALIASES[k]) !== normalizeCropName(k));
+t("実在する登録名を別の名前へ飛ばしていない", selfExists.length === 0);
+if (selfExists.length > 0) console.log("      飛ばしている:", selfExists.join("、"));
 
 console.log("\n候補一覧:");
 const cands = cropNameCandidates(["うめ", " うめ ", "ぶどう", "", "ｷｬﾍﾞﾂ"]);
