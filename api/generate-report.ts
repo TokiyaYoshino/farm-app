@@ -29,7 +29,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const system = [
     "あなたは農場の作業日報を作成するアシスタントです。",
     "渡された作業記録をもとに、簡潔で読みやすい日本語の日報を作成してください。",
-    "形式: 冒頭に1〜2文の総括、続けて「・」で主な作業を箇条書き。最後に翌日への申し送りがあれば1行。",
+    // 形式はプロンプトで頼まず、スキーマで分ける（頼むだけだと1つの塊で返ることがある）
+    "summary に1〜2文の総括、items に主な作業（箇条書きの1項目ずつ）、handover に翌日への申し送りを入れる。",
+    "申し送りが無ければ handover は空文字にする。items に総括を繰り返さない。",
     "事実にない情報は追加しないこと。数値や農薬名は記録どおり正確に扱うこと。",
     "全体で250字程度に収めること。",
   ].join("\n");
@@ -53,6 +55,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ],
       temperature: 0.4,
       max_tokens: 500,
+      // 総括・箇条書き・申し送りを分けて受け取る。プロンプトで形式を頼むだけだと
+      // 1つの塊で返ることがあり、そのまま画面に出すと読みづらい
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "daily_report",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              summary: { type: "string" },
+              items: { type: "array", maxItems: 12, items: { type: "string" } },
+              handover: { type: "string" },
+            },
+            required: ["summary", "items", "handover"],
+            additionalProperties: false,
+          },
+        },
+      },
     }),
   });
 
@@ -63,12 +84,31 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   const data = await r.json();
-  const report = data.choices?.[0]?.message?.content?.trim();
-  if (!report) return res.status(502).json({ error: "生成結果が空でした。" });
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) return res.status(502).json({ error: "生成結果が空でした。" });
+
+  let parsed: { summary?: string; items?: string[]; handover?: string };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return res.status(502).json({ error: "生成結果の解析に失敗しました。もう一度お試しください。" });
+  }
+  const summary = (parsed.summary ?? "").trim();
+  const items = (parsed.items ?? []).map(i => String(i).trim()).filter(Boolean);
+  const handover = (parsed.handover ?? "").trim();
+  if (!summary && items.length === 0) return res.status(502).json({ error: "生成結果が空でした。" });
+
+  // report は従来どおり1本の文字列。ai_outputs への保存と、コピーして他所に
+  // 貼る用途（日報はそのまま送ることがある）のために組み立てて残す
+  const report = [
+    summary,
+    ...items.map(i => `・${i}`),
+    handover ? `\n申し送り: ${handover}` : "",
+  ].filter(Boolean).join("\n");
 
   // 概算コスト算出（gpt-4o-mini: input $0.15 / output $0.60 per 1M tokens）
   const usage = data.usage ?? {};
   const costUsd = ((usage.prompt_tokens ?? 0) * 0.15 + (usage.completion_tokens ?? 0) * 0.60) / 1_000_000;
 
-  return res.status(200).json({ report, usage, costUsd });
+  return res.status(200).json({ report, summary, items, handover, usage, costUsd });
 }

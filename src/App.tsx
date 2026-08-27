@@ -464,6 +464,10 @@ export default function App() {
   const [genDate, setGenDate]               = useState(() => new Date().toISOString().slice(0,10));
   const [genLoading, setGenLoading]         = useState(false);
   const [genResult, setGenResult]           = useState("");
+  // 日報の総括・作業・申し送り。API がスキーマで分けて返す
+  const [genSummary, setGenSummary]         = useState("");
+  const [genItems, setGenItems]             = useState<string[]>([]);
+  const [genHandover, setGenHandover]       = useState("");
   const [genError, setGenError]             = useState("");
 
   // 音声メモをAIで振り分け
@@ -1753,6 +1757,9 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.report) {
         setGenResult(d.report);
+        setGenSummary(d.summary ?? "");
+        setGenItems(Array.isArray(d.items) ? d.items : []);
+        setGenHandover(d.handover ?? "");
         void saveAiOutput("daily_report", {
           targetDate: genDate, inputSummary: records,
           outputText: d.report, usage: d.usage, costUsd: d.costUsd,
@@ -4765,7 +4772,29 @@ export default function App() {
 
           {genResult && (
             <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
-              <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{genResult}</div>
+              {/* 総括・作業・申し送りは API がスキーマで分けて返す。
+                  1つの塊で来たものを目視で切っているわけではない */}
+              {genSummary ? (
+                <>
+                  <div style={{ fontSize:14, lineHeight:1.8, color:C.text }}>{genSummary}</div>
+                  {genItems.length > 0 && (
+                    <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:5 }}>
+                      {genItems.map((it, i) => (
+                        <div key={i} style={{ fontSize:13, lineHeight:1.7, color:C.textSub, display:"flex", gap:7 }}>
+                          <span style={{ color:C.ink, flexShrink:0 }}>・</span><span>{it}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {genHandover && (
+                    <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${C.hairline}`, fontSize:13, lineHeight:1.7, color:C.textSub }}>
+                      <b style={{ color:C.text }}>申し送り</b> — {genHandover}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{genResult}</div>
+              )}
               <button onClick={() => { navigator.clipboard?.writeText(genResult); }} style={{ ...btn("tertiary", "sm"), marginTop:12 }}>
                 <Copy size={13} strokeWidth={2} />コピー
               </button>
