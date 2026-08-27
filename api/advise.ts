@@ -210,14 +210,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     "- 過去に出した助言と照合結果が渡された場合、同じ助言を繰り返さないこと。未実施のものは事情を尋ねるか代替を示すこと。",
     "  「記録と照合できません」は未実施を意味しない。実施していないと決めつけないこと。",
     "",
-    "出力は次のJSONのみ。前後に文章を付けない。",
-    "{",
+    // 形はスキーマ（response_format）が保証するので、ここでは各項目の中身だけを指示する
+    "各項目の中身:",
     // 前置きから書き始めると結論が埋もれる。利用者は答えを知りたくて聞いている
-    '  "reply": "利用者への返答（会話文。**1文目で結論を述べ**、理由は2文目以降。前置き・状況説明から始めない。2〜4文）",',
-    '  "actions": [ { "title": "作業名", "work_type": "作業種別またはnull", "when": "いつ（例: 今週中 / 開花後10日ごろ）", "due_from": "YYYY-MM-DDまたはnull", "due_to": "YYYY-MM-DDまたはnull", "why": "理由（1〜2文）" } ],',
-    '  "watch_points": ["今の時期に見ておくべき点（病害虫の兆候・気象リスクなど）"],',
-    '  "unknowns": ["渡された情報では判断できないこと・確認が必要なこと"]',
-    "}",
+    "- reply: 利用者への返答（会話文）。**1文目で結論を述べ**、理由は2文目以降。前置き・状況説明から始めない。2〜4文。",
+    "- actions[].title: 作業名 / when: いつ（例: 今週中 / 開花後10日ごろ） / why: 理由（1〜2文）",
+    "- watch_points: 今の時期に見ておくべき点（病害虫の兆候・気象リスクなど）",
+    "- unknowns: 渡された情報では判断できないこと・確認が必要なこと",
     "",
     "actions（やることの切り出し）について:",
     "- reply の中で提案した作業を、実行できる単位で切り出すこと。提案が無い返答（質問への説明だけ等）では空配列にする。",
@@ -303,7 +302,46 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ],
       temperature: 0.3,
       max_tokens: 1200,
-      response_format: { type: "json_object" },
+      // json_object は「JSONであること」しか保証しない。形はスキーマで縛る。
+      // ただし**中身の妥当性までは保証されない**ので、下の防御的パースは残す:
+      //   - work_type が作業記録の語彙に完全一致するか（誤ると「やっていないのに実施済み」）
+      //   - due_from / due_to が実在する日付か（「今週中」が入ってくる）
+      // スキーマが守るのは形、コードが守るのは意味、という分担。
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "crop_advice",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              reply: { type: "string" },
+              actions: {
+                type: "array",
+                maxItems: 5,
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    // 語彙に無い作業は null。近いものを当てさせない
+                    work_type: { type: ["string", "null"] },
+                    when: { type: "string" },
+                    due_from: { type: ["string", "null"] },
+                    due_to: { type: ["string", "null"] },
+                    why: { type: "string" },
+                  },
+                  required: ["title", "work_type", "when", "due_from", "due_to", "why"],
+                  additionalProperties: false,
+                },
+              },
+              watch_points: { type: "array", maxItems: 4, items: { type: "string" } },
+              unknowns: { type: "array", maxItems: 4, items: { type: "string" } },
+            },
+            required: ["reply", "actions", "watch_points", "unknowns"],
+            additionalProperties: false,
+          },
+        },
+      },
     }),
   });
 
