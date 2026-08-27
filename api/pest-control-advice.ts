@@ -123,9 +123,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const system = [
     "あなたは農場の防除（農薬散布）作業のタイミングを助言するアシスタントです。",
     "渡された情報のみを根拠に、農薬散布に適した日・時間帯とその理由を日本語で簡潔に助言してください。",
-    // 利用者の問いは「次の散布はいつか」の一点。理由から書き始めると結論が埋もれる
-    "**1文目で結論だけを述べること**（例:「8月30日（日）以降がよさそうです。」）。",
-    "理由は2文目以降に書く。結論より先に前置き・状況説明を書かないこと。",
+    // 結論はプロンプトで頼むのではなくスキーマで分ける。自由文にすると前置きに埋もれる
+    "出力は指定のJSON構造に従うこと。headline に結論だけを短く入れ、理由は reason に分けて書く。",
+    "headline は日付を含む1文（例:「8月30日（日）以降がよさそうです」）。前置き・状況説明を入れない。",
+    "判断できない・当面どの日も適さない場合は、headline にその結論を書く（例:「今週は見送りが無難です」）。",
     "一般的な知識として、降水確率が高い日や散布直後に雨が予想される日は薬効が流れるため避けるべきであること、",
     "強風の日はドリフト（飛散）のリスクがあるため避けるべきであることを踏まえて判断してください。",
     "直近の実績降水が多い場合は、葉が濡れた状態だと薬液の付着が悪くなる点にも触れてください。",
@@ -194,6 +195,41 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ],
       temperature: 0.3,
       max_tokens: 600,
+      // 結論と理由をスキーマで分ける。プロンプトで「1文目に結論を」と頼むだけでは
+      // 前置きから書き始める応答が混ざり、そのまま画面に出ると結論が埋もれる。
+      // diagnose-image.ts / structure-voice.ts と同じ strict モード。
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "pest_control_advice",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              // 画面で最初に、大きく出す1行。日付を含む結論だけ
+              headline: { type: "string" },
+              // なぜそうなのか。headline に含めた内容は繰り返さない
+              reason: { type: "string" },
+              // 避けたほうがよい日と、その理由を短く。無ければ空配列
+              avoidDays: {
+                type: "array",
+                maxItems: 5,
+                items: {
+                  type: "object",
+                  properties: {
+                    date: { type: "string" },
+                    why: { type: "string" },
+                  },
+                  required: ["date", "why"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["headline", "reason", "avoidDays"],
+            additionalProperties: false,
+          },
+        },
+      },
     }),
   });
 
@@ -204,12 +240,29 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   const data = await r.json();
-  const advice = data.choices?.[0]?.message?.content?.trim();
-  if (!advice) return res.status(502).json({ error: "助言結果が空でした。" });
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) return res.status(502).json({ error: "助言結果が空でした。" });
+
+  let parsed: { headline?: string; reason?: string; avoidDays?: { date?: string; why?: string }[] };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return res.status(502).json({ error: "助言結果の解析に失敗しました。もう一度お試しください。" });
+  }
+  const headline = (parsed.headline ?? "").trim();
+  const reason = (parsed.reason ?? "").trim();
+  if (!headline) return res.status(502).json({ error: "助言結果が空でした。" });
+  const avoidDays = (parsed.avoidDays ?? [])
+    .map(d => ({ date: (d.date ?? "").trim(), why: (d.why ?? "").trim() }))
+    .filter(d => d.date && d.why);
 
   // 概算コスト算出（gpt-4o-mini: input $0.15 / output $0.60 per 1M tokens）
   const usage = data.usage ?? {};
   const costUsd = ((usage.prompt_tokens ?? 0) * 0.15 + (usage.completion_tokens ?? 0) * 0.60) / 1_000_000;
 
-  return res.status(200).json({ advice, warnings, usage, costUsd });
+  // advice は従来どおりの1本の文字列。ai_outputs への保存と、まだ構造化に対応していない
+  // 呼び出し元（Expo）のために残す。画面は headline / reason を分けて描く
+  const advice = [headline, reason].filter(Boolean).join("\n\n");
+
+  return res.status(200).json({ advice, headline, reason, avoidDays, warnings, usage, costUsd });
 }

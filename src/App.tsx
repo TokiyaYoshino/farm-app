@@ -481,6 +481,10 @@ export default function App() {
   const [showPestAdviceSheet, setShowPestAdviceSheet] = useState(false);
   // 天気の生データは答えの後ろに畳む（既定は閉じる）
   const [showPestForecast, setShowPestForecast] = useState(false);
+  // 結論・理由・避けたい日は API がスキーマで分けて返す（自由文を切っていない）
+  const [pestAdviceHeadline, setPestAdviceHeadline] = useState("");
+  const [pestAdviceReason, setPestAdviceReason]     = useState("");
+  const [pestAdviceAvoid, setPestAdviceAvoid]       = useState<{ date: string; why: string }[]>([]);
   const [pestAdviceForecast, setPestAdviceForecast] = useState("");
   const [pestAdviceResult, setPestAdviceResult]     = useState("");
   const [pestAdviceDate, setPestAdviceDate]         = useState("");
@@ -1789,6 +1793,9 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.advice) {
         setPestAdviceResult(d.advice);
+        setPestAdviceHeadline(d.headline ?? "");
+        setPestAdviceReason(d.reason ?? "");
+        setPestAdviceAvoid(Array.isArray(d.avoidDays) ? d.avoidDays : []);
         setPestAdviceDate(new Date().toISOString().slice(0, 10));
         void saveAiOutput("pest_advice", {
           inputSummary: forecast,
@@ -1823,7 +1830,10 @@ export default function App() {
       .limit(1);
     const saved = data?.[0];
     if (saved?.output_text) {
+      // ai_outputs には1本の文字列で入っている。保存の形は変えないので、
+      // 開き直したときは headline を空にして従来の表示に落とす
       setPestAdviceResult(saved.output_text);
+      setPestAdviceHeadline(""); setPestAdviceReason(""); setPestAdviceAvoid([]);
       setPestAdviceForecast(saved.input_summary ?? "");
       setPestAdviceDate(today);
       setPestAdviceLoading(false);
@@ -4817,8 +4827,30 @@ export default function App() {
 
           {pestAdviceResult && (
             <>
+              {/* 結論を大きく、理由を小さく。分けて描けるのは API が headline / reason を
+                  スキーマで分離して返すからで、自由文を目視で切っているわけではない */}
               <div style={{ ...S.wellBox, padding:16, marginBottom:10 }}>
-                <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{pestAdviceResult}</div>
+                {pestAdviceHeadline ? (
+                  <>
+                    <div style={{ fontSize:17, fontWeight:700, lineHeight:1.5, color:C.text }}>{pestAdviceHeadline}</div>
+                    {pestAdviceReason && (
+                      <div style={{ fontSize:13, lineHeight:1.8, color:C.textSub, marginTop:8, whiteSpace:"pre-wrap" as const }}>{pestAdviceReason}</div>
+                    )}
+                    {pestAdviceAvoid.length > 0 && (
+                      <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${C.hairline}` }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:5 }}>避けたい日</div>
+                        {pestAdviceAvoid.map((d, i) => (
+                          <div key={i} style={{ fontSize:12, color:C.textSub, lineHeight:1.7 }}>
+                            <b style={{ color:C.text }}>{d.date}</b> — {d.why}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // 古い保存（ai_outputs に文字列で入っているもの）を開いたとき用
+                  <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{pestAdviceResult}</div>
+                )}
               </div>
               {/* 安全上の注意は単独で置く。他の情報に埋めると読まれない */}
               <div style={{ fontSize:12, color:C.textSub, lineHeight:1.7, marginBottom:10 }}>
