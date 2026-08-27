@@ -479,6 +479,8 @@ export default function App() {
   // 天気×防除タイミング助言（1日1回。開くたびに生成すると ai_outputs に重複が溜まるため、
   // 当日ぶんが無いときだけ生成し、あれば保存済みの結果を読み込んで表示する）
   const [showPestAdviceSheet, setShowPestAdviceSheet] = useState(false);
+  // 天気の生データは答えの後ろに畳む（既定は閉じる）
+  const [showPestForecast, setShowPestForecast] = useState(false);
   const [pestAdviceForecast, setPestAdviceForecast] = useState("");
   const [pestAdviceResult, setPestAdviceResult]     = useState("");
   const [pestAdviceDate, setPestAdviceDate]         = useState("");
@@ -1419,6 +1421,25 @@ export default function App() {
       setPesticides(list => list.map(x => (x.id === p.id ? { ...x, registration_no: registrationNo } : x)));
     }
     setPRegs(m => ({ ...m, [p.id]: rows }));
+  };
+
+  /** 保存済みのラベル内容だけを読む（管理タブのパネルは開かない）。
+   *  防除助言のシートから「別画面へ行って実行してください」と指示せずに済ませるため。 */
+  const loadSavedRegistrations = async (p: Pesticide) => {
+    if (pRegs[p.id]) return;
+    setPRegLoading(p.id);
+    try {
+      const { data } = await supabase
+        .from("pesticide_registrations").select("*").eq("pesticide_id", p.id);
+      if (data && data.length > 0) {
+        setPRegs(m => ({ ...m, [p.id]: data as PesticideRegistration[] }));
+      } else {
+        // 保存が無いときは取得が要る。ここで取りに行くと重いので管理タブへ案内する
+        showToast("この農薬はまだラベルを読み込んでいません。管理タブの農薬から開いてください", "warn");
+      }
+    } finally {
+      setPRegLoading(null);
+    }
   };
 
   const openRegistrations = async (p: Pesticide) => {
@@ -4754,17 +4775,17 @@ export default function App() {
             <Wind size={17} strokeWidth={2} color={C.ink} />次の散布はいつ？
           </div>
 
-          {/* 「自分の記録を読んだうえでの助言」であることを利用者に伝える。
-              天気だけの助言は汎用の生成AIでもできるので、記録を見ていることが伝わらないと
-              この機能を使う理由が伝わらない（docs/decisions/20260823-pest-advice-history.md） */}
-          <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.7, marginBottom:12 }}>
-            直近7日の実績と今後7日の予報に加えて、<strong style={{ color:C.textSub }}>この農場の防除記録</strong>（前回の散布からの日数・同じ薬剤の繰り返し・昨年同時期）も踏まえて提案します。最終判断は現地の状況と製品ラベルに従ってください。
-          </div>
+          {/* 答えより先に材料を出さない。
+              以前はここに87字の説明文と14日ぶんの天気（約700字）が、**答えが出る前から**
+              並んでいた。利用者が知りたいのは「次の散布はいつか」であって、その計算に
+              使った材料の全量ではない。記録を読んでいることは、答え自身が
+              「あなたの記録では…」と言うので伝わる（事前の説明は要らなかった）。
 
-          {/* 農薬を選ぶと、その農薬の適用情報（作物・希釈倍数・使用時期・使用回数）も助言の材料に渡る */}
+              安全上の注意も、長い説明文の末尾に埋めると読まれない。答えの直下に
+              単独で置く（下部の注意書き）。 */}
           <div style={S.wellBox}>
             <div style={{ ...S.wrow, display:"block" }}>
-              <div style={S.lbl2}>使用予定の農薬（任意）</div>
+              <div style={S.lbl2}>使う予定の農薬（任意）</div>
               <select
                 style={S.fieldSelect}
                 value={pestAdvicePesticideId}
@@ -4775,17 +4796,18 @@ export default function App() {
               </select>
             </div>
             {pestAdvicePesticideId && !pRegs[pestAdvicePesticideId] && (
-              <div style={{ fontSize:11, color:C.textMuted, padding:"8px 10px 4px", lineHeight:1.6 }}>
-                この農薬の適用情報はまだ取得していません。管理タブの農薬一覧で「適用情報を見る」を一度実行すると、助言にも反映されます。
+              // 「管理タブへ行って◯◯を実行してください」と手順を指示しない。ここで済ませる
+              <div style={{ padding:"8px 10px 4px" }}>
+                <button
+                  onClick={() => { const p = pesticides.find(x => x.id === pestAdvicePesticideId); if (p) void loadSavedRegistrations(p); }}
+                  disabled={pRegLoading === pestAdvicePesticideId}
+                  style={{ ...btn("tertiary", "sm"), padding:0 }}
+                >
+                  {pRegLoading === pestAdvicePesticideId ? "ラベルを読み込み中…" : "ラベルの内容も反映する →"}
+                </button>
               </div>
             )}
           </div>
-
-          {pestAdviceForecast && (
-            <div style={{ fontSize:12, color:C.textMuted, whiteSpace:"pre-wrap" as const, marginBottom:16, lineHeight:1.7 }}>
-              {pestAdviceForecast}
-            </div>
-          )}
 
           {pestAdviceError && (
             <div style={{ fontSize:13, color:C.danger, background:C.dangerBg, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
@@ -4794,9 +4816,32 @@ export default function App() {
           )}
 
           {pestAdviceResult && (
-            <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
-              <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{pestAdviceResult}</div>
-            </div>
+            <>
+              <div style={{ ...S.wellBox, padding:16, marginBottom:10 }}>
+                <div style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-wrap" as const }}>{pestAdviceResult}</div>
+              </div>
+              {/* 安全上の注意は単独で置く。他の情報に埋めると読まれない */}
+              <div style={{ fontSize:12, color:C.textSub, lineHeight:1.7, marginBottom:10 }}>
+                最終判断は現地の状況と製品ラベルに従ってください。
+              </div>
+              {/* 材料は答えの後ろに畳む（Expo版 PestAdviceSheet と同じ形）。
+                  根拠を示すことと、根拠を答えより先に全量出すことは別 */}
+              {pestAdviceForecast && (
+                <>
+                  <button
+                    onClick={() => setShowPestForecast(v => !v)}
+                    style={{ ...btn("tertiary", "sm"), padding:0, marginBottom:8 }}
+                  >
+                    {showPestForecast ? "使った天気を閉じる" : "使った天気を見る（14日分）"}
+                  </button>
+                  {showPestForecast && (
+                    <div style={{ fontSize:12, color:C.textMuted, whiteSpace:"pre-wrap" as const, marginBottom:14, lineHeight:1.7, background:C.well, borderRadius:12, padding:"10px 12px" }}>
+                      {pestAdviceForecast}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
 
           {pestAdviceLoading && !pestAdviceResult && (
