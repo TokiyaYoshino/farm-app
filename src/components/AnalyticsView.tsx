@@ -201,6 +201,8 @@ export default function AnalyticsView({
   const [dailyWeather, setDailyWeather] = useState<DailyWeatherRow[]>([]);
   const [s5Field, setS5Field] = useState("all");
   const [s7Kind, setS7Kind] = useState<"all" | AiOutputRow["kind"]>("all");
+  // 履歴は既定で3行に切る。開いた1件だけ全文にする
+  const [openAiOutputId, setOpenAiOutputId] = useState<string | null>(null);
   const [showDeep, setShowDeep] = useState(false);
 
   const currentYear = new Date().getFullYear();
@@ -393,6 +395,11 @@ export default function AnalyticsView({
 
   // ── AI出力の履歴 ───────────────────────────────────────────────
   const s7Rows = aiOutputs.filter(o => s7Kind === "all" || o.kind === s7Kind).slice(0, 50);
+  /** 履歴に出す1行。
+   *
+   *  以前は最後に JSON.stringify(output_json) を返しており、**生のJSONが
+   *  そのまま画面に出ていた**（`{"advice":{"reply":"にんにくの農薬を…` のような塊）。
+   *  一覧は「いつ・何を聞いて・どうだったか」が分かればよく、中身の全文は要らない。 */
   const summarize = (o: AiOutputRow): string => {
     if (o.kind === "diagnosis" && o.output_json) {
       const j = o.output_json;
@@ -401,7 +408,17 @@ export default function AnalyticsView({
       return names || j.note || "—";
     }
     if (o.output_text) return o.output_text;
-    if (o.output_json) return JSON.stringify(o.output_json);
+    // JSON で保存されている種類（相談など）は、読める場所だけを拾う。
+    // 拾えなければ「—」にする。生のJSONは出さない
+    if (o.output_json) {
+      const j = o.output_json as unknown as Record<string, unknown>;
+      const advice = j.advice as { reply?: unknown } | undefined;
+      if (advice && typeof advice.reply === "string") return advice.reply;
+      if (typeof j.reply === "string") return j.reply;
+      if (typeof j.headline === "string") return j.headline;
+      if (typeof j.summary === "string") return j.summary;
+      return "—";
+    }
     return "—";
   };
 
@@ -671,9 +688,26 @@ export default function AnalyticsView({
                 </span>
                 {o.field && <span style={{ fontSize:12, color:C.textMuted }}>· {o.field}</span>}
               </div>
-              <div style={{ fontSize:13, color:C.textSub, lineHeight:1.7, whiteSpace:"pre-wrap" as const }}>
+              {/* 一覧なので3行で切る。全文が要るときだけ開く。
+                  日報も相談も本文は数百字あり、50件ぶん全文を流すと履歴が読めなくなる */}
+              <div
+                style={{
+                  fontSize:13, color:C.textSub, lineHeight:1.7, whiteSpace:"pre-wrap" as const,
+                  ...(openAiOutputId === o.id ? {} : {
+                    display:"-webkit-box", WebkitLineClamp:3, WebkitBoxOrient:"vertical" as const, overflow:"hidden",
+                  }),
+                }}
+              >
                 {summarize(o)}
               </div>
+              {summarize(o).length > 60 && (
+                <button
+                  onClick={() => setOpenAiOutputId(openAiOutputId === o.id ? null : o.id)}
+                  style={{ background:"none", border:"none", padding:0, marginTop:4, cursor:"pointer", color:C.ink, fontSize:12, fontWeight:600 }}
+                >
+                  {openAiOutputId === o.id ? "閉じる" : "全文を見る"}
+                </button>
+              )}
             </div>
           ))
         )}
