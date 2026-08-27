@@ -4872,9 +4872,10 @@ export default function App() {
             <Sprout size={17} strokeWidth={2} color={C.ink} />
             {adviseCropId != null ? cropName(adviseCropId) : ""}の相談
           </div>
-          <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.7, marginBottom:14 }}>
-            作物・作付け日・天気・この農場の記録をもとに答えます。<b style={{ color:C.textSub }}>作業の時期や順序は目安</b>で、公的な栽培基準ではありません。農薬を使うときは必ず製品ラベルを確認してください。
-          </div>
+          {/* 前置きを置かない。何をもとに答えたか・どこまでが目安かは、
+              回答ごとに limits として下に付く（同じことを先に言うと二重になる）。
+              防除助言の画面と同じ病気で、答える前に78字を読ませていた */}
+          <div style={{ marginBottom:14 }} />
 
           {/* やること — 記録との照合結果。
               「未実施」と「照合できません」を混ぜない。混ぜると

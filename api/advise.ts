@@ -212,7 +212,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     "",
     "出力は次のJSONのみ。前後に文章を付けない。",
     "{",
-    '  "reply": "利用者への返答（会話文。質問に直接答える。2〜5文）",',
+    // 前置きから書き始めると結論が埋もれる。利用者は答えを知りたくて聞いている
+    '  "reply": "利用者への返答（会話文。**1文目で結論を述べ**、理由は2文目以降。前置き・状況説明から始めない。2〜4文）",',
     '  "actions": [ { "title": "作業名", "work_type": "作業種別またはnull", "when": "いつ（例: 今週中 / 開花後10日ごろ）", "due_from": "YYYY-MM-DDまたはnull", "due_to": "YYYY-MM-DDまたはnull", "why": "理由（1〜2文）" } ],',
     '  "watch_points": ["今の時期に見ておくべき点（病害虫の兆候・気象リスクなど）"],',
     '  "unknowns": ["渡された情報では判断できないこと・確認が必要なこと"]',
