@@ -126,6 +126,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // 結論はプロンプトで頼むのではなくスキーマで分ける。自由文にすると前置きに埋もれる
     "出力は指定のJSON構造に従うこと。headline に結論だけを短く入れ、理由は reason に分けて書く。",
     "headline は日付を含む1文（例:「8月30日（日）以降がよさそうです」）。前置き・状況説明を入れない。",
+    "reason は2文以内・120字以内。headline に書いた結論を繰り返さない。",
+    // 実測で「降水確率98%で雨が予想され、薬効が流れる可能性が高いから」を3日ぶん
+    // ほぼ同文で並べていた。読む側には1行で足りる
+    "avoidDays は、同じ理由が続く日をまとめて1件にすること（date に「8/29〜8/31」のように範囲を書く）。",
+    "avoidDays[].why は20字以内。同じ理由を日ごとに書き分けない。",
     "判断できない・当面どの日も適さない場合は、headline にその結論を書く（例:「今週は見送りが無難です」）。",
     "一般的な知識として、降水確率が高い日や散布直後に雨が予想される日は薬効が流れるため避けるべきであること、",
     "強風の日はドリフト（飛散）のリスクがあるため避けるべきであることを踏まえて判断してください。",
@@ -194,7 +199,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         { role: "user", content: user },
       ],
       temperature: 0.3,
-      max_tokens: 600,
+      max_tokens: 500,
       // 結論と理由をスキーマで分ける。プロンプトで「1文目に結論を」と頼むだけでは
       // 前置きから書き始める応答が混ざり、そのまま画面に出ると結論が埋もれる。
       // diagnose-image.ts / structure-voice.ts と同じ strict モード。
@@ -252,9 +257,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const headline = (parsed.headline ?? "").trim();
   const reason = (parsed.reason ?? "").trim();
   if (!headline) return res.status(502).json({ error: "助言結果が空でした。" });
-  const avoidDays = (parsed.avoidDays ?? [])
-    .map(d => ({ date: (d.date ?? "").trim(), why: (d.why ?? "").trim() }))
-    .filter(d => d.date && d.why);
+  // 同じ理由の日をまとめる。プロンプトでも指示しているが、守られないと
+  // ほぼ同文が3行並び、そのぶん結論が下に押し出される（読まれない注意書きと同じ理屈）
+  const avoidGroups = new Map<string, string[]>();
+  for (const d of parsed.avoidDays ?? []) {
+    const date = (d.date ?? "").trim();
+    const why = (d.why ?? "").trim();
+    if (!date || !why) continue;
+    if (!avoidGroups.has(why)) avoidGroups.set(why, []);
+    const dates = avoidGroups.get(why)!;
+    if (!dates.includes(date)) dates.push(date);
+  }
+  const avoidDays = [...avoidGroups.entries()].map(([why, dates]) => ({ date: dates.join("・"), why }));
 
   // 概算コスト算出（gpt-4o-mini: input $0.15 / output $0.60 per 1M tokens）
   const usage = data.usage ?? {};
