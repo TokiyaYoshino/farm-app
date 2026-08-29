@@ -23,7 +23,7 @@ import AnalyticsView from "./components/AnalyticsView";
 import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-import { harvestQty, excludedHarvestCount } from "./lib/metrics";
+import { harvestQty, excludedHarvestCount, formatWorkCountsForPrompt } from "./lib/metrics";
 import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt, lastSpray } from "./lib/pesticideUsage";
 import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
@@ -476,7 +476,14 @@ export default function App() {
 
   // 記録検索チャット
   const [showSearchChatSheet, setShowSearchChatSheet] = useState(false);
-  const [searchChatMessages, setSearchChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  // assistant 行は結論（content）と根拠・注意を分けて持つ。api/search-chat.ts が
+  // スキーマで分けて返すので、自由文を目視で切っているわけではない
+  const [searchChatMessages, setSearchChatMessages] = useState<{
+    role: "user" | "assistant"; content: string;
+    evidence?: { date: string; detail: string }[];
+    notes?: string[];
+    answerable?: boolean;
+  }[]>([]);
   const [searchChatInput, setSearchChatInput]     = useState("");
   const [searchChatLoading, setSearchChatLoading] = useState(false);
   const [searchChatError, setSearchChatError]     = useState("");
@@ -1947,10 +1954,14 @@ export default function App() {
       parts.push(`担当:${userName(r.user_id)}`);
       return parts.join(" / ");
     });
-    // API側が records 20000文字までしか受け付けないため、農薬の登録上限ブロックを先に確保し、
-    // 残りの予算に収まるぶんだけ記録を新しい順に詰める（超過して 400 で弾かれるのを防ぐ）。
+    // API側が records 20000文字までしか受け付けないため、農薬の登録上限ブロックと
+    // 作業の集計を先に確保し、残りの予算に収まるぶんだけ記録を新しい順に詰める
+    // （超過して 400 で弾かれるのを防ぐ）。
     const limits = formatPesticideLimits(regs);
-    const budget = 19000 - limits.length;
+    // 「去年の防除は何回？」を LLM に数えさせると年を取り違えるので、先に数えて渡す。
+    // 農薬の使用回数（limits）と同じ扱い —— 数えるのはコード、言い換えるのが LLM
+    const counts = formatWorkCountsForPrompt(target);
+    const budget = 19000 - limits.length - counts.length;
     const kept: string[] = [];
     let used = 0;
     for (const line of lines) {
@@ -1958,7 +1969,7 @@ export default function App() {
       kept.push(line);
       used += line.length + 1;
     }
-    return { text: kept.join("\n") + limits, count: kept.length };
+    return { text: counts + "\n\n" + kept.join("\n") + limits, count: kept.length };
   };
 
   const sendSearchChatMessage = async () => {
@@ -1979,11 +1990,17 @@ export default function App() {
       const res = await fetch("/api/search-chat", {
         method: "POST",
         headers: apiHeaders(),
-        body: JSON.stringify({ question, records, recordCount: count }),
+        // today を渡さないと「去年」を西暦に読み替えられず、年を取り違える
+        body: JSON.stringify({ question, records, recordCount: count, today: new Date().toISOString().slice(0, 10) }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.answer) {
-        setSearchChatMessages(m => [...m, { role: "assistant", content: d.answer }]);
+        setSearchChatMessages(m => [...m, {
+          role: "assistant", content: d.answer,
+          evidence: Array.isArray(d.evidence) ? d.evidence : [],
+          notes: Array.isArray(d.notes) ? d.notes : [],
+          answerable: d.answerable !== false,
+        }]);
       } else {
         setSearchChatError(d.error || "検索に失敗しました。");
       }
@@ -5058,9 +5075,37 @@ export default function App() {
                   padding: "8px 12px",
                   fontSize: 13,
                   lineHeight: 1.7,
-                  whiteSpace: "pre-wrap" as const,
                 }}>
-                  {m.content}
+                  {/* 結論。API が1〜2文で返す（箇条書きは evidence に分かれている） */}
+                  <div style={m.role === "assistant"
+                    ? { fontSize:14, fontWeight:600, lineHeight:1.7 }
+                    : { whiteSpace:"pre-wrap" as const }}>
+                    {m.content}
+                  </div>
+                  {/* 根拠にした記録。3件までは畳まずに出す（結論の裏付けなので） */}
+                  {m.answerable && m.evidence && m.evidence.length > 0 && (
+                    <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${C.hairline}` }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4 }}>根拠にした記録</div>
+                      {m.evidence.slice(0, 3).map((e, j) => (
+                        <div key={j} style={{ fontSize:12, color:C.textSub, lineHeight:1.7 }}>
+                          <b style={{ color:C.text }}>{e.date}</b> — {e.detail}
+                        </div>
+                      ))}
+                      {m.evidence.length > 3 && (
+                        <Disclosure label="ほかの記録" count={m.evidence.length - 3}>
+                          {m.evidence.slice(3).map((e, j) => (
+                            <div key={j}><b style={{ color:C.text }}>{e.date}</b> — {e.detail}</div>
+                          ))}
+                        </Disclosure>
+                      )}
+                    </div>
+                  )}
+                  {/* 注意書きはサーバー固定文言。結論の隣に常時出すと結論が埋もれる */}
+                  {m.notes && m.notes.length > 0 && (
+                    <Disclosure label="注意" count={m.notes.length}>
+                      {m.notes.map((n, j) => <div key={j}>· {n}</div>)}
+                    </Disclosure>
+                  )}
                 </div>
               ))}
             </div>
