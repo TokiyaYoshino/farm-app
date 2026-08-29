@@ -35,6 +35,7 @@ import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } fro
 import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
 import RowMenu from "./ui/RowMenu";
+import Disclosure from "./ui/Disclosure";
 import CommentThread from "./ui/CommentThread";
 import { canUseAiFeature } from "./ui/aiFeatures";
 
@@ -483,8 +484,6 @@ export default function App() {
   // 天気×防除タイミング助言（1日1回。開くたびに生成すると ai_outputs に重複が溜まるため、
   // 当日ぶんが無いときだけ生成し、あれば保存済みの結果を読み込んで表示する）
   const [showPestAdviceSheet, setShowPestAdviceSheet] = useState(false);
-  // 天気の生データは答えの後ろに畳む（既定は閉じる）
-  const [showPestForecast, setShowPestForecast] = useState(false);
   // 結論・理由・避けたい日は API がスキーマで分けて返す（自由文を切っていない）
   const [pestAdviceHeadline, setPestAdviceHeadline] = useState("");
   const [pestAdviceReason, setPestAdviceReason]     = useState("");
@@ -4888,19 +4887,9 @@ export default function App() {
               {/* 材料は答えの後ろに畳む（Expo版 PestAdviceSheet と同じ形）。
                   根拠を示すことと、根拠を答えより先に全量出すことは別 */}
               {pestAdviceForecast && (
-                <>
-                  <button
-                    onClick={() => setShowPestForecast(v => !v)}
-                    style={{ ...btn("tertiary", "sm"), padding:0, marginBottom:8 }}
-                  >
-                    {showPestForecast ? "使った天気を閉じる" : "使った天気を見る（14日分）"}
-                  </button>
-                  {showPestForecast && (
-                    <div style={{ fontSize:12, color:C.textMuted, whiteSpace:"pre-wrap" as const, marginBottom:14, lineHeight:1.7, background:C.well, borderRadius:12, padding:"10px 12px" }}>
-                      {pestAdviceForecast}
-                    </div>
-                  )}
-                </>
+                <Disclosure label="使った天気（14日分）">
+                  <div style={{ whiteSpace:"pre-wrap" as const }}>{pestAdviceForecast}</div>
+                </Disclosure>
               )}
             </>
           )}
