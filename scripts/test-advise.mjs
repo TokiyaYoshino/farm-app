@@ -11,10 +11,30 @@
 //   5. 会話履歴を渡せ、打ち切ったら黙らずに限界に出すか
 // という**サーバー側で固定している契約**の部分。
 import { pathToFileURL } from "node:url";
+import { registerHooks } from "node:module";
+
+// api/*.ts は `./_auth.js` を import する（NodeNext 規約。実体は _auth.ts）。
+// Vercel のビルドは解決するが素の Node は解決できず ERR_MODULE_NOT_FOUND になるので、
+// 解決だけここで差し替える。api 側のソースは触らない。
+registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.endsWith("_auth.js")) return next(specifier.replace(/_auth\.js$/, "_auth.ts"), context);
+    return next(specifier, context);
+  },
+});
 
 const handler = (await import(pathToFileURL(new URL("../api/advise.ts", import.meta.url).pathname).href)).default;
 
 process.env.OPENAI_API_KEY = "test-key";
+// api/_auth.ts が要求する env。実際には下の fetch スタブが /auth/v1/user を横取りするので
+// 値そのものは使われないが、未設定だと 500（サーバー設定不足）で弾かれる
+process.env.VITE_SUPABASE_URL = "https://test.supabase.invalid";
+process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+
+// ── 認証のスタブ。requireUser は Supabase の /auth/v1/user に問い合わせるので、
+//    そこだけ横取りして通す（検証したいのは認証機構ではなく助言の契約） ──
+const isAuthUrl = url => String(url).includes("/auth/v1/user");
+const authOk = () => ({ ok: true, status: 200, json: async () => ({ id: "test-auth-id", email: "test@example.com" }), text: async () => "" });
 
 // ── OpenAI 応答のスタブ。送ったプロンプトを captured に残す ──
 let captured = null;
@@ -28,6 +48,7 @@ const DEFAULT_LLM_JSON = {
   unknowns: ["土壌の状態"],
 };
 globalThis.fetch = async (url, opts) => {
+  if (isAuthUrl(url)) return authOk();
   captured = JSON.parse(opts.body);
   return {
     ok: true,
@@ -48,7 +69,7 @@ const call = async body => {
       end: () => { out = { code, body: null }; },
     }),
   };
-  await handler({ method: "POST", body }, res);
+  await handler({ method: "POST", body, headers: { authorization: "Bearer test-token" } }, res);
   return out;
 };
 
@@ -83,6 +104,30 @@ t("forecast が長すぎれば 400",
   (await call({ crop: CROP, forecast: "あ".repeat(4001) })).code === 400);
 t("records が長すぎれば 400",
   (await call({ crop: CROP, records: "あ".repeat(8001) })).code === 400);
+
+console.log("\n認証（OpenAI キーの踏み台にさせない）:");
+const callRaw = async req => {
+  let out = null;
+  const res = { status: code => ({ json: b => { out = { code, body: b }; }, end: () => { out = { code, body: null }; } }) };
+  await handler(req, res);
+  return out;
+};
+t("Authorization が無ければ 401",
+  (await callRaw({ method: "POST", body: { crop: CROP }, headers: {} })).code === 401);
+t("Bearer 形式でなければ 401",
+  (await callRaw({ method: "POST", body: { crop: CROP }, headers: { authorization: "test-token" } })).code === 401);
+t("ユーザーとして解決できないトークンは 401（service_role キー等）", await (async () => {
+  const saved = globalThis.fetch;
+  // /auth/v1/user がユーザーを返さない＝id が無い場合
+  globalThis.fetch = async url => isAuthUrl(url)
+    ? { ok: true, status: 200, json: async () => ({}), text: async () => "" }
+    : saved(url);
+  const out = await call({ crop: CROP });
+  globalThis.fetch = saved;
+  return out.code === 401;
+})());
+t("認証は本文の検証より先に走る（未認証で 400 を返さない）",
+  (await callRaw({ method: "POST", body: {}, headers: {} })).code === 401);
 
 console.log("\n農薬の「記載なし」を制限なしに倒さない（最重要）:");
 let r = await call({ crop: { name: "ぶどう", famic_crop_name: "ぶどう", start_date: "2026-04-01" },
@@ -264,13 +309,18 @@ t("やることが無い返答も通る（雑談・質問への説明）",
 llmJson = null;
 
 console.log("\nLLM 出力の取り扱い:");
-t("JSON モードを要求している", captured.response_format?.type === "json_object");
+t("構造化出力（strict スキーマ）を要求している",
+  captured.response_format?.type === "json_schema"
+  && captured.response_format.json_schema?.strict === true
+  && captured.response_format.json_schema?.name === "crop_advice");
 r = await call({ crop: CROP });
 t("costUsd を算出する", typeof r.body.costUsd === "number" && r.body.costUsd > 0);
 const savedFetch = globalThis.fetch;
-globalThis.fetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: "これはJSONではない" } }] }), text: async () => "" });
+globalThis.fetch = async url => isAuthUrl(url) ? authOk()
+  : ({ ok: true, json: async () => ({ choices: [{ message: { content: "これはJSONではない" } }] }), text: async () => "" });
 t("JSON でない応答は 502（壊れた表示を出さない）", (await call({ crop: CROP })).code === 502);
-globalThis.fetch = async () => ({ ok: false, status: 429, text: async () => "rate limit", json: async () => ({}) });
+globalThis.fetch = async url => isAuthUrl(url) ? authOk()
+  : ({ ok: false, status: 429, text: async () => "rate limit", json: async () => ({}) });
 t("OpenAI エラーは 502", (await call({ crop: CROP })).code === 502);
 globalThis.fetch = savedFetch;
 llmJson = { reply: "   ", actions: [{ title: "追肥", work_type: "施肥" }] };
