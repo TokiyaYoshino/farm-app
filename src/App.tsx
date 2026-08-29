@@ -212,6 +212,10 @@ interface CropAdviceMessage {
   content: string;
   sources?: string[] | null;
   limits?: string[] | null;
+  // 生成はしていたが保存先が無く画面に出ていなかった
+  // （scripts/migrations/2026-08-29-crop-advice-watch-unknowns.sql で列を追加）
+  watch_points?: string[] | null;
+  unknowns?: string[] | null;
   registration_facts?: AdviseRegistrationFact[] | null;
   created_at: string;
 }
@@ -2141,6 +2145,7 @@ export default function App() {
         setAdviseMsgs(prev => [...prev, {
           id: `local-${prev.length}`, crop_id: crop.id, role: "assistant",
           content: result.advice.reply, sources: result.sources, limits: result.limits,
+          watch_points: result.advice.watchPoints, unknowns: result.advice.unknowns,
           registration_facts: result.registrationFacts, created_at: new Date().toISOString(),
         }]);
         setAdviseError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
@@ -2173,6 +2178,7 @@ export default function App() {
       ...base, role: "assistant", content: result.advice.reply,
       // 出典・限界・登録情報の原文は生成時のものを残す。あとで文言を変えても過去の発言は当時のまま
       sources: result.sources, limits: result.limits,
+      watch_points: result.advice.watchPoints, unknowns: result.advice.unknowns,
       registration_facts: result.registrationFacts,
       model: AI_MODEL, usage: result.usage ?? null, cost_usd: result.costUsd ?? null,
     }]).select().single();
@@ -4997,30 +5003,62 @@ export default function App() {
                   whiteSpace:"pre-wrap" as const,
                 }}>
                   {m.content}
-                  {/* 農薬の数値はAIの文章ではなく登録情報の原文を表に出す。
-                      文章に混ざった数字を信じさせないため */}
-                  {m.registration_facts && m.registration_facts.length > 0 && (
-                    <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:5 }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:C.textSub }}>登録のある農薬（登録情報の原文）</div>
-                      {m.registration_facts.map((f, i) => (
-                        <div key={i} style={{ background:C.card, borderRadius:10, padding:9 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                            <span style={{ fontSize:12, fontWeight:700, color:C.text, flex:1 }}>{f.productName}</span>
-                            <span style={{ fontSize:10, fontWeight:700, color:C.pesticide, background:C.pesticideBg, borderRadius:999, padding:"2px 8px" }}>{f.pestName}</span>
-                          </div>
-                          <div style={{ fontSize:11, color:C.textSub, lineHeight:1.7 }}>
-                            希釈 {f.dilution} / 使用時期 {f.usageTiming}<br />
-                            本剤の使用回数 {f.usageCount} / 総使用回数 {f.totalCount}
-                          </div>
-                        </div>
+                  {/* 見ておくこと。結論の一部なので畳まない（最大3件） */}
+                  {m.watch_points && m.watch_points.length > 0 && (
+                    <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${C.hairline}` }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4 }}>見ておくこと</div>
+                      {m.watch_points.slice(0, 3).map((w, i) => (
+                        <div key={i} style={{ fontSize:12, color:C.textSub, lineHeight:1.7 }}>· {w}</div>
                       ))}
                     </div>
                   )}
-                  {m.limits && m.limits.length > 0 && (
-                    <div style={{ marginTop:8, fontSize:10.5, color: m.role === "user" ? "rgba(255,255,255,.8)" : C.textMuted, lineHeight:1.7 }}>
-                      {m.limits.map((l, i) => <div key={i}>· {l}</div>)}
-                    </div>
-                  )}
+                  {/* 農薬の数値はAIの文章ではなく登録情報の原文を表に出す。
+                      文章に混ざった数字を信じさせないため。
+                      2件までは常時、それ以上は畳む（適用行が多い農薬だと吹き出しが埋まる） */}
+                  {m.registration_facts && m.registration_facts.length > 0 && (() => {
+                    const facts = m.registration_facts!;
+                    const factCard = (f: AdviseRegistrationFact, i: number) => (
+                      <div key={i} style={{ background:C.card, borderRadius:10, padding:9, marginTop:5 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+                          <span style={{ fontSize:12, fontWeight:700, color:C.text, flex:1 }}>{f.productName}</span>
+                          <span style={{ fontSize:10, fontWeight:700, color:C.pesticide, background:C.pesticideBg, borderRadius:999, padding:"2px 8px" }}>{f.pestName}</span>
+                        </div>
+                        <div style={{ fontSize:11, color:C.textSub, lineHeight:1.7 }}>
+                          希釈 {f.dilution} / 使用時期 {f.usageTiming}<br />
+                          本剤の使用回数 {f.usageCount} / 総使用回数 {f.totalCount}
+                        </div>
+                      </div>
+                    );
+                    return (
+                      <div style={{ marginTop:8 }}>
+                        <div style={{ fontSize:10, fontWeight:700, color:C.textSub }}>登録のある農薬（登録情報の原文）</div>
+                        {facts.slice(0, 2).map(factCard)}
+                        {facts.length > 2 && (
+                          <Disclosure label="ほかの登録内容" count={facts.length - 2}>
+                            {facts.slice(2).map(factCard)}
+                          </Disclosure>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {/* 出典・限界・判断できないことは「前提」としてまとめて畳む。
+                      実測では本文74字に対して limits だけで179字あり、しかも毎ターン
+                      ほぼ同じ固定文言なので、常時表示だと会話が進むほど注釈で埋まる */}
+                  {(() => {
+                    const premise = [
+                      ...(m.unknowns ?? []).map(x => ({ tag: "判断できないこと", text: x })),
+                      ...(m.limits ?? []).map(x => ({ tag: "", text: x })),
+                      ...(m.sources ?? []).map(x => ({ tag: "出典", text: x })),
+                    ];
+                    if (premise.length === 0) return null;
+                    return (
+                      <Disclosure label="この回答の前提" count={premise.length}>
+                        {premise.map((x, i) => (
+                          <div key={i}>· {x.tag ? `${x.tag}: ` : ""}{x.text}</div>
+                        ))}
+                      </Disclosure>
+                    );
+                  })()}
                 </div>
               </div>
             ))}

@@ -17,6 +17,8 @@
 | ai_outputs | id(uuid), organization_id(FK, not null), kind('diagnosis'/'pest_advice'/'daily_report'/'voice_structure'), report_id(→reports), target_date, field, crop_id(→crops), input_summary, output_json(jsonb), output_text, model, usage(jsonb), cost_usd, created_by(→users), created_at |
 | daily_weather | organization_id(FK, not null), date, temp_max, temp_min, rain_sum, wind_max, gdd(有効積算温度・基準10℃), fetched_at ／ PK(organization_id, date) |
 | pesticide_registrations | id(uuid), organization_id(FK, not null), pesticide_id(→pesticides), registration_no, product_name, crop_name, pest_name, dilution, usage_timing, usage_count, total_count, application, raw(jsonb), fetched_at |
+| crop_advice_messages | id(uuid), organization_id(FK, not null), crop_id(→crops), role('user'/'assistant'), content, sources(jsonb), limits(jsonb), watch_points(jsonb), unknowns(jsonb), registration_facts(jsonb), model, usage(jsonb), cost_usd, created_by(→users), created_at |
+| crop_advice_actions | id(uuid), organization_id(FK, not null), crop_id(→crops), message_id(→crop_advice_messages), title, work_type, due_from, due_to, when_text, why, sort_order, dismissed_at, created_by(→users), created_at |
 
 - RLS は全テーブルで有効（allow_all ポリシー、未変更）。テーブル変更時は RLS ポリシーも確認すること
 - マルチテナント化ステップ1〜2（`organizations`テーブル作成・`users.login_id`一意制約・各テーブルへの`organization_id`列追加とクライアントクエリ対応）は完了。SQLは`scripts/migrations/`参照。RLS実ポリシー化は未着手（`docs/adr-001-multitenancy-and-ai.md`参照）
@@ -24,3 +26,6 @@
 - `ai_outputs` / `daily_weather` / `pesticide_registrations` はレガシーの`org`文字列カラムを持たず`organization_id`のみ。SQLは`scripts/migrations/2026-07-31-ai-outputs.sql`
 - `pesticide_registrations`の希釈倍数・使用時期・使用回数は、FAMIC原文に範囲や自然文（「1000～1600倍」「収穫前日まで」「14回以内(土壌灌注は2回以内…)」）が含まれるため**数値に正規化せずtextのまま**保持する。誤った正規化は使用基準の誤判定に直結する（最終的に正しいのは製品ラベルの表示）
 - `crops.famic_crop_name`は上記`crop_name`との突き合わせ用の手動紐付け（「南高梅」→「うめ」）。文字列の自動マッチングは誤判定を生むため実装しない。未設定は「判定不可」として扱い、判定を出さずに設定を促す。集計・判定ロジックは`src/lib/pesticideUsage.ts`に集約（SQLは`scripts/migrations/2026-08-05-crops-famic-crop-name.sql`、方針は`docs/decisions/20260805-pesticide-precheck.md`）
+- `crop_advice_messages` / `crop_advice_actions` は作物ごとの相談スレッド（農業エージェント）。`ai_outputs` が AI 出力の監査ログ（kind ごとに1行）なのに対し、こちらは会話の順序と作付けへの紐付けを持つ。SQLは`scripts/migrations/2026-08-10-crop-advisor.sql`、仕様は`docs/spec-crop-advice-agent.md`
+- `crop_advice_messages` の `sources` / `limits` / `watch_points` / `unknowns` / `registration_facts` は assistant 発言のみ。いずれも**生成時のものをそのまま残す**（あとで文言を変えても過去の発言は当時のまま）。`watch_points` / `unknowns` は`scripts/migrations/2026-08-29-crop-advice-watch-unknowns.sql`で追加したため既存行は null。画面は null 安全に描くこと
+- `crop_advice_actions` に実施済みフラグは**置かない**。作業記録は後から追加・修正されるため、保存すると実態とずれる。照合は毎回`src/lib/adviceMatch.ts`で計算する

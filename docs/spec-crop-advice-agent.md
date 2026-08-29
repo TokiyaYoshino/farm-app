@@ -53,6 +53,7 @@
 | `role` | `user` / `assistant` |
 | `content` | 発言本文 |
 | `sources` / `limits` | assistant発言のみ。サーバーが固定文言で返した出典・限界 |
+| `watch_points` / `unknowns` | assistant発言のみ。「今の時期に見ておくべき点」と「渡された情報では判断できないこと」。生成はしていたが保存先が無く画面に出ていなかったため 2026-08-29 に列を追加した（既存行は null） |
 | `registration_facts` | FAMIC登録適用部の原文（LLMには生成させず、この列に保存して画面表示） |
 | `model` / `usage` / `cost_usd` | 生成に使ったモデル・トークン使用量・コスト |
 

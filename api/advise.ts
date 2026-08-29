@@ -213,7 +213,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // 形はスキーマ（response_format）が保証するので、ここでは各項目の中身だけを指示する
     "各項目の中身:",
     // 前置きから書き始めると結論が埋もれる。利用者は答えを知りたくて聞いている
-    "- reply: 利用者への返答（会話文）。**1文目で結論を述べ**、理由は2文目以降。前置き・状況説明から始めない。2〜4文。",
+    "- reply: 利用者への返答（会話文）。**1文目で結論を述べ**、理由は2文目以降。前置き・状況説明から始めない。2〜3文。",
     "- actions[].title: 作業名 / when: いつ（例: 今週中 / 開花後10日ごろ） / why: 理由（1〜2文）",
     "- watch_points: 今の時期に見ておくべき点（病害虫の兆候・気象リスクなど）",
     "- unknowns: 渡された情報では判断できないこと・確認が必要なこと",
@@ -231,7 +231,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     `- due_from / due_to は「いつ」を日付にしたもの。今日は ${day}。曖昧で日付にできなければ null にし、when に言い回しを残すこと。`,
     "- 期限を勝手に厳しくしないこと。「今週中」なら due_to はその週末。時期が不明なら null。",
     "",
-    "watch_points と unknowns は各0〜4件。全体で700字程度に収めること。",
+    "watch_points と unknowns は各0〜3件、1件30字以内。全体で500字程度に収めること。",
   ].filter(Boolean).join("\n");
 
   const userParts: string[] = [
