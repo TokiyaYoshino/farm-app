@@ -9,6 +9,28 @@
 import type { ApiRequest, ApiResponse } from "./types";
 import { requireUser, denied } from "./_auth.js";
 
+/** 画像が実在して画像として読めるかを確かめる。
+ *  HEAD を許さないストレージがあるので、失敗したら1バイトだけ GET して確かめる。
+ *  取得できないこと自体は異常ではない（記録が古い・写真を消した）ので、
+ *  例外にせず理由を返してハンドラ側で文言を分ける。 */
+async function fetchImageStatus(url: string): Promise<{ ok: true } | { ok: false; reason: "unreachable" | "not-image" }> {
+  const isImage = (ct: string | null) => !!ct && /^image\//i.test(ct.split(";")[0].trim());
+  try {
+    const head = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5000) });
+    if (head.ok) return isImage(head.headers.get("content-type")) ? { ok: true } : { ok: false, reason: "not-image" };
+    if (head.status !== 405 && head.status !== 501) return { ok: false, reason: "unreachable" };
+  } catch {
+    // HEAD が通らない環境がある。GET で確かめ直す
+  }
+  try {
+    const get = await fetch(url, { headers: { Range: "bytes=0-0" }, signal: AbortSignal.timeout(5000) });
+    if (!get.ok) return { ok: false, reason: "unreachable" };
+    return isImage(get.headers.get("content-type")) ? { ok: true } : { ok: false, reason: "not-image" };
+  } catch {
+    return { ok: false, reason: "unreachable" };
+  }
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
@@ -44,6 +66,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     "- 写真だけでは判断できない場合は inconclusive を true にすること。",
     "- 注意書き（JA・専門家への相談、農薬登録の確認）は画面側で固定表示するため、生成しないこと。",
   ].join("\n");
+
+  // 写真が取得できるかを先に確かめる。
+  //
+  // 取得できない URL を渡すと OpenAI は画像を読めないまま inconclusive:true /
+  // possibilities:[] を返し、画面には「写真だけでは判断が難しいとのことです」とだけ出る。
+  // 「写真が壊れている」と「写真では判断できない」は利用者にとって別物で、前者は
+  // 撮り直しではなくアップロードのやり直しが要る。しかも vision の呼び出しは
+  // 1回 $0.0057 と他の機能の10倍以上かかるので、読めない写真での無駄打ちは避ける。
+  const reach = await fetchImageStatus(imageUrl);
+  if (!reach.ok) {
+    return res.status(400).json({
+      error: reach.reason === "not-image"
+        ? "この写真を読み取れませんでした。別の写真でお試しください。"
+        : "写真を取得できませんでした。アップロードし直してからお試しください。",
+    });
+  }
 
   const userText = cropName
     ? `この写真は「${cropName}」の作業記録に添付されたものです。病害虫の兆候がないか診断してください。`
@@ -115,6 +153,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     diagnosis = JSON.parse(content);
   } catch {
     return res.status(502).json({ error: "診断結果の解析に失敗しました。" });
+  }
+
+  // 候補が1件も出ないと、画面は「写真だけでは判断が難しいとのことです」の1文だけになり、
+  // 次に何をすればよいか分からない。実データで確認したケースでは、写真が圃場の地面と
+  // 雑草（作業手袋が写っている）で、候補が出ないこと自体は正しい判断だった。
+  // それでも利用者に返すものが1文では足りないので、note が空のときだけサーバー側で補う
+  // （LLM には書かせない。書かせると毎回違う言い回しになる）
+  const d = diagnosis as { inconclusive?: boolean; possibilities?: unknown[]; note?: string };
+  if ((!Array.isArray(d.possibilities) || d.possibilities.length === 0) && !d.note?.trim()) {
+    d.note = "症状の出ている葉や実に寄って、明るい場所でもう一度撮ると絞り込めることがあります。";
   }
 
   // 概算コスト算出（gpt-4o-mini: input $0.15 / output $0.60 per 1M tokens。画像分のトークンも含む）
