@@ -5034,7 +5034,7 @@ export default function App() {
                         <div style={{ fontSize:10, fontWeight:700, color:C.textSub }}>登録のある農薬（登録情報の原文）</div>
                         {facts.slice(0, 2).map(factCard)}
                         {facts.length > 2 && (
-                          <Disclosure label="ほかの登録内容" count={facts.length - 2}>
+                          <Disclosure label="ほかの登録内容" count={facts.length - 2} on="well">
                             {facts.slice(2).map(factCard)}
                           </Disclosure>
                         )}
@@ -5052,7 +5052,7 @@ export default function App() {
                     ];
                     if (premise.length === 0) return null;
                     return (
-                      <Disclosure label="この回答の前提" count={premise.length}>
+                      <Disclosure label="この回答の前提" count={premise.length} on="well">
                         {premise.map((x, i) => (
                           <div key={i}>· {x.tag ? `${x.tag}: ` : ""}{x.text}</div>
                         ))}
@@ -5130,7 +5130,7 @@ export default function App() {
                         </div>
                       ))}
                       {m.evidence.length > 3 && (
-                        <Disclosure label="ほかの記録" count={m.evidence.length - 3}>
+                        <Disclosure label="ほかの記録" count={m.evidence.length - 3} on="well">
                           {m.evidence.slice(3).map((e, j) => (
                             <div key={j}><b style={{ color:C.text }}>{e.date}</b> — {e.detail}</div>
                           ))}
@@ -5140,7 +5140,7 @@ export default function App() {
                   )}
                   {/* 注意書きはサーバー固定文言。結論の隣に常時出すと結論が埋もれる */}
                   {m.notes && m.notes.length > 0 && (
-                    <Disclosure label="注意" count={m.notes.length}>
+                    <Disclosure label="注意" count={m.notes.length} on="well">
                       {m.notes.map((n, j) => <div key={j}>· {n}</div>)}
                     </Disclosure>
                   )}

@@ -64,7 +64,7 @@ function Notes({ items }: { items: string[] }) {
         </Text>
       </Pressable>
       {open && (
-        <View style={{ marginTop: 6, backgroundColor: C.well, borderRadius: RADIUS.well, padding: 10 }}>
+        <View style={{ marginTop: 6, backgroundColor: C.card, borderRadius: RADIUS.well, padding: 10 }}>
           {items.map((n, i) => (
             <Text key={i} style={{ fontSize: 12, lineHeight: 19, color: C.textMuted }}>· {n}</Text>
           ))}

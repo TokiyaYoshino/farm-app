@@ -22,10 +22,16 @@ interface Props {
   label: string;
   /** 件数。渡すとラベルに「（n件）」が付く */
   count?: number;
+  /**
+   * この部品が乗っている面。開いた中身の背景を1段ずらすために要る。
+   * トークンの原則が「入れ子＝白→灰→白」なので、灰(well)の吹き出しの中で
+   * また灰を敷くと階層が消えて、ただ文章が伸びたようにしか見えない。
+   */
+  on?: "bg" | "well";
   children: ReactNode;
 }
 
-export default function Disclosure({ label, count, children }: Props) {
+export default function Disclosure({ label, count, on = "bg", children }: Props) {
   const [open, setOpen] = useState(false);
   if (count === 0) return null;
   return (
@@ -39,7 +45,7 @@ export default function Disclosure({ label, count, children }: Props) {
       </button>
       {open && (
         <div style={{
-          marginTop: 6, background: C.well, borderRadius: RADIUS.well,
+          marginTop: 6, background: on === "well" ? C.card : C.well, borderRadius: RADIUS.well,
           padding: "10px 12px", fontSize: 12, lineHeight: 1.7, color: C.textMuted,
         }}>
           {children}
