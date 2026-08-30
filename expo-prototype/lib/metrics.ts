@@ -57,3 +57,47 @@ export function pctDiff(current: number, previous: number): number | null {
   if (previous <= 0) return null;
   return Math.round(((current - previous) / previous) * 100);
 }
+
+// ─── 年×作業種別の件数（AIに数えさせないための事前集計）─────────────
+//
+// api/search-chat.ts に渡す材料。「去年の防除は何回した？」を LLM に数えさせると
+// 年を取り違える（実測: 2026年の防除3件を「2025年に」と回答した）。
+// 農薬の使用回数は formatPesticideUsageForPrompt が事前計算して渡しており、
+// そちらは正しく答えられていたので、作業回数も同じく数えてから渡す。
+//
+// 集計は「数えるのはコード、言い換えるのが LLM」という分担のための境界であって、
+// 画面表示には使わない（画面は AnalyticsView が別途集計している）。
+
+export interface CountReport {
+  date: string;
+  work_type: string;
+}
+
+/** 年（降順）× 作業種別（件数降順）の件数表。プロンプトに貼れる形で返す。 */
+export function formatWorkCountsForPrompt(reports: CountReport[]): string {
+  const byYear = new Map<string, Map<string, number>>();
+  for (const r of reports) {
+    const year = (r.date ?? "").slice(0, 4);
+    const work = (r.work_type ?? "").trim();
+    if (!/^\d{4}$/.test(year) || !work) continue;
+    if (!byYear.has(year)) byYear.set(year, new Map());
+    const m = byYear.get(year)!;
+    m.set(work, (m.get(work) ?? 0) + 1);
+  }
+  if (byYear.size === 0) return "";
+
+  const lines = [...byYear.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([year, m]) => {
+      const parts = [...m.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([work, n]) => `${work}${n}回`);
+      return `${year}年: ${parts.join(" / ")}`;
+    });
+
+  return [
+    "",
+    "## 作業の集計（下の作業記録を年ごとに数えたもの・この数字が正）",
+    ...lines,
+  ].join("\n");
+}

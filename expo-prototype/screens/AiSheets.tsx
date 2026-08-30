@@ -48,6 +48,33 @@ function ResultBox({ text }: { text: string }) {
   );
 }
 
+// 注意書きの折りたたみ（Web版 src/ui/Disclosure.tsx と同じ方針）。
+// 結論は常時・前提は畳む。消すのではなく分ける —— どこまでが公的な情報で
+// どこからが AI の一般知識かを利用者が区別できなくなるため、注意書き自体は必ず付ける
+// （docs/decisions/20260829-ai-output-structure.md）
+function Notes({ items }: { items: string[] }) {
+  const [open, setOpen] = useState(false);
+  if (items.length === 0) return null;
+  return (
+    <View style={{ marginTop: 8 }}>
+      <Pressable onPress={() => setOpen(v => !v)} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+        <Feather name={open ? "chevron-down" : "chevron-right"} size={13} color={C.textMuted} />
+        <Text style={{ fontSize: 12, fontWeight: "700", color: C.textMuted }}>
+          {open ? "注意を閉じる" : `注意（${items.length}件）を見る`}
+        </Text>
+      </Pressable>
+      {open && (
+        <View style={{ marginTop: 6, backgroundColor: C.well, borderRadius: RADIUS.well, padding: 10 }}>
+          {items.map((n, i) => (
+            <Text key={i} style={{ fontSize: 12, lineHeight: 19, color: C.textMuted }}>· {n}</Text>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+
 function ErrorText({ msg }: { msg: string }) {
   return msg ? <Text style={{ color: C.danger, fontSize: 13, marginBottom: 12 }}>{msg}</Text> : null;
 }
@@ -114,7 +141,14 @@ export function DailyReportSheet({ open, onClose }: { open: boolean; onClose: ()
 // ── ② 記録検索チャット ──
 export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { reports, crops, pesticides, cropName, userName, prefetchAllRegistrations } = useStore();
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  // assistant 行は結論（content）と根拠・注意を分けて持つ。api/search-chat.ts が
+  // スキーマで分けて返すので、自由文を目視で切っているわけではない（Web版と同一）
+  const [messages, setMessages] = useState<{
+    role: "user" | "assistant"; content: string;
+    evidence?: { date: string; detail: string }[];
+    notes?: string[];
+    answerable?: boolean;
+  }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -139,7 +173,11 @@ export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () 
       return;
     }
     const res = await searchChatApi(question, records, count);
-    if (res.ok) setMessages(m => [...m, { role: "assistant", content: res.data.answer }]);
+    if (res.ok) setMessages(m => [...m, {
+      role: "assistant", content: res.data.answer,
+      evidence: res.data.evidence ?? [], notes: res.data.notes ?? [],
+      answerable: res.data.answerable !== false,
+    }]);
     else setError(res.error);
     setLoading(false);
   };
@@ -162,7 +200,24 @@ export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () 
                 borderRadius: 12,
                 backgroundColor: m.role === "user" ? C.ink : C.well,
               }}>
-                <Text style={{ fontSize: 13, lineHeight: 20, color: m.role === "user" ? "#fff" : C.text }}>{m.content}</Text>
+                <Text style={{
+                  fontSize: m.role === "assistant" ? 14 : 13, lineHeight: 20,
+                  fontWeight: m.role === "assistant" ? "600" : "400",
+                  color: m.role === "user" ? "#fff" : C.text,
+                }}>{m.content}</Text>
+                {/* 根拠にした記録。3件までは畳まずに出す（結論の裏付けなので） */}
+                {m.answerable && m.evidence && m.evidence.length > 0 && (
+                  <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: C.hairline }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: C.textMuted, marginBottom: 4 }}>根拠にした記録</Text>
+                    {m.evidence.slice(0, 3).map((e, j) => (
+                      <Text key={j} style={{ fontSize: 12, color: C.textSub, lineHeight: 19 }}>
+                        <Text style={{ fontWeight: "700", color: C.text }}>{e.date}</Text> — {e.detail}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+                {/* 注意書きはサーバー固定文言。結論の隣に常時出すと結論が埋もれる */}
+                {m.notes && m.notes.length > 0 && <Notes items={m.notes} />}
               </View>
             </View>
           ))}

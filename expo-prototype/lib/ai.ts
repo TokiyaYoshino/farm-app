@@ -4,6 +4,7 @@
 import { supabase } from "./supabase";
 import { wmoToLabel } from "./weather";
 import type { Report, Pesticide } from "./types";
+import { formatWorkCountsForPrompt } from "./metrics";
 
 // Web版本番（Vercel）。api/ ディレクトリのサーバーレス関数がここに載っている
 export const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://kishu-farm.vercel.app";
@@ -123,9 +124,15 @@ export function formatRecordsForChat(reports: Report[], h: FormatHelpers, limits
     parts.push(`担当:${h.userName(r.user_id)}`);
     return parts.join(" / ");
   });
-  // API側が records 20000文字までしか受け付けないため、農薬の登録上限ブロックを先に確保し、
-  // 残りの予算に収まるぶんだけ記録を新しい順に詰める（Web版 formatRecordsForChat と同一）
-  const budget = 19000 - limitsBlock.length;
+  // API側が records 20000文字までしか受け付けないため、農薬の登録上限ブロックと
+  // 作業の集計を先に確保し、残りの予算に収まるぶんだけ記録を新しい順に詰める
+  // （Web版 formatRecordsForChat と同一）
+  //
+  // 「去年の防除は何回？」を LLM に数えさせると年を取り違えるため、先に数えて渡す。
+  // 農薬の使用回数（limitsBlock）と同じ扱い —— 数えるのはコード、言い換えるのが LLM
+  // （docs/decisions/20260829-ai-output-structure.md）
+  const countsBlock = formatWorkCountsForPrompt(target);
+  const budget = 19000 - limitsBlock.length - countsBlock.length;
   const out: string[] = [];
   let total = 0;
   for (const line of lines) {
@@ -133,7 +140,7 @@ export function formatRecordsForChat(reports: Report[], h: FormatHelpers, limits
     out.push(line);
     total += line.length + 1;
   }
-  return { text: out.join("\n") + limitsBlock, count: out.length };
+  return { text: countsBlock + "\n\n" + out.join("\n") + limitsBlock, count: out.length };
 }
 
 // ── 防除助言用の天気予報テキスト（Web版 fetchPestControlForecast と同一） ──
@@ -202,8 +209,18 @@ async function callApi<T>(path: string, body: unknown): Promise<{ ok: true; data
 export const generateReportApi = (records: string, date: string) =>
   callApi<{ report: string; usage?: unknown; costUsd?: number }>("/api/generate-report", { records, date });
 
+// today を渡さないと「去年」を西暦に読み替えられず、年を取り違える（api/search-chat.ts）。
+// evidence / notes は api がスキーマで分けて返すもので、自由文を切っているわけではない
 export const searchChatApi = (question: string, records: string, recordCount: number) =>
-  callApi<{ answer: string }>("/api/search-chat", { question, records, recordCount });
+  callApi<{
+    answer: string;
+    answerable?: boolean;
+    evidence?: { date: string; detail: string }[];
+    notes?: string[];
+  }>("/api/search-chat", {
+    question, records, recordCount,
+    today: new Date().toISOString().slice(0, 10),
+  });
 
 // sprayHistory はその農場自身の防除記録（lib/pesticideUsage.ts の formatSprayHistoryForPrompt の出力）。
 // 天気だけの助言は汎用の生成AIでもできるため、ここを渡すことが本機能の存在理由になる。
