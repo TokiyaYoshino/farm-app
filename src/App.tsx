@@ -3032,8 +3032,9 @@ export default function App() {
                 )}
               </div>
 
-              {/* フィルタチップ */}
-              <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:6, marginBottom:4 }}>
+              {/* フィルタチップ。横スクロールにすると375px幅で4つ目の「担当」が画面外に
+                  切れて存在に気づけなかったため、折り返す（ボタン行と同じ直し方）。 */}
+              <div style={{ display:"flex", flexWrap:"wrap" as const, gap:8, paddingBottom:6, marginBottom:4 }}>
                 <select value={filterCrop} onChange={e => setFilterCrop(Number(e.target.value))} style={chipSelect(!!filterCrop)}>
                   <option value={0}>作物：すべて</option>
                   {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -3096,72 +3097,78 @@ export default function App() {
               )}
 
               {/* 結果 */}
+              {/* 結果：1枚のカードに hairline 区切りの行を積む（CLAUDE.md のレイアウト規則）。
+                  以前は1件＝1枚のソフトカードで、区切り線・原寸写真・ボタン2つを各カードが持ち、
+                  33件で7.2画面ぶんのスクロールになっていた。行タップ＝詳細、コピーと削除は ⋮ に集約。
+                  写真診断だけはラベル付きのまま残す（置き直したばかりの導線を畳むと埋没するため）。
+                  → docs/decisions/20260902-report-list-rows.md */}
               {filteredReports.length === 0 ? (
                 <div style={{ padding:"32px 16px", textAlign:"center" as const, color:C.textMuted, fontSize:13 }}>
                   {reportFilterActive ? "条件に一致する記録がありません" : "まだ作業報告がありません"}
                 </div>
-              ) : filteredReports.map(r => {
-                const wc = r.work_type ? workTypeColor(r.work_type) : null;
-                return (
-                <div key={r.id} style={S.card}>
-                  <div style={S.row}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0, flex:1 }}>
-                      <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(r.crop_id), flexShrink:0 }} />
-                      <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{cropName(r.crop_id)}</span>
-                      {r.field && <span style={{ fontSize:12, color:C.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>· {r.field}</span>}
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                      {wc && <span style={{ fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{r.work_type}</span>}
-                      {commentCountOf("report", r.id) > 0 && (
-                        <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.ink, background:C.inkSoft, borderRadius:999, padding:"3px 8px" }}>
-                          <MessageSquare size={11} strokeWidth={2} />{commentCountOf("report", r.id)}
-                        </span>
-                      )}
-                      <span style={{ fontSize:11, color:C.textMuted }}>{r.date}</span>
-                      {(isAdmin || r.user_id === currentUser?.id) && (
-                        <RowMenu menuKey={`lr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
-                          items={[{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteReport(r.id) }]} />
-                      )}
-                    </div>
-                  </div>
-                  <div style={S.divider} />
-                  <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>
-                    {[
+              ) : (
+                <div style={{ background:C.card, borderRadius:RADIUS.card, boxShadow:SHADOW.card, padding:"0 16px", marginBottom:8 }}>
+                  {filteredReports.map((r, i) => {
+                    const wc = r.work_type ? workTypeColor(r.work_type) : null;
+                    const canDelete = isAdmin || r.user_id === currentUser?.id;
+                    const meta = [
                       r.quantity ? `${r.quantity}kg` : "",
                       (r.work_start && r.work_end) ? `${r.work_start}〜${r.work_end}` : r.work_time ? `${r.work_time}h` : "",
                       r.pesticide_id ? (() => { const ps = pesticides.find(p => p.id === r.pesticide_id); return ps ? ps.name : ""; })() : "",
                       userName(r.user_id),
                       r.weather ? `${r.weather}${r.temp ? ` ${r.temp}°C` : ""}` : "",
-                    ].filter(Boolean).join("  ·  ")}
-                  </div>
-                  {r.note && (
-                    <div style={{ fontSize:12, color:C.textSub, marginTop:8, borderLeft:`2px solid ${C.border}`, paddingLeft:10 }}>
-                      {r.note}
-                    </div>
-                  )}
-                  {r.image_url && (
-                    <>
-                      <img src={r.image_url} alt="作業写真" style={{ width:"100%", borderRadius:14, marginTop:10, maxHeight:220, objectFit:"cover", display:"block" }} />
-                      {/* 診断は写真の隣に置く。「この葉、なんだろう」と思う瞬間は
-                          写真を見ている瞬間であって、フィルタ行を探している瞬間ではない。
-                          詳細シートにも同じ導線があるが、一覧で写真を見て気づく経路のほうが多い */}
-                      {canUseAiFeature("pestDiagnosis") && (
-                        <button
-                          onClick={() => { setSelectedReport(r); diagnoseImage(r); }}
-                          style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
-                        >
-                          <FlaskConical size={12} strokeWidth={2} />この写真で病害虫を調べる
-                        </button>
+                    ].filter(Boolean).join("  ·  ");
+                    return (
+                    <div
+                      key={r.id}
+                      onClick={() => setSelectedReport(r)}
+                      style={{ padding:"13px 0", borderBottom: i === filteredReports.length - 1 ? "none" : `1px solid ${C.hairline}`, cursor:"pointer" }}
+                    >
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0, flex:1 }}>
+                          <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(r.crop_id), flexShrink:0 }} />
+                          <span style={{ fontWeight:700, fontSize:14, color:C.text, whiteSpace:"nowrap" as const }}>{cropName(r.crop_id)}</span>
+                          {r.field && <span style={{ fontSize:12, color:C.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>· {r.field}</span>}
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                          {wc && <span style={{ fontSize:11, fontWeight:700, color:wc.fg, background:wc.bg, borderRadius:999, padding:"3px 9px" }}>{r.work_type}</span>}
+                          {commentCountOf("report", r.id) > 0 && (
+                            <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600, color:C.ink, background:C.inkSoft, borderRadius:999, padding:"3px 8px" }}>
+                              <MessageSquare size={11} strokeWidth={2} />{commentCountOf("report", r.id)}
+                            </span>
+                          )}
+                          <span style={{ fontSize:11, color:C.textMuted, whiteSpace:"nowrap" as const }}>{r.date}</span>
+                          <RowMenu menuKey={`lr${r.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
+                            items={[
+                              { label:"コピーして作成", icon:<Copy size={13} strokeWidth={2} />, onClick:() => handleCopyReport(r) },
+                              ...(canDelete ? [{ label:"削除", icon:<Trash2 size={13} strokeWidth={2} />, danger:true, onClick:() => deleteReport(r.id) }] : []),
+                            ]} />
+                        </div>
+                      </div>
+                      {meta && <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{meta}</div>}
+                      {r.note && (
+                        <div style={{ fontSize:12, color:C.textSub, marginTop:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+                          {r.note}
+                        </div>
                       )}
-                    </>
-                  )}
-                  <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                    <button onClick={() => setSelectedReport(r)} style={{ ...btn("secondary", "sm"), flex:1 }}>詳細を見る</button>
-                    <button onClick={() => handleCopyReport(r)} style={{ ...btn("soft", "sm"), flex:1 }}><Copy size={12} strokeWidth={2} />コピーして作成</button>
-                  </div>
+                      {r.image_url && (
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:8 }}>
+                          <img src={r.image_url} alt="作業写真" style={{ width:40, height:40, borderRadius:10, objectFit:"cover", flexShrink:0, display:"block" }} />
+                          {canUseAiFeature("pestDiagnosis") && (
+                            <button
+                              onClick={e => { e.stopPropagation(); setSelectedReport(r); diagnoseImage(r); }}
+                              style={{ ...btn("tertiary", "sm"), padding:"6px 10px", minHeight:32 }}
+                            >
+                              <FlaskConical size={12} strokeWidth={2} />この写真で病害虫を調べる
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })}
                 </div>
-                );
-              })}
+              )}
             </>
           )}
         </div>
