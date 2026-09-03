@@ -5,21 +5,72 @@
 背景: `docs/multitenancy-progress.md` の残作業。現在は全テーブル `allow_all` のため、
 anonキーを知っていれば他組織のデータを直接読み書きできる状態。公開前に必ず塞ぐ。
 
+**この手順は kishu/asuka の分離までは行わない。** 匿名で素通しになっている穴を先に塞ぐ判断で、
+組織の振り分け（`organization_id` の振り直し）は次段の別タスク
+（`docs/decisions/20260903-rls-before-org-split.md`）。適用しても**アプリの見え方は変わらない**
+（全員の JWT と全行の `organization_id` が同一値のため、判定が全員 true になる）。
+
 ## 全体の流れ（所要 30〜60分）
 
 ```
-0. 事前準備（バックアップ・メンテ告知）
-1. Custom Access Token Hook の設定    ← ダッシュボード操作
-2. 全員ログインし直し（新JWT取得）
-3. RLSポリシーをテーブル1つずつ適用    ← SQL Editor
-4. 越境アクセステスト
-5. アプリ/Web両方の動作確認
+0.  事前準備（バックアップ・メンテ告知）
+0.5 実行前点検（読み取りのみ）        ← SQL Editor / ローカル
+1.  Custom Access Token Hook の設定    ← ダッシュボード操作
+2.  全員ログインし直し（新JWT取得）
+3.  RLSポリシーをテーブル1つずつ適用    ← SQL Editor
+4.  越境アクセステスト
+5.  アプリ/Web両方の動作確認
 ```
 
 ## 0. 事前準備
 
 - [ ] Supabaseダッシュボード > Database > Backups で直近バックアップがあることを確認
 - [ ] 作業中はWeb/アプリの利用を避けるよう関係者に伝える（吉野さん1人なら不要）
+
+## 0.5 実行前点検（2026-09-03 追加・読み取りのみ）
+
+前回の実測から日が経っているため、**まず現状を確定させる**。どちらもデータを変更しない。
+
+### a) SQL Editor での点検
+
+```
+scripts/migrations/2026-09-03-rls-preflight.sql
+```
+
+**1文ずつ選択して実行**する（SQL Editor は複数文をまとめると結果を表示しない）。
+確認するのは10項目。特に見るべきは次の3つ。
+
+| # | 見るところ | 期待 | 外れていたら |
+|---|---|---|---|
+| 6 | `organization_id` が NULL の行 | **全テーブル 0** | NULL の行は適用後**誰からも見えなくなる**。先にバックフィルする |
+| 9 | `storage.objects` の実際のポリシー名 | `allow all` が実在 | 名前が違えば手順7の `drop policy` は**黙って何もしない**。SQL 側の名前を実名に直してから流す |
+| 4 | `organizations` の行 | kishu の1行 | 0行なら `2026-08-10-organizations-check.sql` を先に流す |
+
+### b) 穴の実測（適用前・適用後で同じものを叩く）
+
+```bash
+node scripts/rls-verify.mjs          # .env.local の VITE_SUPABASE_* を読む
+```
+
+anon キーだけで各テーブルが何件読めるかを出す。**適用前は件数が出るのが正常**（それが今の穴）。
+適用後に**全テーブル 0 件**になれば塞がったということ。ログイン中ユーザーの
+`access_token` を `ACCESS_TOKEN=` で渡すと、認証後の見え方も同時に確認できる。
+
+### c) コード側の事前監査（2026-09-03 実施・結果は「流して問題なし」）
+
+適用で壊れる箇所がないか、クライアント側を先に洗った。**修正が必要な箇所は見つからなかった。**
+
+| 監査項目 | 結果 |
+|---|---|
+| ログイン（匿名で `users` を引く経路） | `select("email").eq("login_id", …)`（`src/App.tsx:741`）。手順6の列権限 `grant select (login_id, email)` と**一致**。他の列は引いていない |
+| クライアントからの insert 全17箇所 | Web・Expo とも**すべて `organization_id` を明示**（`currentOrganizationId`）。`with check` で弾かれる箇所は無い |
+| `work_categories` への書き込み | **無い**（select のみ）。読み取り専用ポリシーで足りる |
+| Storage | upload と getPublicUrl のみ。**delete は無い**ので insert/select の2ポリシーで足りる |
+| `api/*.ts` | すべて `SUPABASE_SERVICE_ROLE_KEY`。RLS の影響を受けない |
+| 対象テーブルの網羅 | 全19表が本体＋`2026-08-23-rls-crop-advice.sql`＋`2026-08-04-device-tokens.sql` で**カバーされている**（取りこぼし無し） |
+
+**残る唯一の全機能停止リスクは手順6（`users`）** — ログインできなくなる箇所はここだけ。
+切り戻しの1文を手元に置いてから流すこと。
 
 ## 1. Custom Access Token Hook の設定
 
@@ -82,7 +133,7 @@ create policy allow_all on <テーブル名> for all using (true) with check (tr
 **1テーブルずつ実行し、そのつど画面を確認すること。** まとめて流すと、どのテーブルで
 壊れたのか切り分けられなくなる（Supabase SQL Editor は複数文をまとめると結果を表示しない）。
 
-### 実行前の確認（2026-08-23 時点の実測）
+### 実行前の確認（2026-08-23 時点の実測。最新の実測は手順0.5 で取り直すこと）
 
 - JWT に `organization_id` クレームは**まだ入っていない**（ブラウザのセッションを実測して確認済み）。
   したがって**手順1（Auth Hook）は未実施**であり、ここから始める必要がある
@@ -103,6 +154,7 @@ create policy allow_all on <テーブル名> for all using (true) with check (tr
         -H "apikey: <anon>" -H "Authorization: Bearer <org2のaccess_token>"
       → [] が返ればOK
       ```
+- [ ] `node scripts/rls-verify.mjs` が**全テーブル 0 件**で終わること（手順0.5 b の再実行）
 - [ ] **JWTなし（anonのみ）**で reports 等を叩いて空が返ること:
       ```
       curl 'https://<project>.supabase.co/rest/v1/reports' -H "apikey: <anon>"
