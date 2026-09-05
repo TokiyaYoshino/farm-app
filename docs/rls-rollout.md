@@ -1,5 +1,8 @@
 # RLS実ポリシー化の適用手順（App Store申請前の必須作業）
 
+> **当日の作業は `docs/rls-runbook.md`（クリックレベルの手順書）を見ながら進める。**
+> こちらは背景・設計判断・切り戻しの基準をまとめた文書。
+
 対象SQL: `scripts/migrations/2026-08-02-rls-policies.sql`
 **＋ `scripts/migrations/2026-08-23-rls-crop-advice.sql`（本体に含まれない2表。手順3-5で実行）**
 背景: `docs/multitenancy-progress.md` の残作業。現在は全テーブル `allow_all` のため、
