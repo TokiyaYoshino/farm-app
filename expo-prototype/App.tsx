@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Alert } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -66,17 +66,41 @@ function Root() {
   const insets = useSafeAreaInsets();
   const {
     authSession, authLoading, loading, loadError, retryLoad, refresh,
-    currentUser, logout, unreadNotifCount, markNotifsSeen,
+    currentUser, logout, deleteAccount, unreadNotifCount, markNotifsSeen,
     quickReportOpen, openQuickReport, closeQuickReport, reports, schedules,
   } = useStore();
   const [tab, setTab] = useState<Tab>("home");
   const [analyticsSubTab, setAnalyticsSubTab] = useState<AnalyticsSubTab>("report");
   const [manageSubTab, setManageSubTab] = useState<ManageSubTab>("crops");
   const [showUserSheet, setShowUserSheet] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   // 通知タップからの直接遷移用
   const [notifReport, setNotifReport] = useState<Report | null>(null);
   const [notifSchedule, setNotifSchedule] = useState<Schedule | null>(null);
+
+  // アカウント削除。取り返しがつかないので2段階（意図の確認 → 実行）で確かめる
+  const confirmDeleteAccount = useCallback(() => {
+    if (deletingAccount) return;
+    Alert.alert(
+      "アカウントを削除しますか？",
+      "ログインできなくなり、元に戻せません。\nこれまでの作業記録は農場の記録として残ります。",
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除する",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingAccount(true);
+            const err = await deleteAccount();
+            setDeletingAccount(false);
+            if (err) { Alert.alert("削除できませんでした", err); return; }
+            setShowUserSheet(false);
+          },
+        },
+      ],
+    );
+  }, [deleteAccount, deletingAccount]);
 
   // ── 対象（記録・予定）の詳細シートを開く。開けたら true ──
   // targetType は comments.target_type と同じ緩い string（"report" 以外は予定扱い）
@@ -258,8 +282,8 @@ function Root() {
       <ReportDetailSheet report={notifReport} onClose={() => setNotifReport(null)} />
       <ScheduleDetailSheet schedule={notifSchedule} onClose={() => setNotifSchedule(null)} />
 
-      {/* ユーザーシート（ログアウト） */}
-      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.4}>
+      {/* ユーザーシート（ログアウト・アカウント削除） */}
+      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.5}>
         <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
           <Text style={{ fontWeight: "700", fontSize: 17, color: C.text, marginBottom: 4 }}>{currentUser?.name ?? ""}</Text>
           <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
@@ -269,6 +293,17 @@ function Root() {
             icon={<Feather name="log-out" size={16} color={C.text} />}>
             ログアウト
           </Btn>
+
+          {/* アカウント削除。App Store Guideline 5.1.1(v) がアプリ内の導線を求めるため必須。
+              作業記録は組織の記録として残ることを、消す前に必ず伝える */}
+          <View style={{ height: 1, backgroundColor: C.hairline, marginVertical: 20 }} />
+          <Btn variant="dangerOutline" size="md" onPress={confirmDeleteAccount}
+            icon={<Feather name="trash-2" size={15} color={C.danger} />}>
+            アカウントを削除
+          </Btn>
+          <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 10, lineHeight: 17 }}>
+            ログインできなくなります。これまでの作業記録は農場の記録として残ります。
+          </Text>
         </View>
       </BottomSheet>
     </View>

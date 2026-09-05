@@ -1144,10 +1144,16 @@ export default function App() {
       showToast("予定を削除しました");
     });
 
+  // users 行だけをクライアントから消すと Supabase Auth のユーザーが残り、消したはずの人が
+  // 有効なJWTを取得できてしまう（api/_auth.ts の requireUser を通る）。認証情報ごと消すため
+  // service_role を持つ api/delete-account.ts に任せる。docs/decisions/20260905-account-deletion.md
   const deleteUser = (id: number) =>
-    confirmDelete("このユーザーを削除しますか？", async () => {
-      const { error } = await supabase.from("users").delete().eq("id", id).eq("organization_id", currentOrganizationId);
-      if (error) { console.error("deleteUser error:", error); return showToast(error.message, "err"); }
+    confirmDelete("このユーザーを削除しますか？\n（このユーザーの作業記録は農場の記録として残ります）", async () => {
+      const r = await fetch("/api/delete-account", {
+        method: "POST", headers: apiHeaders(), body: JSON.stringify({ user_id: id }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { console.error("deleteUser error:", d); return showToast(d.error ?? "削除に失敗しました", "err"); }
       setUsers(p => p.filter(u => u.id !== id));
       showToast("ユーザーを削除しました");
     });

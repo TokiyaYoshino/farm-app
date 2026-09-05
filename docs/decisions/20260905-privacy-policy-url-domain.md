@@ -73,9 +73,15 @@ RLS が `allow_all` の状態でこれを行うと、`docs/rls-rollout.md` が�
    レジストラ側に設定する。**必要な値は追加時に Vercel が画面に出すものを正とする**
 4. 反映後、**シークレットウィンドウで** `https://kishufarm.com/privacy` を開き、
    Vercel のログイン画面を経由せず本文が表示されることを確認する
-5. `docs/app-store-submission.md:82` のプライバシーポリシーURLを
+5. **`EXPO_PUBLIC_API_BASE` を `https://kishufarm.com` に切り替える**（監査 14）。
+   アプリの API 呼び先も既定で `kishu-farm.vercel.app` を向いており、保護は
+   サーバーレス関数にも等しくかかるため、現状ではアプリの AI 機能が1つも動かない。
+   EAS の development / preview / production すべてに登録し、
+   `expo-prototype/lib/ai.ts` と `expo-prototype/lib/store.tsx` の既定値も同じ値にする
+   （登録し忘れたビルドが黙って壊れるのを防ぐため）。**この手順は 2〜4 と不可分**
+6. `docs/app-store-submission.md:82` のプライバシーポリシーURLを
    `https://kishufarm.com/privacy` に更新する
-6. CLAUDE.md の本番URLの記述を実態に合わせて整理する
+7. CLAUDE.md の本番URLの記述を実態に合わせて整理する
 
 ## 未解決
 

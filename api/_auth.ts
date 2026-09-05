@@ -87,14 +87,15 @@ export async function requireUser(req: ApiRequest): Promise<{ ok: true; user: Au
 }
 
 /**
- * 管理者であることまで確認し、users 行（所属組織を含む）を返す。
- * ユーザーを作る set-user-auth のように、権限と所属が結果を左右する操作で使う。
+ * ログイン済みであることを確認し、users 行（役割・所属組織を含む）を返す。
+ * 権限までは見ないので、本人にも管理者にも許す操作（delete-account の本人削除など）で使う。
+ * 管理者に限定したいときは下の requireAdmin を使う。
  *
  * users 行の解決は auth_id を主にし、取れないときは email で拾う。
  * set-user-auth は両方を書いているが、過去に作られた行で auth_id が
  * 埋まっていない可能性があるため（未確認）、片方だけに依存しない。
  */
-export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: AppUser } | Fail> {
+export async function requireAppUser(req: ApiRequest): Promise<{ ok: true; user: AppUser } | Fail> {
   const base = await requireUser(req);
   if (!base.ok) return base;
 
@@ -118,9 +119,6 @@ export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: A
     if (!row) {
       return { ok: false, status: 403, error: "このアカウントに対応する利用者情報が見つかりません。" };
     }
-    if (row.role !== "admin") {
-      return { ok: false, status: 403, error: "この操作は管理者のみ実行できます。" };
-    }
     return {
       ok: true,
       user: {
@@ -134,6 +132,19 @@ export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: A
   } catch {
     return { ok: false, status: 503, error: "権限を確認できませんでした。時間をおいてお試しください。" };
   }
+}
+
+/**
+ * 管理者であることまで確認し、users 行を返す。
+ * ユーザーを作る set-user-auth のように、権限と所属が結果を左右する操作で使う。
+ */
+export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: AppUser } | Fail> {
+  const r = await requireAppUser(req);
+  if (!r.ok) return r;
+  if (r.user.role !== "admin") {
+    return { ok: false, status: 403, error: "この操作は管理者のみ実行できます。" };
+  }
+  return r;
 }
 
 /** 失敗をそのままレスポンスに変換する。各ハンドラの定型文を減らすため */

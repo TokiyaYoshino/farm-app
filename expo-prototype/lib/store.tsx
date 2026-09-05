@@ -33,6 +33,7 @@ interface Store {
   refresh: () => Promise<void>;
   login: (loginId: string, password: string) => Promise<string | null>; // エラーメッセージ or null
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<string | null>; // エラーメッセージ or null（成功）
   // data
   currentUser: User | null;
   isAdmin: boolean;
@@ -306,6 +307,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setCurrentUser(null);
   }, [pushToken]);
+
+  /**
+   * 自分のアカウントを削除する（App Store Guideline 5.1.1(v)）。
+   * 実際の削除は api/delete-account.ts が service_role で行う。成功したら
+   * ログアウトと同じ後始末をしてログイン画面に戻す。エラーメッセージを返し、
+   * null なら成功（login/logout と同じ約束）。
+   */
+  const deleteAccount = useCallback(async (): Promise<string | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return "ログインが必要です。ログインし直してください。";
+      const res = await fetch(`${API_BASE}/api/delete-account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) return (d as { error?: string }).error || "アカウントの削除に失敗しました。";
+      // 端末側の後始末。device_tokens 行はサーバー側で users の cascade により消えている
+      setPushToken(null);
+      pushRegisteredFor.current = null;
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      return null;
+    } catch {
+      return "通信に失敗しました。ネットワークをご確認ください。";
+    }
+  }, []);
 
   // ── 画像アップロード（Web版 uploadImage の RN 版: URI → ArrayBuffer） ──
   const uploadImage = async (uri: string): Promise<string> => {
@@ -774,7 +804,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     comments.filter(cm => cm.target_type === type && cm.target_id === String(id)).length, [comments]);
 
   const store: Store = {
-    authSession, authLoading, loading, loadError, retryLoad, refreshing, refresh, login, logout,
+    authSession, authLoading, loading, loadError, retryLoad, refreshing, refresh, login, logout, deleteAccount,
     currentUser, isAdmin: (currentUser?.role ?? "worker") === "admin",
     users, crops, fields, reports, schedules, pesticides, projects, workCategories, comments,
     weatherCoords, wxAuto, wxLoading,
