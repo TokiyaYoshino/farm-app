@@ -12,9 +12,21 @@ anonキーを知っていれば他組織のデータを直接読み書きでき�
 1. Custom Access Token Hook の設定    ← ダッシュボード操作
 2. 全員ログインし直し（新JWT取得）
 3. RLSポリシーをテーブル1つずつ適用    ← SQL Editor
-4. 越境アクセステスト
+   （users の後に auth-hook ポリシー、最後に Storage の差し替え版）
+4. 越境アクセステスト                  ← scripts/verify-rls.sh
 5. アプリ/Web両方の動作確認
+6. 1時間後にもう一度ログインし、JWTに organization_id が残っていることを確認
 ```
+
+**2026-09-05 に本体SQLの欠落と Storage ポリシーの穴を見つけて手当てしている。**
+実行するファイルは4つ:
+
+| 順 | ファイル | 備考 |
+|---|---|---|
+| 1 | `2026-08-02-rls-policies.sql` | 本体。ただし **3) の Storage ブロックは実行しない** |
+| 2 | `2026-08-23-rls-crop-advice.sql` | 相談スレッド2表（本体に無い） |
+| 3 | `2026-09-05-rls-auth-hook-policy.sql` | **必須**。users の後に実行 |
+| 4 | `2026-09-05-rls-storage-fix.sql` | 本体の 3) の差し替え |
 
 ## 0. 事前準備
 
@@ -60,14 +72,34 @@ SQL Editor で **2) をテーブル1ブロックずつ**実行する。順番の
    - スモークテスト: アプリで作物の相談スレッドを開き、過去のやりとりが表示されること
 6. **最後に `users`**（ログイン画面の login_id→email 解決が匿名selectに依存するため、
    列制限grantを含むブロックを一気に実行し、直後にログインできることを必ず確認）
-7. Storage の 3) ブロック
-   - **⚠ このブロックだけでは画像が守れない（2026-09-05 の監査で判明）。**
-     `report_images_select_public` は `TO` 句が無いため anon を含む全ロールが対象になり、
-     `storage.objects` を匿名で列挙できる。「ランダムパスだから推測困難」という前提は
-     一覧が取れる相手には成立せず、**他組織の作業写真を全件ダウンロードできる状態が残る**
-   - 対応方針（select を `to authenticated` に変更＋バケットを private 化＋
-     `getPublicUrl` → `createSignedUrl` への差し替え。片方だけ入れると既存写真が全滅する）は
-     `docs/pre-release-audit.md` の 3 に記載。**RLS 適用と同じ機会にやるのが最も安い**
+   - **⚠ 続けて `scripts/migrations/2026-09-05-rls-auth-hook-policy.sql` を実行する（必須）。**
+     本体の 0) は Hook 関数に `grant select` しか与えていないが、grant は RLS を
+     通過させない。`custom_access_token_hook` は SECURITY DEFINER ではないため
+     `supabase_auth_admin` として実行され、users に RLS が効いた瞬間から
+     ポリシーの評価対象になる。本体が users に作るポリシーはどれも
+     `supabase_auth_admin` を対象にしていないので、**Hook の select が0件になり、
+     以後発行されるJWTから organization_id クレームが消える**
+   - **時間差で壊れるのが厄介**: 適用直後は既存トークンが生きているので画面は正常に見える。
+     アクセストークンが自動更新される1時間ほど後に、全ユーザーが全データを見失う。
+     手順2をやったのに「データが全部消えて見える」が再発したらこれを疑う
+   - 適用後に**もう一度**ログインし直して、JWT に `organization_id` が入っているか
+     確認すること（適用前の確認では検出できない）
+7. Storage — **本体の 3) ブロックは実行せず、
+   `scripts/migrations/2026-09-05-rls-storage-fix.sql` を実行する**
+   - 本体の `report_images_select_public` は `TO` 句が無いため anon を含む全ロールが
+     対象になり、`storage.objects` を匿名で列挙できる。「ランダムパスだから推測困難」
+     という前提は一覧が取れる相手には成立せず、本体を流しきっても
+     **他組織の作業写真を全件ダウンロードできる状態が残る**（2026-09-05 の監査で判明）
+   - 差し替え版は select ポリシーを作らない。アプリは Storage の `upload()` と
+     `getPublicUrl()` しか使っておらず（`list()`/`remove()`/`download()` の呼び出しは
+     リポジトリ全体でゼロ）、画像配信は public バケットの
+     `/storage/v1/object/public/...` で RLS を通らずに行われるため、
+     **select ポリシーはアプリの動作に一切使われていない**。落としても表示は変わらず、
+     anon も他組織の認証ユーザーも列挙できなくなる
+   - 残る制約: public バケットのままなので **URLを知っていればログインなしで読める**。
+     URLは `reports.image_url` にあり、その表は組織スコープになるので通常は漏れないが、
+     公開URLは期限が無く失効させられない。private バケット＋署名URL＋組織プレフィックスへの
+     移行は**2組織目を迎える前に**別途実施する（`docs/pre-release-audit.md` の 3）
 
 各ブロック実行後のスモークテスト: Web版をリロードして該当データが表示されること。
 
@@ -89,6 +121,15 @@ create policy allow_all on <テーブル名> for all using (true) with check (tr
 **1テーブルずつ実行し、そのつど画面を確認すること。** まとめて流すと、どのテーブルで
 壊れたのか切り分けられなくなる（Supabase SQL Editor は複数文をまとめると結果を表示しない）。
 
+### 実行前の確認（2026-09-05 時点）
+
+- **RLS は未着手のまま**（2026-09-05 に確認）。下の 2026-08-23 の記述は現在も有効
+- 手順6に **`scripts/migrations/2026-09-05-rls-auth-hook-policy.sql` の実行が追加**（必須）。
+  本体SQLの欠落を埋めるもので、無いと1時間後に全員がデータを見失う
+- 手順7の Storage は差し替え版
+  （`scripts/migrations/2026-09-05-rls-storage-fix.sql`）を使うこと
+- 手順4は `scripts/verify-rls.sh` で実行する
+
 ### 実行前の確認（2026-08-23 時点の実測）
 
 - JWT に `organization_id` クレームは**まだ入っていない**（ブラウザのセッションを実測して確認済み）。
@@ -98,23 +139,48 @@ create policy allow_all on <テーブル名> for all using (true) with check (tr
 
 ## 4. 越境アクセステスト
 
-`docs/multitenancy-progress.md` の「手動テストチェックリスト」を実施。
-最低限やるべきもの:
+**`scripts/verify-rls.sh` を実行する。** 手作業の curl を自動化したもので、
+匿名アクセス14表・users の列制限・Storage の列挙・越境アクセスを一度に検証する。
 
-- [ ] テスト用2組織目 + テストユーザーを作成
-- [ ] org2ユーザーでログインし、org1（霧珠ファーム）のデータが一切見えないこと
-- [ ] curl で anonキー + org2のJWT を使い、org1のレコードIDを直接指定した
-      select/update が空振り・失敗すること:
-      ```
-      curl 'https://<project>.supabase.co/rest/v1/reports?id=eq.<org1のid>' \
-        -H "apikey: <anon>" -H "Authorization: Bearer <org2のaccess_token>"
-      → [] が返ればOK
-      ```
-- [ ] **JWTなし（anonのみ）**で reports 等を叩いて空が返ること:
-      ```
-      curl 'https://<project>.supabase.co/rest/v1/reports' -H "apikey: <anon>"
-      → [] が返ればOK（現状はここで全データが返ってしまう）
-      ```
+```bash
+export SUPABASE_URL="https://<project>.supabase.co"
+export SUPABASE_ANON_KEY="<anonキー>"
+bash scripts/verify-rls.sh
+```
+
+読み取りしか行わないのでデータは変わらない。**FAIL が1つでもある間は公開しないこと。**
+
+2組織目を作ってあるなら、越境テストまで実行できる:
+
+```bash
+export JWT_ORG2="<org2ユーザーの access_token>"
+export ORG1_REPORT_ID="<org1に実在する reports.id>"
+bash scripts/verify-rls.sh
+```
+
+access_token は Web版にログインして DevTools > Application > Local Storage の
+`sb-<project>-auth-token` 内の `access_token` をコピーする。
+JWT に `organization_id` クレームが入っているかもここで自動チェックされる
+（手順1・2の実施漏れの検出）。
+
+2組織目がまだ無い場合、越境の項目は SKIP になる。匿名アクセスの項目だけでも
+「anonキーを知っていれば全データが読める」という一番大きな穴は塞げたことを確認できるので、
+**まず SKIP ありで通し、2組織目を作った時点で再実行する**のが現実的。
+
+### 補足: users のユーザー列挙について
+
+ログイン画面が login_id → email を匿名で解決する設計のため、本体SQLは
+`users` の `login_id` / `email` 列だけ匿名参照を許している（手順6）。
+このため **全組織のログインIDとメールアドレスは匿名で列挙できる**状態が残る。
+業務アプリなので優先度は低いが、消したい場合の方針は
+`docs/pre-release-audit.md` の 10 を参照（email が login_id から決定的に
+生成されているので、クライアント側で組み立てれば匿名参照ごと不要にできる）。
+先に下のクエリで例外が無いことを確認すること:
+
+```sql
+select login_id, email from users where email not like '%@kishu-farm.system';
+-- 0件なら、匿名参照を廃止できる
+```
 
 ## 5. 既知の注意点
 

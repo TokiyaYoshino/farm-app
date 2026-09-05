@@ -31,9 +31,11 @@ App Store 公開までに潰すべき問題を、コードとインフラ設定�
 | 12 | 課金を入れる時の IAP 要件 | 将来 | 審査 3.1 |
 | 13 | データ販売構想を実行する時の再申告 | 将来 | 審査 5.1.2 |
 | 14 | アプリの API 呼び先が SSO 保護下。AI機能が本番で全滅 | 必須 | 審査 2.1 |
+| 15 | RLS 移行SQLの欠落。適用1時間後に全員がデータを見失う | 必須 | セキュリティ/可用性 |
 
 **進捗（2026-09-05）**: 2 は方針決定・実行は RLS 待ち / **6・7・4 は対応済み** /
-14 を追記（2 の調査中に判明）。
+14・15 を追記（14 は 2 の調査中、15 は RLS 準備中に判明）/
+1 の実行準備（修正SQL2本・検証スクリプト）は完了。
 
 **良好だった点**（確認済み・対応不要）は末尾にまとめた。既に手当てされているものを再点検して時間を使わないため。
 
@@ -114,27 +116,33 @@ SQL のコメントは「画像URLは推測困難なランダムパスで」と�
 記録テキストは守られるのに写真だけ素通り、という中途半端な状態になるので、
 RLS 作業と同じタイミングで直すのが合理的。
 
-**対応（段階的にどれでも）**
+**対応（SQL は用意済み。RLS 適用と同時に流す）**
 
-1. **最小の手当て（今すぐ・破壊的変更なし）** — select にも認証を要求する:
-   ```sql
-   drop policy if exists report_images_select_public on storage.objects;
-   create policy report_images_select_authed on storage.objects for select
-     to authenticated
-     using (bucket_id = 'report-images');
-   ```
-   ただし **バケットが public 設定のままだと `/object/public/` 経由の読み取りは
-   RLS を迂回する**ため、Supabase ダッシュボード > Storage > report-images を
-   **private に変更**し、コードを `getPublicUrl` → `createSignedUrl`（有効期限付き）に
-   差し替えるところまでやって初めて塞がる。変更箇所は3つ:
-   `src/App.tsx:812` / `expo-prototype/lib/store.tsx:320` / `expo-prototype/screens/AiSheets.tsx:709`
+`scripts/migrations/2026-09-05-rls-storage-fix.sql` を作成した。
+**本体の 3) ブロックの代わりにこれを実行する。**
 
-2. **本来の形（次の改修で）** — パスを `${organization_id}/${uuid}.jpg` にし、
-   ポリシーで先頭セグメントと `jwt_organization_id()` を突き合わせる。
-   既存ファイルの移行が要るので、1 を先に入れてから別途。
+当初は「select を `to authenticated` に変える」案だったが、調査の結果もっと単純に
+**select ポリシーを1つも作らない**のが正しいと分かった。理由:
 
-**注意**: 1 を入れると、DB に保存済みの `getPublicUrl` 形式のURLは全て開けなくなる。
-署名URL方式への差し替えとセットで行うこと（片方だけ入れると既存の写真が全滅する）。
+- アプリは Storage API のうち `upload()` と `getPublicUrl()` しか使っていない。
+  `list()` / `remove()` / `download()` の呼び出しはリポジトリ全体で**ゼロ**
+- `getPublicUrl()` はURL文字列を組み立てるだけのクライアント処理で通信しない。
+  画像の実配信は public バケットの `/storage/v1/object/public/...` で行われ、
+  **ここは RLS を通らない**
+- つまり **select ポリシーはアプリの動作に一切使われていない**。落としても表示は
+  変わらず、anon も他組織の認証ユーザーも列挙できなくなる
+
+コード変更ゼロ・既存画像の破壊ゼロで、列挙経路だけが消える。
+
+**残る制約（承知のうえで launch する）**: public バケットのままなので
+**URLを知っていればログインなしで読める**。URLは `reports.image_url` にあり、その表は
+組織スコープになるので通常は他組織に渡らないが、公開URLは期限が無く失効させられない。
+
+完全に塞ぐには private バケット + 署名URL + 組織プレフィックスのパス
+（`${organization_id}/${uuid}.jpg`）への移行が要る。既存ファイルの移行と
+クライアント3箇所（`src/App.tsx:812` / `expo-prototype/lib/store.tsx:350` /
+`expo-prototype/screens/AiSheets.tsx:709`）の改修を伴うので今回は分ける。
+**2組織目を迎える前に実施すること**（現状は実質1組織なので緊急度は低い）。
 
 ---
 
@@ -365,6 +373,39 @@ AI機能をスクショに含める想定）。動かなければ Guideline 2.1 
 
 ---
 
+## 15. RLS 移行SQLの欠落。適用1時間後に全員がデータを見失う — **必須**
+
+**1（RLS）の実行準備中に判明。SQLを流す前に手当て済み。**
+
+本体 `scripts/migrations/2026-08-02-rls-policies.sql` の 0) は、JWT に組織IDを埋める
+Hook 関数が `users` を読めるように **grant だけ**を与えている:
+
+```sql
+grant select on table public.users to supabase_auth_admin;
+```
+
+しかし **grant はテーブル権限であって、RLS を通過させるものではない**。
+`custom_access_token_hook` は `SECURITY DEFINER` ではないため呼び出し元の
+`supabase_auth_admin` として実行され、`users` に RLS が効いた瞬間からポリシーの
+評価対象になる。本体が `users` に作るポリシー（`users_select_own_org` /
+`users_select_login_lookup`）はどちらも `supabase_auth_admin` を対象にしていない。
+
+結果、**Hook の select が0件を返し、以後発行されるJWTから `organization_id` クレームが
+消える**。全テーブルのポリシーが `organization_id = jwt_organization_id()` で組まれている
+ため、**全ユーザーが全データを見失う**。
+
+**時間差で壊れるのが厄介**: 手順6を適用した直後は既存トークンが生きているので画面は
+正常に見える。アクセストークンが自動更新される1時間ほど後に落ちる。手順書の切り戻し表の
+「データが全部消えて見える」を、手順2（ログインし直し）を済ませているのに踏むことになり、
+原因にたどり着きにくい。
+
+**対応済み**: `scripts/migrations/2026-09-05-rls-auth-hook-policy.sql` を追加した。
+`supabase_auth_admin` 向けの select ポリシーを1本作るだけ。Supabase 公式の
+Custom Access Token Hook のドキュメントも grant に加えてこのポリシーを作る手順を載せている。
+`docs/rls-rollout.md` の手順6に実行を組み込み済み。
+
+---
+
 ## 良好だった点（確認済み・対応不要）
 
 再点検で時間を使わないための記録。
@@ -427,3 +468,5 @@ AI機能をスクショに含める想定）。動かなければ Guideline 2.1 
 - **2026-09-05** 6 を修正（`set-user-auth` を PUT 更新に）
 - **2026-09-05** 4・7 を対応（`api/delete-account.ts` 新設、Expo にアカウント削除導線、
   Web の管理者削除を API 経由に変更）。`docs/decisions/20260905-account-deletion.md`
+- **2026-09-05** 1（RLS）の実行準備。15 を発見して修正SQLを追加、3 の修正SQLを作成、
+  検証スクリプト `scripts/verify-rls.sh` を用意。`docs/rls-rollout.md` を更新
