@@ -15,27 +15,11 @@
 //
 // 何も書き込まない。GET のみ。
 
-import { readFileSync, existsSync } from "node:fs";
+import { supabaseConfig, pickEnv } from "./_env.mjs";
 
-/** .env 系ファイルから KEY=VALUE を拾う（依存を増やさないための最小実装） */
-const envFromFiles = {};
-for (const f of [".env.local", ".env", "expo-prototype/.env.local", "expo-prototype/.env"]) {
-  if (!existsSync(f)) continue;
-  for (const line of readFileSync(f, "utf8").split("\n")) {
-    const m = line.match(/^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m) envFromFiles[m[1]] ??= m[2].replace(/^["']|["']$/g, "");
-  }
-}
-const pick = (...names) => names.map(n => process.env[n] ?? envFromFiles[n]).find(Boolean);
+const { url: URL_, anon: ANON } = supabaseConfig();
+const TOKEN = pickEnv("ACCESS_TOKEN");
 
-const URL_ = pick("SUPABASE_URL", "VITE_SUPABASE_URL", "EXPO_PUBLIC_SUPABASE_URL");
-const ANON = pick("SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY", "EXPO_PUBLIC_SUPABASE_ANON_KEY");
-const TOKEN = pick("ACCESS_TOKEN");
-
-if (!URL_ || !ANON) {
-  console.error("VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY が見つかりません（.env.local か環境変数で渡す）");
-  process.exit(1);
-}
 
 // 組織スコープであるべき表。ここが anon で読めてはいけない。
 const SCOPED = [
