@@ -15,6 +15,10 @@ TestFlight 配信まで）。本書は公開審査に出すための入力項目
 3. **Vercel Production の `OPENAI_API_KEY`** — Development のみ設定されている疑いがある。
    本番のAI機能（アプリは本番APIを叩く）が動かないと審査で機能不全と判断されうる
 
+**上記以外にも公開を止める問題が複数ある。着手前に `docs/pre-release-audit.md` を読むこと**
+（2026-09-05 の監査。プライバシーポリシーURLに審査担当が到達できない・作業写真が
+RLS適用後も公開のまま・アカウント削除導線が無い・パスワード再設定が失敗する、など）。
+
 ## 1. Apple Developer Program の登録
 
 - https://developer.apple.com/programs/ から登録（$99/年、個人 or 法人）
@@ -126,6 +130,7 @@ npx eas-cli submit --platform ios --latest
 | 4.2 | 機能が最小限／WebViewラッパー | ネイティブ実装済み（WebView案は不採用: `docs/decisions/20260801-...`） |
 | 5.1.1 | 権限の説明文が不十分 | `app.json` の `infoPlist` に日本語で記載済み |
 | 5.1.1(v) | ログイン必須の正当性 | 業務用アプリであることを備考で説明 |
+| 5.1.1(v) | **アプリ内のアカウント削除が必須** | **未対応。`docs/pre-release-audit.md` の 4 を参照** |
 | 1.2 | ユーザー生成コンテンツの通報機能 | コメントは同一組織内のみ。閉じた業務利用として説明する |
 
 ## 8. 申請後
