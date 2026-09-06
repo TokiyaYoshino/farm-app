@@ -108,6 +108,9 @@ Vercel Serverless Function（Node.js）。`POST` のみ、`OPENAI_API_KEY` の�
 ### `work_type` の扱い
 渡された `workTypes` 語彙に完全一致しない作業は API 側で `null` に落とす（近い語彙への丸めはしない）。打ち切った件数は `limits` に明記する。
 
+### 公的な防除マニュアルを渡す（2026-09-07〜）
+農水省「総合防除実践マニュアル」の作目別PDFから抽出したテキストを `references`（`{title, source, text}[]`・合計12000字まで）で渡し、「## 公的な防除マニュアル（原文・この範囲は資料に基づく）」として置く。出典は `sources` に必ず載せ、画面の「この回答の前提」から原文へ辿れるようにする（公共データ利用規約が求める出典表示でもある）。対応は**キャベツ・ぶどうの2作目のみ**で、近い作物への代用はしない。資料の栽培暦は特定産地を想定した例なので時期はそのまま当てはめさせず、薬剤の可否は従来どおり FAMIC 原文でのみ判断する（`docs/decisions/20260907-national-references.md`）。
+
 ### 集計は渡す（2026-09-06〜）
 散布履歴（`formatSprayHistoryForPrompt`）と年×作業種別の件数（`formatWorkCountsForPrompt`）をクライアントが `aggregates` として渡し、プロンプトは「## 自農場の集計（コードが数えた確定値・数え直さないこと）」の別ブロックに置く。**新しい集計は書かない**——画面・防除助言と同じ関数を通すことで、AIの言うことと画面の数字が食い違わないようにする。渡すだけでは使わないため「散布の時期・間隔・回数の質問では必ず答えに反映する」ことと、「同じ商品の繰り返しを、同じ薬剤を続けてよい根拠にしない」ことをプロンプトで明示している。
 
@@ -170,7 +173,9 @@ Vercel Serverless Function（Node.js）。`POST` のみ、`OPENAI_API_KEY` の�
 | ファイル | 役割 |
 |---|---|
 | `api/advise.ts` | API本体 |
-| `scripts/test-advise.mjs` | APIの契約テスト（120 assertions） |
+| `scripts/test-advise.mjs` | APIの契約テスト（130 assertions） |
+| `scripts/fetch-maff-ipm.mjs` | 農水省の防除マニュアルの取り込み（`src/data/maff-ipm/*.json` を生成） |
+| `src/data/maffIpm.ts` | 作物名から資料を引く（対応が無ければ空＝資料なしとして縮退） |
 | `scripts/test-advice-match.mjs` | Web版の照合ロジックのテスト（37 assertions） |
 | `scripts/migrations/2026-08-10-crop-advisor.sql` | テーブル定義 |
 | `scripts/migrations/2026-08-10-organizations-check.sql` | 上記の前提確認用（`organization_id` 参照先の実在確認） |

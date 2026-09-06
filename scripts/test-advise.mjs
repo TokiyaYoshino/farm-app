@@ -250,6 +250,32 @@ t("本文の中身は消さない", r.body.advice.reply.includes("雨が続く�
 t("見ておくことにも同じ処理をする", !r.body.advice.watchPoints[0].includes("\\n"));
 llmJson = null;
 
+// 情報源の3層目（作業の段取り・病害虫の一般知識）だけが参照元を持たず推論のままだった。
+// 国の防除マニュアルは公共データ利用規約で取り込めるので、原文を渡して出典を示す
+// （docs/decisions/20260906-regional-calendar-gate.md / 20260907-national-references.md）
+console.log("\n公的な防除マニュアルを渡す:");
+const REF = [{
+  title: "総合防除実践マニュアル キャベツ編",
+  source: "https://www.maff.go.jp/j/syouan/syokubo/gaicyu/g_ipm/attach/pdf/index-47.pdf",
+  text: "菌核病 黒腐病 根こぶ病 密植を避ける 発病株の除去・処分 結球開始時の薬剤散布",
+}];
+r = await call({ crop: CROP, references: REF, workTypes: WORK_TYPES });
+t("原文をプロンプトに載せる", prompt().includes("発病株の除去・処分"));
+t("出典をプロンプトに載せる", prompt().includes("index-47.pdf"));
+t("資料名を見出しにする", prompt().includes("総合防除実践マニュアル キャベツ編"));
+t("出典を sources に出す（画面で辿れるように）",
+  r.body.sources.some(s => s.includes("総合防除実践マニュアル キャベツ編") && s.includes("index-47.pdf")));
+// マニュアル自身が「栽培暦は一般化したものではなく特定産地を想定」と断っている
+t("資料の時期をそのまま当てはめさせない", prompt().includes("特定の産地を想定した例"));
+t("資料に無いことを資料由来として述べさせない", prompt().includes("資料に書かれていないことを"));
+t("農薬の可否は資料ではなく登録情報で判断させる（回帰）",
+  prompt().includes("渡された農薬登録情報に書かれている値だけ"));
+r = await call({ crop: CROP, workTypes: WORK_TYPES });
+t("渡さなければブロックごと出さない", !prompt().includes("## 公的な防除マニュアル"));
+t("出典にも混ぜない", !r.body.sources.some(s => s.includes("総合防除実践マニュアル")));
+t("長すぎる資料は 400 で弾く",
+  (await call({ crop: CROP, references: [{ title: "x", source: "y", text: "あ".repeat(12001) }] })).code === 400);
+
 console.log("\n出典・限界は必ず付く:");
 r = await call({ crop: CROP });
 t("出典が空でない", Array.isArray(r.body.sources) && r.body.sources.length > 0);

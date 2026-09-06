@@ -24,6 +24,7 @@ import GanttChart from "./components/GanttChart";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { harvestQty, excludedHarvestCount, formatWorkCountsForPrompt } from "./lib/metrics";
+import { referencesForCrop } from "./data/maffIpm";
 import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt, lastSpray } from "./lib/pesticideUsage";
 import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
@@ -2148,6 +2149,11 @@ export default function App() {
           today: new Date().toISOString().slice(0, 10),
           forecast, registrations, records, question, region: weatherCoords?.name,
           aggregates: aggregates || undefined,
+          // 作業の段取り・病害虫の一般知識だけが参照元を持たず推論のままだったので、
+          // 国の防除マニュアル（公共データ利用規約）を原文で渡す。対応する作目が
+          // 無ければ空＝従来どおり LLM の一般知識に「目安」と断らせる。
+          // 畑全体の相談は作物が定まらないため渡さない（他作物の資料を当てないため）
+          references: crop ? referencesForCrop(crop.name) : undefined,
           messages: adviseMsgs.map(m => ({ role: m.role, content: m.content })),
           // 前に出した助言とその実施状況。画面のバッジと同じ matchActions を通すので
           // AI の言うことと画面が食い違わない

@@ -124,7 +124,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = await requireUser(req);
   if (!auth.ok) return denied(res, auth);
 
-  const { crop, today, forecast, registrations, records, aggregates, question, region, messages, adviceHistory, workTypes } =
+  const { crop, today, forecast, registrations, records, aggregates, references, question, region, messages, adviceHistory, workTypes } =
     (req.body ?? {}) as {
       crop?: CropInfo;
       today?: string;
@@ -133,6 +133,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       records?: string;
       /** 呼び出し側が事前に数えた値（散布履歴・作業回数）。LLM に数え直させない */
       aggregates?: string;
+      /** 公的資料の原文（農水省の防除マニュアル等）。出典を示して引用させる */
+      references?: { title?: string; source?: string; text?: string }[];
       question?: string;
       region?: string;
       /** これまでのやりとり（古い順）。会話として続けるために渡す */
@@ -164,6 +166,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (typeof aggregates === "string" && aggregates.length > 4000) {
     return res.status(400).json({ error: "aggregates too long" });
+  }
+  // 公的資料。1件ずつではなく合計で見る（作目が増えても上限を超えさせない）
+  const refs = (Array.isArray(references) ? references : [])
+    .filter(x => x && typeof x.text === "string" && x.text.trim() !== "")
+    .map(x => ({
+      title: (typeof x.title === "string" ? x.title : "資料").trim().slice(0, 120),
+      source: (typeof x.source === "string" ? x.source : "").trim().slice(0, 300),
+      text: x.text!.trim(),
+    }));
+  if (refs.reduce((a, x) => a + x.text.length, 0) > 12000) {
+    return res.status(400).json({ error: "references too long" });
   }
   if (typeof question === "string" && question.length > 500) {
     return res.status(400).json({ error: "question too long" });
@@ -237,6 +250,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           "  散布の時期・間隔・回数に関わる質問では、集計の「前回の散布からの日数」「同じ商品を繰り返し使っている組み合わせ」「昨年の同時期」を**必ず答えに反映する**こと。一般論だけで答えないこと。",
           // 実測で「3回使っているため次も散布を」と逆向きに読んだ。連用は注意する材料
           "  ただし同じ商品を繰り返し使っている事実は、**同じ薬剤を続けてよい根拠にしないこと**。連用は薬剤耐性の観点で注意する材料であり、登録のある別の薬剤を検討するよう促す側に使う（有効成分・系統のデータは無いため、同一系統かどうかの判定はしないこと）。",
+        ].join("\n")
+      : null,
+    // 3層目（作業の段取り・病害虫の一般知識）に参照元を持たせる。ただし資料の栽培暦は
+    // 資料自身が「特定の産地を想定した例」と断っているので、時期をそのまま当てはめさせない
+    refs.length > 0
+      ? [
+          "- 「公的な防除マニュアル」は国が公開している資料の原文。**そこに書かれている範囲は、資料に基づくものとして使ってよい**（どの資料かを reply 中で示す必要はない。出典は画面側で表示する）。",
+          "  ただし資料に載っている栽培暦・時期は**特定の産地を想定した例**であり、この農場にそのまま当てはめないこと。時期は自農場の記録と天気から述べる。",
+          "  **資料に書かれていないことを、資料に基づくかのように述べてはならない。**",
+          "  資料に薬剤名が出てきても、使用の可否は農薬登録情報（下記）でしか判断しないこと。",
         ].join("\n")
       : null,
     "- 過去に出した助言と照合結果が渡された場合、同じ助言を繰り返さないこと。未実施のものは事情を尋ねるか代替を示すこと。",
@@ -326,6 +349,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       "この作物に農薬登録上の作物名が紐付いていないため、適用情報を照合できていない。具体的な薬剤・希釈倍数・回数には触れないこと。");
   }
 
+  if (refs.length > 0) {
+    userParts.push("", "## 公的な防除マニュアル（原文・この範囲は資料に基づく）");
+    refs.forEach(x => {
+      userParts.push("", `### ${x.title}`, ...(x.source ? [`出典: ${x.source}`] : []), x.text);
+    });
+  }
   if (hasAggregates) {
     userParts.push("", "## 自農場の集計（コードが数えた確定値・数え直さないこと）", aggregates!.trim());
   }
@@ -504,6 +533,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (facts.length > 0) {
     sources.push("農薬の希釈倍数・使用時期・使用回数: 農薬登録情報（独立行政法人 農林水産消費安全技術センター FAMIC 登録適用部）の原文");
   }
+  refs.forEach(x => {
+    sources.push(`防除の考え方: ${x.title}（農林水産省）${x.source ? ` — 出典: ${x.source}` : ""}`);
+  });
   if (typeof forecast === "string" && forecast.trim()) {
     sources.push("天気の実績・予報: Open-Meteo");
   }
