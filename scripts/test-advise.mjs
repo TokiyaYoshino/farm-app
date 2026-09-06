@@ -305,12 +305,13 @@ r = await call({
     { role: "assistant", content: "まず追肥を検討してください。" },
   ],
 });
-t("やりとりを OpenAI に渡す", captured.messages.length === 4);
-t("材料 → 会話 の順に並ぶ（材料を毎回重複させない）",
+t("やりとりを OpenAI に渡す", captured.messages.length === 5);
+t("材料 → 会話 → 今回の質問 の順に並ぶ（材料を毎回重複させない）",
   captured.messages[0].role === "system" && captured.messages[1].role === "user"
   && captured.messages[1].content.includes("## 対象")
   && captured.messages[2].content === "キャベツこれどうしたらいい？"
-  && captured.messages[3].role === "assistant");
+  && captured.messages[3].role === "assistant"
+  && captured.messages[4]?.role === "user" && captured.messages[4]?.content === "追肥はもう要らない？");
 t("前のやりとりを踏まえるよう指示", prompt().includes("前のやりとりを踏まえて"));
 t("挨拶を繰り返させない", prompt().includes("挨拶や自己紹介を毎回繰り返さない"));
 t("role が user/assistant 以外のやりとりは捨てる", await (async () => {
@@ -320,6 +321,24 @@ t("role が user/assistant 以外のやりとりは捨てる", await (async () =
 t("空のやりとりは捨てる", await (async () => {
   await call({ crop: CROP, messages: [{ role: "user", content: "  " }] });
   return captured.messages.length === 2;
+})());
+
+// 実測（2026-09-07・本番）: 追加質問に対して前の回答をほぼそのまま返していた。
+// 原因は、送るメッセージの末尾が「前回のAIの回答」で、今回の質問が材料ブロックに
+// 埋もれていたこと。会話の続きを書けと言われている形になっていた
+console.log("\n今回の質問を会話の最後に置く:");
+r = await call({ crop: CROP, question: "水はけはどう直す？", messages: [
+  { role: "user", content: "今の時期は？" },
+  { role: "assistant", content: "病害虫に注意です。" },
+] });
+const lastMsg = captured.messages[captured.messages.length - 1];
+t("最後のメッセージが今回の質問", lastMsg.role === "user" && lastMsg.content === "水はけはどう直す？");
+t("質問を材料ブロックに二重で入れない",
+  captured.messages.filter(m => m.content.includes("水はけはどう直す？")).length === 1);
+t("前の回答の続きを書かせない指示がある", prompt().includes("前の回答を繰り返さず"));
+t("履歴の末尾が同じ質問でも二重にしない", await (async () => {
+  await call({ crop: CROP, question: "同じ質問", messages: [{ role: "user", content: "同じ質問" }] });
+  return captured.messages.filter(m => m.content.trim() === "同じ質問").length === 1;
 })());
 
 console.log("\n会話の打ち切りを黙って行わない:");

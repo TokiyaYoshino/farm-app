@@ -204,6 +204,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const droppedRows = allFacts.length - facts.length;
   const hasRecords = typeof records === "string" && records.trim() !== "";
   const hasAggregates = typeof aggregates === "string" && aggregates.trim() !== "";
+  /** 今回の質問。会話の最後の user メッセージとして置く */
+  const askNow = typeof question === "string" ? question.trim() : "";
 
   const system = [
     isGeneral
@@ -211,6 +213,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       : "あなたは日本の農業の作業計画を助言するアシスタントです。特定の作付けについて、農家の相談相手として継続的に対話します。",
     "利用者は「次に何をすればいいか分からない」状態で相談しています。作業の順序と時期の目安を、日本語で具体的に示してください。",
     "会話の続きである場合は、前のやりとりを踏まえて答えること。挨拶や自己紹介を毎回繰り返さないこと。",
+    "**会話の最後にある利用者のメッセージが今回の質問**。前の回答を繰り返さず、その質問そのものに答えること。",
     "",
     "情報の扱い（厳守）:",
     "- 作業の段取り・生育段階・時期の目安は、あなたの一般知識で答えてよい。ただし産地・品種・栽培方式で変わるため、必ず「目安」として述べること。",
@@ -333,9 +336,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (typeof adviceHistory === "string" && adviceHistory.trim()) {
     userParts.push("", adviceHistory.trim());
   }
-  if (typeof question === "string" && question.trim()) {
-    userParts.push("", "## 利用者からの質問（これに優先して答える）", question.trim());
-  }
+  // 今回の質問は材料ブロックに入れない。会話の**最後**の user メッセージとして置く（下）。
+  // 材料に混ぜて末尾が前回の assistant のままだと、モデルは「続きを書け」と言われている形になり、
+  // 実測（2026-09-07・本番）では追加質問に対して前の回答をほぼそのまま返していた
 
   // 材料（作物・天気・農薬・記録・過去の助言）は system の直後に1度だけ置き、
   // そのあとに会話履歴を並べる。材料を各ターンに重複させないことでトークンを節約する
@@ -347,7 +350,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       messages: [
         { role: "system", content: system },
         { role: "user", content: userParts.join("\n") },
-        ...turns,
+        // 呼び出し側が送信中の質問を履歴に含めていても二重にしない
+        ...(askNow && turns.at(-1)?.role === "user" && turns.at(-1)?.content.trim() === askNow
+          ? turns.slice(0, -1)
+          : turns),
+        ...(askNow ? [{ role: "user" as const, content: askNow }] : []),
       ],
       temperature: 0.3,
       // 返答の長さを質問に合わせさせたぶん、上限が近いと strict スキーマの JSON が
