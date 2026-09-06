@@ -1,6 +1,6 @@
 # 仕様書: AI機能全体
 
-最終更新: 2026-08-23（origin/main 時点の実装を元に作成）
+最終更新: 2026-09-07（畑全体の相談・集計の受け渡し・AI出力履歴の相談対応を反映）
 関連: [`docs/spec-crop-advice-agent.md`](spec-crop-advice-agent.md)（作物ごとの相談＝農業エージェントの詳細仕様）、[`docs/roadmap.md`](roadmap.md)（事業戦略・課金プラン）、[`docs/research/competitor-gap-analysis-2026-08.md`](research/competitor-gap-analysis-2026-08.md)（8章の競合比較根拠）
 
 このドキュメントは「今どう動くか」だけを追える1枚物。個々の機能の設計判断の経緯はADR（`docs/decisions/*.md`）を参照する。
@@ -117,7 +117,7 @@ ai_outputs: id(uuid), organization_id(FK, not null),
 ```
 
 - 5機能中4機能（3.1・3.2・3.4・3.5、および3.6）が保存対象。**3.3（記録検索チャット）は保存実装が無い**
-- Web版の分析タブ（`AnalyticsView.tsx`）がAI出力履歴を表示（`KIND_LABEL`: 画像診断／防除助言／日報／音声整理の4種のみ。**`advice`種別は未対応**、6章参照）
+- Web版の分析タブ（`AnalyticsView.tsx`）がAI出力履歴を表示（`KIND_LABEL`: 画像診断／防除助言／日報／音声整理／相談の5種。`advice`（相談）は2026-09-07に対応した。それ以前は種別ラベルが空欄で絞り込みにも出ていなかった）
 - 保存はDB直書き（`supabase.from("ai_outputs").insert`）。APIサーバー自体はSupabaseに触れないため、保存の成否はクライアント側の責任
 
 ---
@@ -129,7 +129,7 @@ ai_outputs: id(uuid), organization_id(FK, not null),
 | 機能1〜5（音声・日報・検索・防除助言・画像診断） | 実装済み | 実装済み（`expo-prototype/lib/ai.ts`に同等ロジックを重複実装） |
 | 機能6（作物ごとの相談＝農業エージェント） | 実装済み（2026-08-23以降に移植） | 実装済み・本番稼働中 |
 | 機能6のうち「畑全体の相談」（`crop_id = null`） | 実装済み（2026-09-06） | **未対応** |
-| `AnalyticsView`のAI出力履歴表示 | `kind`4種のみ対応（`advice`未対応） | 該当機能なし（Web版のみに存在する分析タブ） |
+| `AnalyticsView`のAI出力履歴表示 | `kind`5種に対応（相談を含む・2026-09-07） | 該当機能なし（Web版のみに存在する分析タブ） |
 
 畑全体の相談をExpo版に展開する場合は、`expo-prototype/lib/store.tsx`（`.eq("crop_id", cropId)` を null 対応に）・`expo-prototype/lib/adviceMatch.ts`（`crop_id` の型と照合条件）・`AdviseSheet` の対象セレクタの3箇所を直す。`api/advise.ts` は共通なので変更不要。現状は null 行が Expo 側のクエリに現れないだけで、壊れてはいない（`docs/decisions/20260906-general-advice-entry.md`）。
 

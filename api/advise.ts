@@ -430,10 +430,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(502).json({ error: "助言結果を読み取れませんでした。もう一度お試しください。" });
   }
 
-  const asStrings = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((s): s is string => typeof s === "string" && s.trim() !== "").slice(0, 6) : [];
+  // モデルが改行のつもりで「リテラルの \n」（バックスラッシュ + n）を混ぜてくることがある。
+  // 画面は pre-wrap で描くので、そのままだと「\n」という文字が本文に出る
+  const fixNewlines = (s: string): string => s.replace(/\\r\\n|\\n/g, "\n");
 
-  const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+  const asStrings = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v.filter((s): s is string => typeof s === "string" && s.trim() !== "").map(fixNewlines).slice(0, 6)
+      : [];
+
+  const reply = typeof parsed.reply === "string" ? fixNewlines(parsed.reply).trim() : "";
   if (!reply) return res.status(502).json({ error: "助言結果が空でした。もう一度お試しください。" });
 
   // work_type は語彙に**完全一致**するものだけ通す。一致しなければ null に落とす。

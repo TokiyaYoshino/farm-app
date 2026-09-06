@@ -67,7 +67,7 @@
 
 **照合結果（実施済みか否か）はどちらのテーブルにも保存しない**。作業記録は後から増減するため、保存すると実態とずれる。`lib/adviceMatch.ts` で毎回計算する（`metrics.ts`・`pesticideUsage.ts` と同じ方針）。
 
-RLSは他テーブルと同じく現状 `allow_all`（`docs/rls-rollout.md` で一斉に実ポリシー化する予定・未実施）。
+RLSは実ポリシー適用済み（`crop_advice_messages_all_own_org` ほか、条件は `organization_id = jwt_organization_id()`）。**作物を見ていないので `crop_id` が null の行も読み書きできる**（2026-09-07 に本番のポリシー定義で確認）。
 
 ---
 
@@ -158,7 +158,7 @@ Vercel Serverless Function（Node.js）。`POST` のみ、`OPENAI_API_KEY` の�
 - **本番稼働中**（`main` にマージ・マイグレーション2本適用済み）
 - 実測: `crop=キャベツ`・`start_date=2026-06-20` で3件の「やること」を生成、`work_type` は3件すべて語彙に完全一致（施肥／防除／除草）＝ `unmatchable` ゼロ
 - コスト: 1回 ¥0.07（$0.00044）
-- **`crops.famic_crop_name` が7件すべて `null`（未紐付け）**。そのためレスポンスの `registrationFacts` は常に0件、`limits` に「作物名が紐付いていないため薬剤の使用可否は判断していません」が出る。設計どおりの縮退動作であり不具合ではない。紐付け作業は本番データ更新のため要承認・未実行
+- `crops.famic_crop_name` は7件中4件が紐付け済み（2026-09-07 時点。ぶどう×2・キャベツ×2）。残る3件（ほうれん草・にんにく・たまねぎ）は、登録済みの農薬に該当作物の適用行が無いため紐付けても `registrationFacts` は0件のまま。未紐付けの作付けでは `limits` に「作物名が紐付いていないため薬剤の使用可否は判断していません」が出る（設計どおりの縮退）。紐付けの妥当性は `scripts/check-crop-links.mjs` で検査できる
 - `work_type` の命中率は実測1回のみ。摘芯・芽かき等の専門的・作物固有の作業名では語彙外に落ちる可能性が残る
 - 実機（Expo）での動作確認（スレッドの読み込み・保存・dismiss）は未実施
 - Vercel Production の `OPENAI_API_KEY` は設定済みと確認済み
@@ -170,7 +170,8 @@ Vercel Serverless Function（Node.js）。`POST` のみ、`OPENAI_API_KEY` の�
 | ファイル | 役割 |
 |---|---|
 | `api/advise.ts` | API本体 |
-| `scripts/test-advise.mjs` | APIの契約テスト（113 assertions） |
+| `scripts/test-advise.mjs` | APIの契約テスト（120 assertions） |
+| `scripts/test-advice-match.mjs` | Web版の照合ロジックのテスト（37 assertions） |
 | `scripts/migrations/2026-08-10-crop-advisor.sql` | テーブル定義 |
 | `scripts/migrations/2026-08-10-organizations-check.sql` | 上記の前提確認用（`organization_id` 参照先の実在確認） |
 | `expo-prototype/lib/adviceMatch.ts` | 照合ロジック |

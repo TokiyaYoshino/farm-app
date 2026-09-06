@@ -40,7 +40,7 @@ interface DiagnosisJson {
 
 interface AiOutputRow {
   id: string;
-  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure";
+  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice";
   created_at: string;
   target_date: string | null;
   field: string | null;
@@ -71,11 +71,14 @@ interface Props {
 // 梅・みかんそれぞれの適正値は daily_weather に実績が溜まってから見直す。
 const GDD_BASE_TEMP = 10;
 
+// advice（相談）は kind として保存されていたのに、この表に無いため履歴から漏れ、
+// コスト集計にも出ていなかった（docs/spec-ai-features.md 4章の既知のギャップ）
 const KIND_LABEL: Record<AiOutputRow["kind"], string> = {
   diagnosis:       "画像診断",
   pest_advice:     "防除助言",
   daily_report:    "日報",
   voice_structure: "音声整理",
+  advice:          "相談",
 };
 
 /**

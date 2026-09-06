@@ -239,6 +239,17 @@ llmJson = null;
 r = await call({ crop: CROP });
 t("フィールドが無い応答でも壊れない", r.body.advice.followUpQuestion === null);
 
+// 実測で、モデルが改行のつもりで **リテラルの \n**（バックスラッシュ + n）を
+// 本文に混ぜることがあった。画面は pre-wrap で描くので、そのまま「\n」の文字が出る
+console.log("\n改行のつもりのリテラル \\n を直す:");
+llmJson = { ...DEFAULT_LLM_JSON, reply: "今週は防除を控えてください。\\n- 雨が続くため\\n- 薬剤が流れるため",
+  watch_points: ["べと病\\n初期病斑"] };
+r = await call({ crop: CROP });
+t("本文のリテラル \\n を改行にする", r.body.advice.reply.includes("\n") && !r.body.advice.reply.includes("\\n"));
+t("本文の中身は消さない", r.body.advice.reply.includes("雨が続くため"));
+t("見ておくことにも同じ処理をする", !r.body.advice.watchPoints[0].includes("\\n"));
+llmJson = null;
+
 console.log("\n出典・限界は必ず付く:");
 r = await call({ crop: CROP });
 t("出典が空でない", Array.isArray(r.body.sources) && r.body.sources.length > 0);
