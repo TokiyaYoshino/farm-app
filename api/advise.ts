@@ -124,13 +124,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = await requireUser(req);
   if (!auth.ok) return denied(res, auth);
 
-  const { crop, today, forecast, registrations, records, question, region, messages, adviceHistory, workTypes } =
+  const { crop, today, forecast, registrations, records, aggregates, question, region, messages, adviceHistory, workTypes } =
     (req.body ?? {}) as {
       crop?: CropInfo;
       today?: string;
       forecast?: string;
       registrations?: RegistrationInfo[];
       records?: string;
+      /** 呼び出し側が事前に数えた値（散布履歴・作業回数）。LLM に数え直させない */
+      aggregates?: string;
       question?: string;
       region?: string;
       /** これまでのやりとり（古い順）。会話として続けるために渡す */
@@ -141,9 +143,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       workTypes?: string[];
     };
 
+  // crop を渡さない呼び出しは「作物を指定しない畑全体の相談」。作物が定まらないと
+  // FAMIC の適用情報を照合できないため、薬剤の具体値には触れさせない（以下 isGeneral 分岐）
+  const isGeneral = crop == null;
   const cropName = typeof crop?.name === "string" ? crop.name.trim() : "";
-  if (!cropName) return res.status(400).json({ error: "crop.name required" });
-  if (cropName.length > 60) return res.status(400).json({ error: "crop.name too long" });
+  if (!isGeneral) {
+    if (!cropName) return res.status(400).json({ error: "crop.name required" });
+    if (cropName.length > 60) return res.status(400).json({ error: "crop.name too long" });
+  }
 
   const day = typeof today === "string" && ISO_DATE.test(today)
     ? today
@@ -154,6 +161,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (typeof records === "string" && records.length > 8000) {
     return res.status(400).json({ error: "records too long" });
+  }
+  if (typeof aggregates === "string" && aggregates.length > 4000) {
+    return res.status(400).json({ error: "aggregates too long" });
   }
   if (typeof question === "string" && question.length > 500) {
     return res.status(400).json({ error: "question too long" });
@@ -179,21 +189,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "missing env: OPENAI_API_KEY" });
 
-  const famicCropName = typeof crop?.famic_crop_name === "string" && crop.famic_crop_name.trim()
+  // 畑全体の相談では作物が定まらないので、適用情報の照合材料をすべて空に倒す
+  // （クライアントも空で送るが、ここでも落として二重に防ぐ）
+  const famicCropName = !isGeneral && typeof crop?.famic_crop_name === "string" && crop.famic_crop_name.trim()
     ? crop.famic_crop_name.trim()
     : null;
-  const elapsed = daysSince(crop?.start_date ?? null, day);
+  const elapsed = isGeneral ? null : daysSince(crop?.start_date ?? null, day);
   // 適用行は上限を切る。1商品75作物×複数病害虫で200行を超えることがあり、
   // 全部渡すとプロンプトが膨らむ。切ったことは limits に明記する（黙って削ると
   // 「載っていない＝適用が無い」と誤読される）
   const MAX_ROWS = 30;
-  const allFacts = Array.isArray(registrations) ? toFacts(registrations, famicCropName) : [];
+  const allFacts = !isGeneral && Array.isArray(registrations) ? toFacts(registrations, famicCropName) : [];
   const facts = allFacts.slice(0, MAX_ROWS);
   const droppedRows = allFacts.length - facts.length;
   const hasRecords = typeof records === "string" && records.trim() !== "";
+  const hasAggregates = typeof aggregates === "string" && aggregates.trim() !== "";
 
   const system = [
-    "あなたは日本の農業の作業計画を助言するアシスタントです。特定の作付けについて、農家の相談相手として継続的に対話します。",
+    isGeneral
+      ? "あなたは日本の農業の作業計画を助言するアシスタントです。農家の相談相手として継続的に対話します。今回は特定の作付けに絞らない、農場全体についての相談です。"
+      : "あなたは日本の農業の作業計画を助言するアシスタントです。特定の作付けについて、農家の相談相手として継続的に対話します。",
     "利用者は「次に何をすればいいか分からない」状態で相談しています。作業の順序と時期の目安を、日本語で具体的に示してください。",
     "会話の続きである場合は、前のやりとりを踏まえて答えること。挨拶や自己紹介を毎回繰り返さないこと。",
     "",
@@ -204,16 +219,39 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     "- 「記載なし（判定不可）」と書かれた欄は、制限が無いという意味ではない。判断できないと述べること。",
     "- 特定の農薬名を新たに推薦してはならない（登録の有無を確認できないため）。防除が必要な場面では「登録のある薬剤を確認する」と述べる。",
     "- 肥料の施用量・農薬の使用量を具体的な数値で断定してはならない。土壌診断・製品の表示・地域の指導機関に依ると述べること。",
+    isGeneral
+      ? "- 対象の作物が指定されていない。時期・薬剤・生育段階は作物によって変わるため、特定の作物を前提にした具体値を述べず、作物によって変わる旨を示すこと。作物を絞った方が答えられる質問では、その作物を選んで相談し直すよう促すこと。"
+      : null,
     hasRecords
       ? "- 作業記録が渡された場合は、直前にやった作業を踏まえて次を提案すること。記録に無い作業を「やった」と決めつけないこと。"
       : "- 作業記録は渡されていない。過去の作業実績を知っている前提で書かないこと（「前回の防除から」等と書かない）。",
+    // 数えるのはコード、言い換えるのが LLM（docs/decisions/20260829-ai-output-structure.md）。
+    // 記録から自分で数え直させると、年の取り違えや回数の誤りがそのまま助言に乗る
+    hasAggregates
+      ? [
+          "- 「自農場の集計」の数値はコードが数えた確定値。**その数字をそのまま使い、記録から数え直さないこと**。集計と違う回数・日数を述べてはならない。",
+          // 渡すだけでは使わない（実測：前回の散布9日前・同一商品3回連用を渡しても触れなかった）
+          "  散布の時期・間隔・回数に関わる質問では、集計の「前回の散布からの日数」「同じ商品を繰り返し使っている組み合わせ」「昨年の同時期」を**必ず答えに反映する**こと。一般論だけで答えないこと。",
+          // 実測で「3回使っているため次も散布を」と逆向きに読んだ。連用は注意する材料
+          "  ただし同じ商品を繰り返し使っている事実は、**同じ薬剤を続けてよい根拠にしないこと**。連用は薬剤耐性の観点で注意する材料であり、登録のある別の薬剤を検討するよう促す側に使う（有効成分・系統のデータは無いため、同一系統かどうかの判定はしないこと）。",
+        ].join("\n")
+      : null,
     "- 過去に出した助言と照合結果が渡された場合、同じ助言を繰り返さないこと。未実施のものは事情を尋ねるか代替を示すこと。",
     "  「記録と照合できません」は未実施を意味しない。実施していないと決めつけないこと。",
+    "- 情報が足りないところを推測で埋めないこと（不足は下の reply の指示にしたがって尋ねる）。",
     "",
     // 形はスキーマ（response_format）が保証するので、ここでは各項目の中身だけを指示する
     "各項目の中身:",
     // 前置きから書き始めると結論が埋もれる。利用者は答えを知りたくて聞いている
-    "- reply: 利用者への返答（会話文）。**1文目で結論を述べ**、理由は2文目以降。前置き・状況説明から始めない。2〜3文。",
+    // 文数を固定で縛ると、一言で済む質問にも3文書き、手順を聞かれても3文で打ち切る。
+    // 結論を先に出す原則（docs/decisions/20260829-ai-output-structure.md）はそのままに、
+    // 量だけ質問側に合わせさせる
+    "- reply: 利用者への返答（会話文）。**1文目で結論を述べ**、理由は2文目以降。前置き・状況説明から始めない。長さは質問に合わせる —— 一言で済むことは一言で答え、手順や選び方を聞かれたら必要なだけ書く。",
+    // 実測では、聞くべきこと（「具体的な病害虫の情報が不足」）を unknowns に流していた。
+    // プロンプトで押しても直らないので、専用の枠を作って役割を分けている
+    "- follow_up_question: 症状・場所・時期・作業の状況など、答えを絞るのに要る情報が質問に無いときに、確認したいこと1つ。40字以内の疑問文。足りているときは null。",
+    "  **unknowns は判断の限界**（渡された情報では分からないこと）で、**follow_up_question は利用者に尋ねること**。同じ内容を両方に書かないこと。",
+    "  reply は分かる範囲の答えで完結させること。質問だけを返してはならない（聞き返しは follow_up_question に置く）。",
     "- actions[].title: 作業名 / when: いつ（例: 今週中 / 開花後10日ごろ） / why: 理由（1〜2文）",
     "- watch_points: 今の時期に見ておくべき点（病害虫の兆候・気象リスクなど）",
     "- unknowns: 渡された情報では判断できないこと・確認が必要なこと",
@@ -231,17 +269,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     `- due_from / due_to は「いつ」を日付にしたもの。今日は ${day}。曖昧で日付にできなければ null にし、when に言い回しを残すこと。`,
     "- 期限を勝手に厳しくしないこと。「今週中」なら due_to はその週末。時期が不明なら null。",
     "",
-    "watch_points と unknowns は各0〜3件、1件30字以内。全体で500字程度に収めること。",
+    // 総量ではなく配分の問題なので、字数の一律上限は置かない（ADR 20260829）。
+    // 重複だけを禁じる
+    "watch_points と unknowns は各0〜3件、1件30字以内。actions と watch_points に出したことは、reply で同じ内容を書き直さないこと（画面では別枠に並べて出る）。",
   ].filter(Boolean).join("\n");
 
   const userParts: string[] = [
     "## 対象",
-    `作物: ${cropName}`,
-    ...(famicCropName ? [`農薬登録上の作物名: ${famicCropName}`] : []),
+    ...(isGeneral
+      ? ["対象: 農場全体（特定の作付けに絞っていない相談）"]
+      : [`作物: ${cropName}`, ...(famicCropName ? [`農薬登録上の作物名: ${famicCropName}`] : [])]),
     `今日の日付: ${day}`,
-    ...(crop?.start_date && elapsed != null
-      ? [`作付け開始: ${crop.start_date}（作付けから${elapsed}日目）`]
-      : ["作付け開始日: 未登録（生育段階は日付と一般的な作型から推定すること。断定しない）"]),
+    ...(isGeneral
+      ? []
+      : crop?.start_date && elapsed != null
+        ? [`作付け開始: ${crop.start_date}（作付けから${elapsed}日目）`]
+        : ["作付け開始日: 未登録（生育段階は日付と一般的な作型から推定すること。断定しない）"]),
     ...(region ? [`地域: ${region}`] : ["地域: 不明（地域差が大きい点に触れること）"]),
   ];
 
@@ -269,6 +312,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (droppedRows > 0) {
       userParts.push(`（ほか${droppedRows}件の適用行は省略。省略ぶんは範囲外として扱い、無いものとして述べないこと）`);
     }
+  } else if (isGeneral) {
+    userParts.push("", "## 登録のある農薬の適用情報",
+      "作物を指定していない相談のため、農薬登録情報を照合していない。具体的な薬剤・希釈倍数・回数には触れず、農薬が必要な場面では対象の作物を選んで相談するよう伝えること。");
   } else if (famicCropName) {
     userParts.push("", "## 登録のある農薬の適用情報",
       `登録済みの農薬に「${famicCropName}」に適用のある行が見つからなかった。具体的な薬剤・希釈倍数・回数には触れないこと。`);
@@ -277,6 +323,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       "この作物に農薬登録上の作物名が紐付いていないため、適用情報を照合できていない。具体的な薬剤・希釈倍数・回数には触れないこと。");
   }
 
+  if (hasAggregates) {
+    userParts.push("", "## 自農場の集計（コードが数えた確定値・数え直さないこと）", aggregates!.trim());
+  }
   if (hasRecords) {
     userParts.push("", "## 最近の作業記録", records!.trim());
   }
@@ -301,7 +350,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         ...turns,
       ],
       temperature: 0.3,
-      max_tokens: 1200,
+      // 返答の長さを質問に合わせさせたぶん、上限が近いと strict スキーマの JSON が
+      // 途中で切れて全体が壊れる（パース失敗＝502）。余白を持たせる
+      max_tokens: 1800,
       // json_object は「JSONであること」しか保証しない。形はスキーマで縛る。
       // ただし**中身の妥当性までは保証されない**ので、下の防御的パースは残す:
       //   - work_type が作業記録の語彙に完全一致するか（誤ると「やっていないのに実施済み」）
@@ -336,8 +387,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               },
               watch_points: { type: "array", maxItems: 4, items: { type: "string" } },
               unknowns: { type: "array", maxItems: 4, items: { type: "string" } },
+              // 聞き返しは無いことのほうが多いので null を許す。strict なので required には入れる
+              follow_up_question: { type: ["string", "null"] },
             },
-            required: ["reply", "actions", "watch_points", "unknowns"],
+            required: ["reply", "actions", "watch_points", "unknowns", "follow_up_question"],
             additionalProperties: false,
           },
         },
@@ -361,6 +414,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 due_from?: string | null; due_to?: string | null; why?: string }[];
     watch_points?: string[];
     unknowns?: string[];
+    follow_up_question?: string | null;
   };
   try {
     parsed = JSON.parse(content);
@@ -418,11 +472,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       };
     });
 
+  // 「聞き返さない」を "null" や空文字で表してくることがあるので、どちらも null に倒す
+  const followUp = typeof parsed.follow_up_question === "string" ? parsed.follow_up_question.trim() : "";
   const advice = {
     reply,
     actions,
     watchPoints: asStrings(parsed.watch_points),
     unknowns: asStrings(parsed.unknowns),
+    followUpQuestion: followUp === "" || followUp === "null" ? null : followUp.slice(0, 120),
   };
 
   // ── 出典と限界は必ず返す（LLM に書かせない）────────────────────────
@@ -444,9 +501,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     "農薬を使用するときは、最終的に製品ラベルの表示を確認してください。ラベルの表示が正です。",
   ];
   if (facts.length === 0) {
-    limits.push(famicCropName
-      ? `登録済みの農薬に「${famicCropName}」の適用行が見つからないため、薬剤の使用可否は判断していません。`
-      : "この作物に農薬登録上の作物名が紐付いていないため、薬剤の使用可否は判断していません（管理タブの作物から設定できます）。");
+    limits.push(
+      isGeneral
+        ? "作物を指定していない相談のため、薬剤の使用可否は判断していません。農薬について具体的に知りたいときは、対象の作物を選んで相談してください。"
+        : famicCropName
+          ? `登録済みの農薬に「${famicCropName}」の適用行が見つからないため、薬剤の使用可否は判断していません。`
+          : "この作物に農薬登録上の作物名が紐付いていないため、薬剤の使用可否は判断していません（管理タブの作物から設定できます）。");
   }
   if (facts.some(f => f.hasBlankLimit)) {
     limits.push("適用情報に「記載なし」の欄があります。制限が無いという意味ではなく、判定できないという意味です。製品ラベルを確認してください。");
@@ -457,7 +517,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!hasRecords) {
     limits.push("この農場の作業記録は参照していないため、すでに済んだ作業が含まれることがあります。");
   }
-  if (!crop?.start_date) {
+  if (!isGeneral && !crop?.start_date) {
     limits.push("作付け開始日が未登録のため、生育段階は日付からの推定です。");
   }
   // 会話を打ち切ったことを黙っていると「前に言ったのに覚えていない」に見える

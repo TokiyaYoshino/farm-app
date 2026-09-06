@@ -1,7 +1,7 @@
 # 仕様書: 作物ごとの相談（農業エージェント）
 
-最終更新: 2026-08-23（origin/main 時点の実装を元に作成）
-関連: [`docs/decisions/20260810-next-action-advice.md`](decisions/20260810-next-action-advice.md)（設計判断・検討した他案の詳細はこちら）
+最終更新: 2026-09-06（9章「畑全体の相談」を追加。1〜8章はExpo版を基準に書かれた2026-08-23時点の記述で、その後Web版にも移植済み）
+関連: [`docs/decisions/20260810-next-action-advice.md`](decisions/20260810-next-action-advice.md)（設計判断・検討した他案の詳細はこちら）、[`docs/decisions/20260906-general-advice-entry.md`](decisions/20260906-general-advice-entry.md)（畑全体の相談・ホーム導線の格上げ）
 
 このドキュメントは「今どう動くか」だけを追える1枚物。設計に至った経緯・却下案の理由はADR（上記リンク）を参照する。
 
@@ -78,11 +78,12 @@ Vercel Serverless Function（Node.js）。`POST` のみ、`OPENAI_API_KEY` の�
 ### リクエスト
 ```
 {
-  crop: { name, famic_crop_name?, start_date? },   // name必須・60文字以内
+  crop?: { name, famic_crop_name?, start_date? },  // 省略で「畑全体の相談」（9章）。渡すなら name必須・60文字以内
   today?: "YYYY-MM-DD",                             // 省略時はサーバー側の今日
   forecast?: string,                                 // 4000文字以内
   registrations?: RegistrationInfo[],                // FAMIC登録適用部の原文行
   records?: string,                                  // 8000文字以内
+  aggregates?: string,                                // 呼び出し側が事前に数えた値（4000文字以内・下記）
   question: string,
   region?: string,
   messages?: { role, content }[],                    // これまでのやりとり（直近12件まで）
@@ -106,6 +107,12 @@ Vercel Serverless Function（Node.js）。`POST` のみ、`OPENAI_API_KEY` の�
 
 ### `work_type` の扱い
 渡された `workTypes` 語彙に完全一致しない作業は API 側で `null` に落とす（近い語彙への丸めはしない）。打ち切った件数は `limits` に明記する。
+
+### 集計は渡す（2026-09-06〜）
+散布履歴（`formatSprayHistoryForPrompt`）と年×作業種別の件数（`formatWorkCountsForPrompt`）をクライアントが `aggregates` として渡し、プロンプトは「## 自農場の集計（コードが数えた確定値・数え直さないこと）」の別ブロックに置く。**新しい集計は書かない**——画面・防除助言と同じ関数を通すことで、AIの言うことと画面の数字が食い違わないようにする。渡すだけでは使わないため「散布の時期・間隔・回数の質問では必ず答えに反映する」ことと、「同じ商品の繰り返しを、同じ薬剤を続けてよい根拠にしない」ことをプロンプトで明示している。
+
+### 返答の長さと聞き返し（2026-09-06〜）
+文数の固定縛り（「2〜3文」「全体500字程度」）は廃止し、長さは質問に合わせさせる（結論を先に述べる原則は維持）。情報が足りないときの聞き返しは `follow_up_question`（40字以内の疑問文 or `null`）として**スキーマの専用枠**に置く —— プロンプトの指示だけでは、聞くべきことを `unknowns` に流してしまうため。`unknowns` は「判断できないこと」、`follow_up_question` は「利用者に尋ねること」で役割が違う。クライアントは聞き返しを本文の最後の段落として `content` に連結して保存する（`docs/decisions/20260906-advice-reply-tone.md`）。
 
 ---
 
@@ -163,7 +170,7 @@ Vercel Serverless Function（Node.js）。`POST` のみ、`OPENAI_API_KEY` の�
 | ファイル | 役割 |
 |---|---|
 | `api/advise.ts` | API本体 |
-| `scripts/test-advise.mjs` | APIの契約テスト（77 assertions） |
+| `scripts/test-advise.mjs` | APIの契約テスト（113 assertions） |
 | `scripts/migrations/2026-08-10-crop-advisor.sql` | テーブル定義 |
 | `scripts/migrations/2026-08-10-organizations-check.sql` | 上記の前提確認用（`organization_id` 参照先の実在確認） |
 | `expo-prototype/lib/adviceMatch.ts` | 照合ロジック |
@@ -175,3 +182,19 @@ Vercel Serverless Function（Node.js）。`POST` のみ、`OPENAI_API_KEY` の�
 | `expo-prototype/screens/ManageScreen.tsx` | 作物行からの起動導線 |
 | `expo-prototype/screens/HomeScreen.tsx` | 今日の予定直後の起動導線 |
 | `expo-prototype/scripts/link-famic-crop-names.mjs` | FAMIC作物名の紐付け（1回きりの運用スクリプト、既定は確認のみ・`--apply`で更新） |
+| `src/App.tsx` | Web版の実装（スレッド・シート・ホーム導線。機能6のWeb移植は2026-08-23以降に完了） |
+| `src/lib/adviceMatch.ts` | Web版の照合ロジック（Expo版とは型定義のみ異なる） |
+| `scripts/migrations/2026-09-06-crop-advice-general-thread.sql` | 畑全体の相談のための `crop_id` nullable 化 |
+
+---
+
+## 9. 畑全体の相談（`crop_id` なし、2026-09-06〜・Web版のみ）
+
+作物を指定しないスレッドを1本足した。作物を1件も登録していない利用者と、作物にまたがる相談のための入口（設計判断は [`docs/decisions/20260906-general-advice-entry.md`](decisions/20260906-general-advice-entry.md)）。
+
+- **保存先は同じ2テーブル**。`crop_id` を nullable 化し、null = 畑全体のスレッドとする（`scripts/migrations/2026-09-06-crop-advice-general-thread.sql`）。読み出しは `.is("crop_id", null)`
+- **導線**: ホームの「相談する」カード（旧「作付け中」カード）の主操作ボタン。行き先は作物0件なら畑全体、1件ならその作付け、2件以上なら畑全体。シート上部の対象セレクタで切り替えられる
+- **農薬の適用情報は照合しない**。作物が定まらないため `api/advise.ts` は `crop` 未指定を `isGeneral` として扱い、適用情報を渡されてもプロンプトに載せず、`limits` に「作物を指定していない相談のため、薬剤の使用可否は判断していません。…対象の作物を選んで相談してください」を必ず付ける
+- **記録は全作物を渡す**（作物名を各行に添える）。照合（`src/lib/adviceMatch.ts`）も作物で絞らず全記録を対象にする
+- **バッジには出さない**。ホームの「やること」件数は作物行に出すものなので、`crop_id` が null の行は集計から除く
+- **Expo版は未対応**。`.eq("crop_id", cropId)` で引くため null 行は現れず、壊れはしない。Webでの利用実績を見てから移植を判断する

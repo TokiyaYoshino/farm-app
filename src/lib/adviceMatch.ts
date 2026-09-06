@@ -20,6 +20,8 @@
 //
 // 4. **照合は作物・作業種別・期間の3条件。** 圃場は見ない（助言は作付け単位で出しており、
 //    圃場を指定していないため。圃場で絞ると別圃場でやった作業を見落とす）。
+//    ただし `crop_id` が null の助言（畑全体の相談から出たもの）は作物を条件から外し、
+//    全記録を対象にする。null を作物IDと比較すると永遠に一致せず、やったのに「まだ」と出る。
 /** 照合に使う作業記録の最小形。App.tsx の Report がそのまま渡る。
  *  Web 版には lib/types.ts が無いため、依存を作らず構造的に受ける
  *  （expo-prototype/lib/adviceMatch.ts とはこの型定義だけが異なる）。 */
@@ -34,7 +36,8 @@ export interface MatchReport {
 /** crop_advice_actions の1行。DBの列名に合わせる（store がそのまま渡す） */
 export interface AdviceAction {
   id: string;
-  crop_id: number;
+  /** 助言の対象作物。null は畑全体の相談（作物を絞らずに照合する） */
+  crop_id: number | null;
   message_id: string;
   title: string;
   /** reports.work_type と同じ語彙。null は照合不可 */
@@ -82,7 +85,7 @@ const normalize = (s: string): string => s.normalize("NFKC").trim().toLowerCase(
 /** その記録が助言の作業に当たるか。作業種別は完全一致で見る。
  *  部分一致（「防除」が「防除準備」に当たる等）は誤判定を生むため採らない。 */
 function reportMatches(r: MatchReport, a: AdviceAction, start: string, end: string | null): boolean {
-  if (r.crop_id !== a.crop_id) return false;
+  if (a.crop_id != null && r.crop_id !== a.crop_id) return false;
   if (!a.work_type) return false;
   if (normalize(r.work_type ?? "") !== normalize(a.work_type)) return false;
   if (r.date < start) return false;
@@ -188,7 +191,11 @@ export function matchDetail(m: ActionMatch): string {
  * 踏まえて答えられるようにする。画面表示と同じ matchActions を通すので、
  * AI の言うことと画面のバッジが食い違わない。
  */
-export function formatAdviceHistoryForPrompt(matches: ActionMatch[], maxItems = 20): string {
+export function formatAdviceHistoryForPrompt(
+  matches: ActionMatch[],
+  maxItems = 20,
+  scope: "crop" | "farm" = "crop",
+): string {
   if (matches.length === 0) return "";
   const lines = matches.slice(0, maxItems).map(m => {
     const a = m.action;
@@ -200,7 +207,7 @@ export function formatAdviceHistoryForPrompt(matches: ActionMatch[], maxItems = 
   const dropped = matches.length - Math.min(matches.length, maxItems);
   return [
     "",
-    "## これまでにこの作付けへ出した助言と、作業記録から分かる実施状況",
+    `## これまでに${scope === "farm" ? "畑全体の相談で" : "この作付けへ"}出した助言と、作業記録から分かる実施状況`,
     "同じ助言を繰り返さず、「まだ」のものは事情を尋ねるか代替を示すこと。",
     // statusLabel と同じ語を使う。ここがずれると AI の言うことと画面のバッジが食い違う
     "「記録から分かりません」は「やっていない」という意味ではない。実施していないと決めつけないこと。",

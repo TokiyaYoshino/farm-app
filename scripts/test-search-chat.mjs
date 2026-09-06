@@ -64,8 +64,8 @@ let pass = 0, fail = 0;
 const t = (name, cond) => { cond ? (pass++, console.log("  ✓", name)) : (fail++, console.log("  ✗", name)); };
 
 const RECORDS = [
-  "2026-08-05 【南高梅・上ノ段】作業:防除 / 農薬:ﾀﾞｺﾆｰﾙ1000(300L)",
-  "2025-09-20 【南高梅・上ノ段】作業:防除 / 農薬:ﾀﾞｺﾆｰﾙ1000(300L)",
+  "2026-08-05 【ほうれん草・上の段】作業:防除 / 農薬:ﾀﾞｺﾆｰﾙ1000(300L)",
+  "2025-09-20 【ほうれん草・上の段】作業:防除 / 農薬:ﾀﾞｺﾆｰﾙ1000(300L)",
 ].join("\n");
 const Q = "去年の梅の防除は何回した？";
 
@@ -147,7 +147,7 @@ t("農薬に触れるなら混合剤の注意が付く",
   r.body.notes.some(n => n.includes("混合剤") && n.includes("成分別")));
 // 既定スタブの根拠日付はこの記録に無く除外注記が増えるため、根拠を合わせておく
 llmJson = { answer: "1,200kgでした。", answerable: true, evidence: [{ date: "2026-07-20", detail: "収穫1200kg" }] };
-r = await call({ question: "先月の収穫量は？", records: "2026-07-20 【南高梅】作業:収穫 / 数量:1200kg" });
+r = await call({ question: "先月の収穫量は？", records: "2026-07-20 【ほうれん草】作業:収穫 / 数量:1200kg" });
 t("農薬と無関係なら農薬の注意は付けない",
   !r.body.notes.some(n => n.includes("混合剤")) && r.body.notes.length === 1);
 llmJson = null;

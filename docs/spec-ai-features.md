@@ -18,9 +18,9 @@ farm-appは6つのAI機能を持つ。すべてOpenAI（`gpt-4o-mini`系）を�
 | 3 | 記録検索チャット | `api/search-chat.ts` | ○ | ○ |
 | 4 | 天気×防除タイミング助言 | `api/pest-control-advice.ts` | ○ | ○ |
 | 5 | 病害虫画像診断 | `api/diagnose-image.ts` | ○ | ○ |
-| 6 | 作物ごとの相談（農業エージェント） | `api/advise.ts` | **×（Expo限定）** | ○ |
+| 6 | 作物ごとの相談（農業エージェント） | `api/advise.ts` | ○ | ○ |
 
-機能6のみWeb版に未実装（詳細は6章）。
+機能6は2026-08-23以降にWeb版へ移植済み。Web版にはさらに「畑全体の相談」（作物を指定しないスレッド、2026-09-06）がある（5章）。
 
 ---
 
@@ -101,7 +101,7 @@ farm-appは6つのAI機能を持つ。すべてOpenAI（`gpt-4o-mini`系）を�
 - 上記5機能は「1回叩いて表示して終わり」（`ai_outputs`への監査ログのみ）だが、本機能は**会話として続き・作物ごとに溜まり・作業記録と照合できる**専用テーブル（`crop_advice_messages`/`crop_advice_actions`）を持つ
 - 記録検索チャット（3.3）が「記録の検索」なのに対し、本機能は「知識の補填」（記録がゼロでも成立する）
 - 農薬の数値はLLMに生成させず、FAMIC登録情報の原文を`registrationFacts`として別枠で返す点は3.4と共通するが、`crops.famic_crop_name`の紐付けが前提（未紐付けなら常に空、判定不可として縮退）
-- **現状Expo版のみ実装**（6章参照）
+- Web版・Expo版の両方で実装済み。Web版のみ、作物を指定しない**畑全体の相談**（`crop_id = null` のスレッド）に対応する。作物が定まらないぶん適用情報は照合せず、作物を選ぶよう促す（`docs/decisions/20260906-general-advice-entry.md`）
 - **マーケットでの強み**: 競合レビュー89件で唯一の年齢言及（20代・新規就農者）が、まさにこの機能が埋めるギャップと一致する——「種まきした日を入れると今後の作業なども教えてくれる」ものを期待していたが実際には無く、分からずアプリを削除した、というのが記録された唯一の削除理由（`docs/research/competitor-gap-analysis-2026-08.md`①B）。しかも「助言を1回出して終わり」ではなく、会話が作付けごとに溜まり、助言した作業を実際の作業記録と照合して実施済み/未実施を示すところまで実装しており、比較対象の4アプリのレビューにこの水準の統合を指摘する声は無い。2026-08-10に本番稼働（詳細は`docs/spec-crop-advice-agent.md`）
 
 ---
@@ -127,10 +127,11 @@ ai_outputs: id(uuid), organization_id(FK, not null),
 | 項目 | Web版（`src/App.tsx`） | Expo版（`expo-prototype/`） |
 |---|---|---|
 | 機能1〜5（音声・日報・検索・防除助言・画像診断） | 実装済み | 実装済み（`expo-prototype/lib/ai.ts`に同等ロジックを重複実装） |
-| 機能6（作物ごとの相談＝農業エージェント） | **未実装** | 実装済み・本番稼働中 |
+| 機能6（作物ごとの相談＝農業エージェント） | 実装済み（2026-08-23以降に移植） | 実装済み・本番稼働中 |
+| 機能6のうち「畑全体の相談」（`crop_id = null`） | 実装済み（2026-09-06） | **未対応** |
 | `AnalyticsView`のAI出力履歴表示 | `kind`4種のみ対応（`advice`未対応） | 該当機能なし（Web版のみに存在する分析タブ） |
 
-機能6をWeb版にも展開する場合、`AdviseSheet`相当のUIをWeb側に新規実装する必要がある（`api/advise.ts`自体は共通APIなので流用可）。
+畑全体の相談をExpo版に展開する場合は、`expo-prototype/lib/store.tsx`（`.eq("crop_id", cropId)` を null 対応に）・`expo-prototype/lib/adviceMatch.ts`（`crop_id` の型と照合条件）・`AdviseSheet` の対象セレクタの3箇所を直す。`api/advise.ts` は共通なので変更不要。現状は null 行が Expo 側のクエリに現れないだけで、壊れてはいない（`docs/decisions/20260906-general-advice-entry.md`）。
 
 ---
 
@@ -144,7 +145,12 @@ ai_outputs: id(uuid), organization_id(FK, not null),
 
 ## 7. セキュリティ上の注意
 
-`api/*.ts`のAI系5〜6本はいずれも**無認証**（誰でも呼べる）。加えてRLSは全テーブル`allow_all`のままで実ポリシー化されていない（`docs/rls-rollout.md`、詳細は`docs/multitenancy-progress.md`）。この状態でAI出力を外部に公開する口（公開API・共有リンク・エクスポート）は開けない、という制約が`docs/decision-log.md`（2026-07-31）に明記されている。RLS実ポリシー化が本番公開前の最優先課題である点は本ドキュメントの対象外の機能にも共通する前提条件。
+**2026-09-06 に実態を確認したところ、この章の前提（無認証・RLS未適用）はどちらも解消していた。**
+
+- `api/*.ts` は AI 系6本と `pesticide-registration.ts` を含め**すべて `requireUser`（`api/_auth.ts`）を通す**。未認証・Bearer 形式でない・ユーザーとして解決できないトークンはいずれも 401（`scripts/test-advise.mjs` の「認証」節で契約テスト済み）
+- RLS は**実ポリシー適用済み**。`allow_all` は全テーブルから消え、`<table>_all_own_org`（`organization_id = jwt_organization_id()`）が入っている。anon キーでは1行も読めない
+
+したがって「AI出力を外部に公開する口を開けない」（`docs/decision-log.md` 2026-07-31）という制約の前提は変わっている。公開する場合の可否は改めて判断すること。`docs/rls-rollout.md` / `docs/multitenancy-progress.md` は作業中のため、完了状態の記述はそちらの更新を待つ。
 
 ---
 

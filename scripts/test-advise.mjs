@@ -93,7 +93,10 @@ const CROP = { name: "たまねぎ", famic_crop_name: "たまねぎ", start_date
 const WORK_TYPES = ["播種", "定植", "施肥", "防除", "除草", "収穫"];
 
 console.log("\n入力の検証:");
-t("crop.name 無しは 400", (await call({})).code === 400);
+// crop を渡さない呼び出しは「作物を指定しない畑全体の相談」として通す。作物を1件も
+// 登録していない利用者の入口なので弾かない（docs/decisions/20260906-general-advice-entry.md）
+t("crop 無しは畑全体の相談として通る", (await call({})).code === 200);
+t("crop はあるが name 無しは 400", (await call({ crop: {} })).code === 400);
 t("crop.name 空文字は 400", (await call({ crop: { name: "  " } })).code === 400);
 t("GET は 405", await (async () => {
   let c = null;
@@ -164,13 +167,77 @@ t("一致行が無ければ限界に明記",
   r.body.limits.some(l => l.includes("適用行が見つからない")));
 
 console.log("\nFAMIC 作物名が未紐付けのとき:");
-r = await call({ crop: { name: "南高梅", start_date: "2020-03-01" }, registrations: [REG_FULL] });
+r = await call({ crop: { name: "ほうれん草", start_date: "2026-08-20" }, registrations: [REG_FULL] });
 t("適用情報は照合しない（空）", r.body.registrationFacts.length === 0);
 t("プロンプトで薬剤に触れさせない", prompt().includes("照合できていない"));
 t("限界に紐付け未設定を明記",
   r.body.limits.some(l => l.includes("紐付いていない")));
 t("出典に FAMIC を挙げない（照合していないため）",
   !r.body.sources.some(s => s.includes("FAMIC")));
+
+// 作物が定まらない＝適用情報を照合できない、という点は未紐付けのときと同じ。
+// 入口が目立つぶん踏み込んだ農薬の質問が来るので、ここが緩むと実害に直結する
+console.log("\n畑全体の相談（作物を指定しない）:");
+r = await call({ registrations: [REG_FULL], workTypes: WORK_TYPES });
+t("農場全体の相談として扱う", prompt().includes("農場全体"));
+t("適用情報を渡されても薬剤の原文をプロンプトに載せない", !prompt().includes("ﾀﾞｺﾆｰﾙ1000"));
+t("プロンプトで薬剤に触れさせない", prompt().includes("農薬登録情報を照合していない"));
+t("適用情報は照合しない（空）", r.body.registrationFacts.length === 0);
+t("限界に作物未指定を明記し作物を選ぶよう促す",
+  r.body.limits.some(l => l.includes("作物を指定していない") && l.includes("作物を選んで相談")));
+t("出典に FAMIC を挙げない（照合していないため）",
+  !r.body.sources.some(s => s.includes("FAMIC")));
+t("作付け開始日の限界は出さない（作付けを対象にしていないため）",
+  !r.body.limits.some(l => l.includes("作付け開始日が未登録")));
+
+// 普段使いのAI（ChatGPT等）と同じ会話の質感にするための契約。
+// 「結論を先に出す」（docs/decisions/20260829-ai-output-structure.md）は保ったまま、
+// 文数の固定縛りだけを外す。長さは質問側に合わせさせる
+console.log("\n返答の質感（会話として自然に答える）:");
+r = await call({ crop: CROP, workTypes: WORK_TYPES });
+t("文数を固定で縛らない", !prompt().includes("2〜3文"));
+t("長さは質問に合わせると指示する", prompt().includes("長さは質問に合わせる"));
+t("結論を先に述べる原則は維持（ADR 20260829）", prompt().includes("1文目で結論"));
+// 許可形（「聞き返してよい」）だと実測で一度も聞き返さなかったため、
+// 条件と置き場所を指定した指示にする（docs/decisions/20260906-advice-reply-tone.md）
+t("聞き返す条件を具体的に指示する", prompt().includes("答えを絞るのに要る情報が質問に無いとき"));
+t("聞き返しは reply ではなく専用枠に置く", prompt().includes("聞き返しは follow_up_question に置く"));
+t("reply は分かる範囲で完結させる（質問だけを返さない）",
+  prompt().includes("質問だけを返してはならない"));
+t("全体の字数上限で注意書きを圧迫しない", !prompt().includes("全体で500字程度"));
+t("やること・見ておくことの内容を本文で書き直させない",
+  prompt().includes("reply で同じ内容を書き直さない"));
+// 返答が伸びたぶん、構造化出力が途中で切れると JSON 全体が壊れて 502 になる
+t("返答が伸びても切れない出力上限を確保する", captured.max_tokens >= 1600);
+
+// 聞き返しはプロンプトの指示では実現しなかった。実測すると、聞くべきこと
+// （「具体的な病害虫の情報が不足」）を unknowns に流していた —— スキーマに置き場が
+// あるほうへ行く。ならば置き場を作る、が正解（docs/decisions/20260906-advice-reply-tone.md）
+console.log("\n聞き返し（follow_up_question）:");
+const schema = () => captured.response_format.json_schema.schema;
+r = await call({ crop: CROP, workTypes: WORK_TYPES });
+t("スキーマに follow_up_question がある", "follow_up_question" in schema().properties);
+t("聞き返さない返答もあるので null を許す",
+  schema().properties.follow_up_question?.type?.includes("null") === true);
+t("strict スキーマなので required に入れる",
+  schema().required.includes("follow_up_question"));
+t("unknowns との役割の違いを指示する", prompt().includes("unknowns は判断の限界"));
+
+llmJson = { ...DEFAULT_LLM_JSON, follow_up_question: "葉と実のどちらに症状が出ていますか？" };
+r = await call({ crop: CROP });
+t("聞き返しを返す", r.body.advice.followUpQuestion === "葉と実のどちらに症状が出ていますか？");
+
+llmJson = { ...DEFAULT_LLM_JSON, follow_up_question: "   " };
+r = await call({ crop: CROP });
+t("空の聞き返しは null に落とす", r.body.advice.followUpQuestion === null);
+
+llmJson = { ...DEFAULT_LLM_JSON, follow_up_question: "null" };
+r = await call({ crop: CROP });
+t("文字列の null も null に落とす", r.body.advice.followUpQuestion === null);
+
+llmJson = null;
+r = await call({ crop: CROP });
+t("フィールドが無い応答でも壊れない", r.body.advice.followUpQuestion === null);
 
 console.log("\n出典・限界は必ず付く:");
 r = await call({ crop: CROP });
@@ -181,6 +248,25 @@ t("限界に「目安」と地域差を明記",
   r.body.limits.some(l => l.includes("目安") && l.includes("地域の指導機関")));
 t("限界に製品ラベルの確認を必ず入れる",
   r.body.limits.some(l => l.includes("製品ラベル")));
+
+// 数えるのはコード、言い換えるのが LLM（docs/decisions/20260829-ai-output-structure.md）。
+// 防除助言と記録検索は既に集計済みの値を受け取っているが、相談だけが受け取っていなかった
+console.log("\nコードが数えた集計を渡す:");
+const FACTS = "### 前回の散布\n2026-08-28（9日前） たまねぎ・上の段: ダコニール\n\n2026年: 防除3回 / 施肥2回";
+r = await call({ crop: CROP, aggregates: FACTS, records: "2026-08-28 防除", workTypes: WORK_TYPES });
+t("集計をそのままプロンプトに載せる", prompt().includes("前回の散布") && prompt().includes("防除3回"));
+t("集計であることが分かる見出しを付ける", prompt().includes("## 自農場の集計"));
+t("数え直しを禁じる", prompt().includes("数え直さないこと"));
+// 渡すだけでは使わない（実測：前回の散布9日前・同一商品3回連用を渡しても触れなかった）
+t("関係する質問では集計を答えに反映させる", prompt().includes("必ず答えに反映する"));
+// 実測：同じ商品の3回連用を「だから次も撒こう」の根拠に読み替えた。連用は注意する材料であって
+// 推奨の根拠ではない（系統の判定は RAC データが無くできない / 20260823-pest-advice-history.md）
+t("同じ商品の繰り返しを散布の根拠に読み替えさせない",
+  prompt().includes("同じ薬剤を続けてよい根拠にしないこと"));
+t("集計が無いときはブロックごと出さない",
+  (await call({ crop: CROP, records: "2026-08-28 防除" })) && !prompt().includes("## 自農場の集計"));
+t("長すぎる集計は 400 で弾く",
+  (await call({ crop: CROP, aggregates: "あ".repeat(4001) })).code === 400);
 
 console.log("\n記録ゼロでも成立する（知識の補填が目的）:");
 r = await call({ crop: CROP });

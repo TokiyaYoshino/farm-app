@@ -200,14 +200,15 @@ async function fetchPestControlForecast(lat: number, lng: number): Promise<strin
 // ─── 型 ─────────────────────────────────────────────────
 type Role = "admin" | "worker" | "viewer";
 interface User   { id: number; name: string; role: Role; login_id?: string; auth_id?: string; email?: string; org?: string; organization_id?: string; }
-// famic_crop_name は FAMIC 登録適用部の作物名（例: 南高梅 → うめ）との手動紐付け。
+// famic_crop_name は FAMIC 登録適用部の作物名（例: ほうれん草 → ほうれんそう）との紐付け。
 // 未設定なら農薬の使用回数は「判定不可」として扱う（自動マッチングはしない）
 interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; famic_crop_name?: string | null; }
 
 // ─── 作付けの相談（農業エージェント）── crop_advice_messages の1発言
 interface CropAdviceMessage {
   id: string;
-  crop_id: number;
+  /** 相談対象の作物。null は畑全体の相談（作物を指定しないスレッド） */
+  crop_id: number | null;
   role: "user" | "assistant";
   content: string;
   sources?: string[] | null;
@@ -230,7 +231,11 @@ interface AdviseAction {
   dueFrom: string | null; dueTo: string | null; why: string; sortOrder: number;
 }
 interface AdviseResult {
-  advice: { reply: string; actions: AdviseAction[]; watchPoints: string[]; unknowns: string[] };
+  advice: {
+    reply: string; actions: AdviseAction[]; watchPoints: string[]; unknowns: string[];
+    /** 答えを絞るのに要る情報が足りないときの聞き返し。無ければ null */
+    followUpQuestion?: string | null;
+  };
   registrationFacts: AdviseRegistrationFact[];
   sources: string[];
   limits: string[];
@@ -537,6 +542,9 @@ export default function App() {
   // ─── 作付けの相談（農業エージェント）─────────────────────────
   // Expo版 AdviseSheet の Web 移植。api/advise.ts は共通なので UI とストア相当だけ。
   // 照合結果は保存せず毎回計算する（記録は後から増減するため / src/lib/adviceMatch.ts）。
+  // 開閉は adviseOpen で持つ。adviseCropId は「どのスレッドか」だけを表し、
+  // null は畑全体の相談を意味する（開閉と兼用にすると、畑全体＝閉じている、になってしまう）
+  const [adviseOpen, setAdviseOpen] = useState(false);
   const [adviseCropId, setAdviseCropId] = useState<number | null>(null);
   const [adviseMsgs, setAdviseMsgs] = useState<CropAdviceMessage[]>([]);
   const [adviseActions, setAdviseActions] = useState<AdviceAction[]>([]);
@@ -624,8 +632,11 @@ export default function App() {
       if (organizationId) {
         const { data: acts } = await supabase.from("crop_advice_actions").select("*")
           .eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300);
+        // 畑全体の相談（crop_id が null）はバッジの対象外。作物行に出す件数なので素通しする
         const byCrop: Record<number, AdviceAction[]> = {};
-        ((acts ?? []) as AdviceAction[]).forEach(a => { (byCrop[a.crop_id] ??= []).push(a); });
+        ((acts ?? []) as AdviceAction[]).forEach(a => {
+          if (a.crop_id != null) (byCrop[a.crop_id] ??= []).push(a);
+        });
         setAdviceCounts(byCrop);
 
         // 作物名の自動一致に使う候補（＝ラベル上の作物名）。
@@ -1228,7 +1239,7 @@ export default function App() {
     showToast("目標収穫量を更新しました");
   };
 
-  // FAMIC 登録適用部の作物名との紐付け。「南高梅」→「うめ」のように登録上の作物名と
+  // FAMIC 登録適用部の作物名との紐付け。「ほうれん草」→「ほうれんそう」のように登録上の作物名と
   // 一致しないため自動マッチングはせず、手入力で対応させる。未設定のあいだは
   // 農薬の総使用回数を「判定不可」として扱う（誤判定で法令違反に導かないため）。
   const updateFamicCropName = async (cropId: number, value: string) => {
@@ -2017,8 +2028,12 @@ export default function App() {
 
   // 照合は毎回計算する（保存しない）。作業記録が後から増えても表示が実態とずれない
   const adviseMatches = useMemo(
-    () => (adviseCropId == null ? [] : matchActions(adviseActions, reports.filter(r => r.crop_id === adviseCropId))),
-    [adviseActions, reports, adviseCropId],
+    // 畑全体の相談は作物で絞らず全記録と照合する（adviceMatch.ts 側も crop_id null を許す）
+    () => (!adviseOpen ? [] : matchActions(
+      adviseActions,
+      adviseCropId == null ? reports : reports.filter(r => r.crop_id === adviseCropId),
+    )),
+    [adviseActions, reports, adviseCropId, adviseOpen],
   );
 
   // ─── 作付けの相談（農業エージェント）─────────────────────────
@@ -2026,13 +2041,14 @@ export default function App() {
   // 記録検索チャットとは目的が違う。あちらは記録の検索（記録に無いことは答えない）で、
   // こちらは知識の補填（記録がゼロでも成立する）。設計は
   // docs/decisions/20260810-next-action-advice.md、照合は src/lib/adviceMatch.ts。
-  const loadCropAdvice = async (cropId: number) => {
+  // cropId が null なら畑全体のスレッド（crop_id is null）を引く
+  const loadCropAdvice = async (cropId: number | null) => {
     if (!currentOrganizationId) return null;
+    const msgQ = supabase.from("crop_advice_messages").select("*").eq("organization_id", currentOrganizationId);
+    const actQ = supabase.from("crop_advice_actions").select("*").eq("organization_id", currentOrganizationId);
     const [msgRes, actRes] = await Promise.all([
-      supabase.from("crop_advice_messages").select("*")
-        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
-      supabase.from("crop_advice_actions").select("*")
-        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+      (cropId == null ? msgQ.is("crop_id", null) : msgQ.eq("crop_id", cropId)).order("created_at"),
+      (cropId == null ? actQ.is("crop_id", null) : actQ.eq("crop_id", cropId)).order("created_at"),
     ]);
     if (msgRes.error || actRes.error) return null;
     return {
@@ -2049,13 +2065,14 @@ export default function App() {
       .eq("organization_id", currentOrganizationId).order("created_at", { ascending: false }).limit(300);
     const byCrop: Record<number, AdviceAction[]> = {};
     ((data ?? []) as AdviceAction[]).forEach(a => {
-      (byCrop[a.crop_id] ??= []).push(a);
+      if (a.crop_id != null) (byCrop[a.crop_id] ??= []).push(a);
     });
     setAdviceCounts(byCrop);
   };
 
-  const openAdviseSheet = async (cropId: number) => {
+  const openAdviseSheet = async (cropId: number | null) => {
     setAdviseCropId(cropId);
+    setAdviseOpen(true);
     setAdviseMsgs([]); setAdviseActions([]); setAdviseError(""); setAdviseInput("");
     setAdviseThreadLoading(true);
     const data = await loadCropAdvice(cropId);
@@ -2066,13 +2083,14 @@ export default function App() {
 
   const sendAdvise = async () => {
     const question = adviseInput.trim();
-    const crop = crops.find(c => c.id === adviseCropId);
-    if (!crop || !question || adviseLoading) return;
+    // adviseCropId が null なら畑全体の相談。作物を1件も登録していなくても成立する
+    const crop = adviseCropId != null ? crops.find(c => c.id === adviseCropId) ?? null : null;
+    if ((adviseCropId != null && !crop) || !question || adviseLoading) return;
     setAdviseLoading(true); setAdviseError("");
     // 送信した質問はすぐ画面に出す（保存の成否を待たせない）
     const pendingId = `pending-${adviseMsgs.length}`;
     setAdviseMsgs(prev => [...prev, {
-      id: pendingId, crop_id: crop.id, role: "user", content: question,
+      id: pendingId, crop_id: adviseCropId, role: "user", content: question,
       created_at: new Date().toISOString(),
     }]);
     setAdviseInput("");
@@ -2081,22 +2099,31 @@ export default function App() {
       if (weatherCoords) {
         forecast = await fetchPestControlForecast(weatherCoords.lat, weatherCoords.lng).catch(() => undefined);
       }
-      // その作付けに紐づく記録だけを渡す。件数ゼロでも成立する
-      const cropReports = reports.filter(r => r.crop_id === crop.id);
-      const records = cropReports.length > 0
-        ? cropReports
+      // 作付けの相談はその作付けの記録だけ、畑全体の相談は全作物の記録を渡す。件数ゼロでも成立する
+      const targetReports = crop ? reports.filter(r => r.crop_id === crop.id) : reports;
+      const records = targetReports.length > 0
+        ? targetReports
             .slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60)
             .map(r => [
-              `${r.date} ${r.work_type || "作業不明"}`,
+              // 畑全体では作物名を添える。どの作物の作業か分からないと助言が噛み合わない
+              `${r.date} ${crop ? "" : `${cropName(r.crop_id)} `}${r.work_type || "作業不明"}`,
               r.field ? `圃場:${r.field}` : "",
               r.quantity ? `数量:${r.quantity}` : "",
               r.note ? `メモ:${r.note}` : "",
             ].filter(Boolean).join(" / "))
             .join("\n").slice(0, 7500)
         : undefined;
+      // 数えるのはコード、言い換えるのが LLM（docs/decisions/20260829-ai-output-structure.md）。
+      // 防除助言・記録検索は既に集計済みの値を渡しているが、相談だけが渡していなかった。
+      // 画面（今日の一手）・防除助言と同じ関数を通すので、AI の言うことと画面が食い違わない
+      const aggregates = [
+        formatSprayHistoryForPrompt({ reports: targetReports, crops, pesticides, maxChars: 2000 }),
+        formatWorkCountsForPrompt(targetReports),
+      ].filter(s => s.trim() !== "").join("\n\n").slice(0, 4000);
       // famic_crop_name が未設定なら適用行を1件も送らない。紐付けが無い状態で全行を渡すと、
-      // 他作物の適用情報をこの作付けのものとして提示してしまう
-      const famic = crop.famic_crop_name?.trim() || null;
+      // 他作物の適用情報をこの作付けのものとして提示してしまう。
+      // 畑全体の相談も作物が定まらないため、同じ理由で常に空になる
+      const famic = crop?.famic_crop_name?.trim() || null;
       const norm = (s: string) => s.normalize("NFKC").trim().toLowerCase();
       const registrations = famic
         ? Object.values(await prefetchAllRegistrations()).flat()
@@ -2116,13 +2143,15 @@ export default function App() {
         method: "POST",
         headers: apiHeaders(),
         body: JSON.stringify({
-          crop: { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null },
+          // crop を省くと api/advise.ts 側が畑全体の相談として扱う
+          crop: crop ? { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null } : undefined,
           today: new Date().toISOString().slice(0, 10),
           forecast, registrations, records, question, region: weatherCoords?.name,
+          aggregates: aggregates || undefined,
           messages: adviseMsgs.map(m => ({ role: m.role, content: m.content })),
           // 前に出した助言とその実施状況。画面のバッジと同じ matchActions を通すので
           // AI の言うことと画面が食い違わない
-          adviceHistory: formatAdviceHistoryForPrompt(adviseMatches).slice(0, 6000),
+          adviceHistory: formatAdviceHistoryForPrompt(adviseMatches, 20, crop ? "crop" : "farm").slice(0, 6000),
           workTypes: workTypeVocab,
         }),
       });
@@ -2135,7 +2164,7 @@ export default function App() {
         return;
       }
       const result = d as AdviseResult;
-      const saved = await saveAdviceTurn(crop.id, question, result);
+      const saved = await saveAdviceTurn(adviseCropId, question, result);
       if (saved) {
         setAdviseMsgs(prev => [...prev.filter(m => m.id !== pendingId), ...saved.messages]);
         setAdviseActions(prev => [...prev, ...saved.actions]);
@@ -2143,17 +2172,19 @@ export default function App() {
       } else {
         // 保存できなくても回答は見せる（相談自体を無駄にしない）。溜まらないことは明示する
         setAdviseMsgs(prev => [...prev, {
-          id: `local-${prev.length}`, crop_id: crop.id, role: "assistant",
-          content: result.advice.reply, sources: result.sources, limits: result.limits,
+          id: `local-${prev.length}`, crop_id: adviseCropId, role: "assistant",
+          content: adviceContent(result.advice), sources: result.sources, limits: result.limits,
           watch_points: result.advice.watchPoints, unknowns: result.advice.unknowns,
           registration_facts: result.registrationFacts, created_at: new Date().toISOString(),
         }]);
         setAdviseError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
       }
       void saveAiOutput("advice", {
-        cropId: crop.id,
-        inputSummary: [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`,
-          `記録:${cropReports.length}件`, `質問:${question}`].join(" / "),
+        cropId: crop ? crop.id : null,
+        inputSummary: [
+          ...(crop ? [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`] : ["対象:畑全体"]),
+          `記録:${targetReports.length}件`, `質問:${question}`,
+        ].join(" / "),
         outputJson: { advice: result.advice, registrationFacts: result.registrationFacts,
           sources: result.sources, limits: result.limits },
         usage: result.usage, costUsd: result.costUsd,
@@ -2168,14 +2199,19 @@ export default function App() {
 
   // 質問と返答を1往復として入れる。返答だけ・質問だけが残るとスレッドが読めなくなるので、
   // 返答の insert が失敗したら質問も消す
-  const saveAdviceTurn = async (cropId: number, question: string, result: AdviseResult) => {
+  // 聞き返しは本文の最後の段落として同じ吹き出しに入れる。別列を足さないのは、
+  // 利用者にとっては返答の一部（会話）であり、分けても表示上の利点が無いため
+  const adviceContent = (a: AdviseResult["advice"]) =>
+    [a.reply, a.followUpQuestion].filter(Boolean).join("\n\n");
+
+  const saveAdviceTurn = async (cropId: number | null, question: string, result: AdviseResult) => {
     if (!currentOrganizationId) return null;
     const base = { organization_id: currentOrganizationId, crop_id: cropId, created_by: currentUser?.id ?? null };
     const { data: userRow, error: userErr } = await supabase.from("crop_advice_messages")
       .insert([{ ...base, role: "user", content: question }]).select().single();
     if (userErr || !userRow) return null;
     const { data: aiRow, error: aiErr } = await supabase.from("crop_advice_messages").insert([{
-      ...base, role: "assistant", content: result.advice.reply,
+      ...base, role: "assistant", content: adviceContent(result.advice),
       // 出典・限界・登録情報の原文は生成時のものを残す。あとで文言を変えても過去の発言は当時のまま
       sources: result.sources, limits: result.limits,
       watch_points: result.advice.watchPoints, unknowns: result.advice.unknowns,
@@ -2739,16 +2775,40 @@ export default function App() {
             );
           })()}
 
-          {/* ── 作付け中 ─────────────────────────────────────────
-              農業エージェントの居場所。作物は農家が日常的に考える単位なので、
-              一覧としてそもそも自然に開かれる。そこに「やること」の未実施件数を出すことで、
-              エージェントが「探しに行く機能」ではなく「放置できない通知」になる。
-              件数は保存せず matchActions で毎回計算する（記録は後から増減するため）。 */}
-          {canUseAiFeature("nextActionAdvice") && crops.length > 0 && (
+          {/* ── 相談する ─────────────────────────────────────────
+              農業エージェントの居場所。作物ごとの「やること」の未実施件数を出すことで、
+              「探しに行く機能」ではなく「放置できない通知」になる。件数は保存せず
+              matchActions で毎回計算する（記録は後から増減するため）。
+
+              新しいカードを足さずここを格上げしたのは、上の「今日の一手」の位置と
+              ホームの縦幅を守るため。ボタンの行き先を作物1件だけその作付けにするのは、
+              作物未指定だと農薬の登録情報を照合できない＝弱い方に固定で流さないため
+              （docs/decisions/20260906-general-advice-entry.md）。 */}
+          {canUseAiFeature("nextActionAdvice") && (
             <div style={{ background:C.card, borderRadius:RADIUS.card, boxShadow:SHADOW.card, padding:"14px 16px", marginBottom:12 }}>
-              <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:4, display:"flex", alignItems:"center", gap:5 }}>
-                <Sprout size={12} strokeWidth={2} />作付け中 — 相談できます
+              <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:8, display:"flex", alignItems:"center", gap:5 }}>
+                <Sprout size={12} strokeWidth={2} />相談する
               </div>
+              {/* 空状態の一行だけ置き、説明文は書かない（docs/decisions/20260824-no-manual-test.md）。
+                  作物があるときは行き先をボタン自身に書けば説明は要らない */}
+              {crops.length === 0 && (
+                <div style={{ fontSize:13, color:C.textSub, lineHeight:1.6, marginBottom:12 }}>
+                  作物を登録していなくても、畑のことを相談できます。
+                </div>
+              )}
+              <button
+                onClick={() => openAdviseSheet(crops.length === 1 ? crops[0].id : null)}
+                style={{ ...btn("primary", "lg"), width:"100%" }}
+              >
+                <Sprout size={15} strokeWidth={2} />
+                {crops.length === 1 ? `${crops[0].name}のことを相談する`
+                  : crops.length === 0 ? "畑のことを相談する" : "畑全体のことを相談する"}
+              </button>
+              {crops.length > 0 && (
+                <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, margin:"16px 0 2px", display:"flex", alignItems:"center", gap:5 }}>
+                  作付け中
+                </div>
+              )}
               {crops.map((c, i) => {
                 const acts = adviceCounts[c.id] ?? [];
                 const m = countMatches(matchActions(acts, reports.filter(r => r.crop_id === c.id)));
@@ -3213,7 +3273,7 @@ export default function App() {
                     <div style={S.lbl}>目標収穫量（kg/年・任意）</div>
                     <input type="number" style={S.input} placeholder="例: 500" min="0" value={cForm.target_yield} onChange={e => setCForm(f => ({ ...f, target_yield:e.target.value }))} />
                     <div style={S.lbl}>農薬の数え方（任意・あとで自動で入ります）</div>
-                    <input style={S.input} placeholder="例: うめ（南高梅なら「うめ」）" value={cForm.famic_crop_name} onChange={e => setCForm(f => ({ ...f, famic_crop_name:e.target.value }))} />
+                    <input style={S.input} placeholder="例: ほうれんそう（ほうれん草なら「ほうれんそう」）" value={cForm.famic_crop_name} onChange={e => setCForm(f => ({ ...f, famic_crop_name:e.target.value }))} />
                     <div style={{ fontSize:11, color:C.textMuted, marginTop:-8, marginBottom:12, lineHeight:1.6 }}>
                       空のままで大丈夫です。農薬を登録すると自動で入ります。
                     </div>
@@ -3292,7 +3352,7 @@ export default function App() {
                             <>
                               <div style={S.lbl2}>農薬の数え方</div>
                               <div style={{ fontSize:11, color:C.textMuted, marginTop:2, marginBottom:6, lineHeight:1.6 }}>
-                                南高梅なら「うめ」のように、農薬ラベルに書かれている名前を選びます
+                                ほうれん草なら「ほうれんそう」のように、農薬ラベルに書かれている名前を選びます
                               </div>
                               {registrationCropNames.length > 0 ? (
                                 <div style={{ display:"flex", flexWrap:"wrap" as const, gap:6 }}>
@@ -4939,16 +4999,40 @@ export default function App() {
       </BottomSheet>
 
       {/* 作付けの相談（農業エージェント）*/}
-      <BottomSheet open={adviseCropId !== null} onClose={() => setAdviseCropId(null)}>
+      <BottomSheet open={adviseOpen} onClose={() => setAdviseOpen(false)}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4, display:"flex", alignItems:"center", gap:6 }}>
             <Sprout size={17} strokeWidth={2} color={C.ink} />
-            {adviseCropId != null ? cropName(adviseCropId) : ""}の相談
+            {adviseCropId != null ? cropName(adviseCropId) : "畑全体"}の相談
           </div>
           {/* 前置きを置かない。何をもとに答えたか・どこまでが目安かは、
               回答ごとに limits として下に付く（同じことを先に言うと二重になる）。
               防除助言の画面と同じ病気で、答える前に78字を読ませていた */}
           <div style={{ marginBottom:14 }} />
+
+          {/* 対象の切り替え。作物を選ぶと農薬の登録情報まで照合できるので、
+              畑全体（＝照合できない側）に固定させない。チップ行にすると作物が増えたとき
+              横スクロールになり、docs/decisions/20260823-ai-information-architecture.md が
+              問題視した形そのものになるため select にする。
+              スレッドは対象ごとに独立しているので、切り替えは開き直しと同じ */}
+          {crops.length > 0 && (
+            <div style={{ ...S.wellBox, marginBottom:14 }}>
+              <div style={S.wrow}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={S.lbl2}>相談する対象</div>
+                  <select
+                    value={adviseCropId ?? ""}
+                    onChange={e => { void openAdviseSheet(e.target.value === "" ? null : Number(e.target.value)); }}
+                    style={S.fieldSelect}
+                  >
+                    <option value="">畑全体</option>
+                    {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <ChevronRight size={15} strokeWidth={2} color={C.textMuted} style={{ transform:"rotate(90deg)" }} />
+              </div>
+            </div>
+          )}
 
           {/* やること — 記録との照合結果。
               「未実施」と「照合できません」を混ぜない。混ぜると
@@ -4989,8 +5073,17 @@ export default function App() {
           )}
           {!adviseThreadLoading && adviseMsgs.length === 0 && (
             <div style={{ fontSize:13, color:C.textMuted, lineHeight:1.8, marginBottom:12 }}>
-              例:「そろそろ追肥したほうがいい？」「今の時期に気をつける病気は？」<br />
-              やりとりはこの作付けに残り、次に相談するとき前回の内容を踏まえて答えます。
+              {adviseCropId != null ? (
+                <>
+                  例:「そろそろ追肥したほうがいい？」「今の時期に気をつける病気は？」<br />
+                  やりとりはこの作付けに残り、次に相談するとき前回の内容を踏まえて答えます。
+                </>
+              ) : (
+                <>
+                  例:「今の時期、畑全体で気をつけることは？」「そろそろ何をすればいい？」<br />
+                  やりとりは畑全体の相談として残ります。農薬を具体的に知りたいときは、上で作物を選んでください。
+                </>
+              )}
             </div>
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
@@ -5043,12 +5136,20 @@ export default function App() {
                   })()}
                   {/* 出典・限界・判断できないことは「前提」としてまとめて畳む。
                       実測では本文74字に対して limits だけで179字あり、しかも毎ターン
-                      ほぼ同じ固定文言なので、常時表示だと会話が進むほど注釈で埋まる */}
+                      ほぼ同じ固定文言なので、常時表示だと会話が進むほど注釈で埋まる。
+                      畳んでもスレッドが伸びると同じ文が何度も入るため、**同じスレッドで既に
+                      出た文はここに出さない**（消すのではなく重複を省く。保存はそのまま残り、
+                      毎回必要な農薬ラベルの確認は入力欄の上に常設した） */}
                   {(() => {
+                    const seen = new Set(
+                      adviseMsgs.slice(0, adviseMsgs.findIndex(x => x.id === m.id))
+                        .flatMap(x => [...(x.limits ?? []), ...(x.sources ?? [])]),
+                    );
                     const premise = [
+                      // 判断できないことは毎回その回の内容なので重複除去の対象にしない
                       ...(m.unknowns ?? []).map(x => ({ tag: "判断できないこと", text: x })),
-                      ...(m.limits ?? []).map(x => ({ tag: "", text: x })),
-                      ...(m.sources ?? []).map(x => ({ tag: "出典", text: x })),
+                      ...(m.limits ?? []).filter(x => !seen.has(x)).map(x => ({ tag: "", text: x })),
+                      ...(m.sources ?? []).filter(x => !seen.has(x)).map(x => ({ tag: "出典", text: x })),
                     ];
                     if (premise.length === 0) return null;
                     return (
@@ -5075,12 +5176,18 @@ export default function App() {
             </div>
           )}
 
+          {/* 農薬の使用基準の遵守は法的義務（罰則あり）。この一文だけは畳んだ中に置かず、
+              入力欄の上に常設する —— 前提の重複を省いた結果、スレッドが伸びると
+              初回の1件が画面外に流れてしまうため（docs/decisions/20260906-advice-reply-tone.md） */}
+          <div style={{ fontSize:11, color:C.textMuted, lineHeight:1.6, marginBottom:8 }}>
+            農薬を使うときは製品ラベルの表示を最終確認してください。作業の時期は目安です。
+          </div>
           <div style={{ display:"flex", gap:8 }}>
             <input
               value={adviseInput}
               onChange={e => setAdviseInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAdvise(); } }}
-              placeholder="この作付けについて聞く"
+              placeholder={adviseCropId != null ? "この作付けについて聞く" : "畑全体について聞く"}
               style={{ flex:1, minWidth:0, fontSize:16, padding:"11px 14px", borderRadius:999, border:`1px solid ${C.hairline}`, outline:"none", background:C.card, color:C.text }}
             />
             <button onClick={sendAdvise} disabled={adviseLoading || !adviseInput.trim()} style={{ ...btn("primary", "md"), opacity: adviseLoading || !adviseInput.trim() ? 0.5 : 1 }}>
