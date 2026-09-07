@@ -15,6 +15,7 @@ import {
 } from "../lib/ai";
 import { formatPesticideUsageForPrompt, formatSprayHistoryForPrompt } from "../lib/pesticideUsage";
 import { formatWorkCountsForPrompt } from "../lib/metrics";
+import { referencesForCrop } from "../data/maffIpm";
 import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
   type AdviceAction, type ActionMatch, type MatchStatus,
@@ -648,6 +649,11 @@ export function AdviseSheet({ open, onClose, cropId, photoDiagnosis, onAskRecord
         aggregates: aggregates || undefined,
         pesticideUsage: pesticideUsage || undefined,
         photoDiagnosis: photo?.text,
+        // 作業の段取り・病害虫の一般知識だけが参照元を持たず推論のままだったので、
+        // 国の防除マニュアル（公共データ利用規約）を原文で渡す。対応する作目が
+        // 無ければ空＝従来どおり LLM の一般知識に「目安」と断らせる。
+        // 畑全体の相談は作物が定まらないため渡さない（他作物の資料を当てないため）
+        references: crop ? referencesForCrop(crop.name) : undefined,
         question,
         region: weatherCoords?.name,
         // 会話として続ける（今の質問は question で渡すので履歴には入れない）

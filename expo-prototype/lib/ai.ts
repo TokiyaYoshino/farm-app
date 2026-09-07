@@ -303,6 +303,8 @@ export const adviseApi = (body: {
   pesticideUsage?: string;
   /** 写真から絞り込んだ候補（画像診断の結果を整形した文字列） */
   photoDiagnosis?: string;
+  /** 公的資料の原文（農水省の防除マニュアル等）。出典を示して引用させる */
+  references?: { title?: string; source?: string; text?: string }[];
   question?: string;
   region?: string;
   /** これまでのやりとり（古い順）。直近12件までがプロンプトに乗る */
