@@ -181,7 +181,13 @@ console.log("\n畑全体の相談（作物を指定しない）:");
 r = await call({ registrations: [REG_FULL], workTypes: WORK_TYPES });
 t("農場全体の相談として扱う", prompt().includes("農場全体"));
 t("適用情報を渡されても薬剤の原文をプロンプトに載せない", !prompt().includes("ﾀﾞｺﾆｰﾙ1000"));
-t("プロンプトで薬剤に触れさせない", prompt().includes("農薬登録情報を照合していない"));
+t("プロンプトで薬剤に触れさせない",
+  prompt().includes("農薬の適用情報（希釈倍数・使用方法・適用のある病害虫）は照合していない")
+  && prompt().includes("希釈倍数・使用方法・その薬剤を使ってよいかどうかには触れず"));
+// 使用実績を渡していない畑全体では、従来どおり「作物を選んで相談」だけを促す
+t("使用実績が無ければ作物を選ぶよう促すだけ",
+  prompt().includes("農薬が必要な場面では対象の作物を選んで相談するよう伝えること")
+  && !prompt().includes("そのまま述べてよい"));
 t("適用情報は照合しない（空）", r.body.registrationFacts.length === 0);
 t("限界に作物未指定を明記し作物を選ぶよう促す",
   r.body.limits.some(l => l.includes("作物を指定していない") && l.includes("作物を選んで相談")));
@@ -189,6 +195,96 @@ t("出典に FAMIC を挙げない（照合していないため）",
   !r.body.sources.some(s => s.includes("FAMIC")));
 t("作付け開始日の限界は出さない（作付けを対象にしていないため）",
   !r.body.limits.some(l => l.includes("作付け開始日が未登録")));
+
+// ── 農薬の使用実績（pesticideUsage）─────────────────────────────
+// 防除助言は散布履歴を、記録検索は使用回数を受け取っているのに、相談だけが
+// 農薬の使用回数を受け取っていなかった（docs/decisions/20260908-advice-handoff.md）。
+// 文字列は src/lib/pesticideUsage.ts の formatPesticideUsageForPrompt が
+// 見出しごと整形して渡す（adviceHistory と同じ素通しの形）。
+const USAGE = `
+## 農薬の使える回数と使用実績（作付け単位・ラベルの記載は原文のまま）
+集計基準日: 2026-09-08。期間は作付け開始日以降、1年を超える場合は直近1年。
+- ﾀﾞｺﾆｰﾙ1000
+  - 作付け「たまねぎ」（2026-02-20 以降） / 使用 3回（07/30、08/14、08/28） / 総使用回数 6回以内 / 判定: 上限 6回に対して実績 3回（可否の判断ではない）`;
+const USAGE_UNKNOWN = `
+## 農薬の使える回数と使用実績（作付け単位・ラベルの記載は原文のまま）
+- ｻﾝｹｲ園芸ﾎﾞﾙﾄﾞｰ
+  - 作付け「ぶどう」（2026-04-01 以降） / 使用 2回（06/10、07/02） / 総使用回数 記載なし / 判定: 不可（総使用回数が数値化できない）`;
+
+console.log("\n農薬の使用実績を渡す:");
+r = await call({ crop: CROP, pesticideUsage: USAGE, workTypes: WORK_TYPES });
+t("渡した集計がそのままプロンプトに載る", prompt().includes("使用 3回") && prompt().includes("6回以内"));
+t("クライアント側の見出しをそのまま使う（素通し）",
+  prompt().includes("## 農薬の使える回数と使用実績"));
+t("数え直しを禁じる", prompt().includes("記録から数え直さないこと"));
+// ここが本丸。画面（PesticideUsageSummary）は残り回数を出していないので、
+// 相談だけが「あと3回使えます」と言うと数字が食い違い、しかも「許可」側にずれる
+t("「あと◯回使える」を明文で禁じる", prompt().includes("あと◯回使える"));
+t("上限未達を使用可の根拠にさせない",
+  prompt().includes("上限に達していないことは、その農薬を使ってよいという意味ではない"));
+t("「判定: 不可」は可否を述べさせない", prompt().includes("判定: 不可"));
+t("表に無い農薬を「使っていない」と読ませない",
+  prompt().includes("集計していないという意味であって、使っていないという意味ではない"));
+t("記録漏れの限界を出す",
+  r.body.limits.some(l => l.includes("記録し忘れ") && l.includes("実際の回数はこれより多い")));
+t("同一成分を合算していない限界を出す",
+  r.body.limits.some(l => l.includes("同じ有効成分")));
+t("上限未達＝使用可ではないことを限界に出す",
+  r.body.limits.some(l => l.includes("上限に達していないことは")));
+t("出典に「記録を数えた値」を挙げる",
+  r.body.sources.some(s => s.includes("使用回数") && s.includes("作業記録")));
+t("出典に上限の出どころ（FAMIC 原文）を挙げる",
+  r.body.sources.some(s => s.includes("総使用回数") && s.includes("FAMIC")));
+
+r = await call({ crop: CROP, workTypes: WORK_TYPES });
+t("渡さなければブロックは出ない", !prompt().includes("農薬の使える回数と使用実績"));
+t("渡さなければ限界も出ない", !r.body.limits.some(l => l.includes("記録し忘れ")));
+t("渡さなければ「あと◯回」の禁止指示も出ない（プロンプトを膨らませない）",
+  !prompt().includes("あと◯回使える"));
+t("渡さなければ出典にも出ない",
+  !r.body.sources.some(s => s.includes("使用回数") && s.includes("作業記録")));
+t("pesticideUsage が長すぎれば 400",
+  (await call({ crop: CROP, pesticideUsage: "あ".repeat(2501) })).code === 400);
+t("上限ちょうどは通る",
+  (await call({ crop: CROP, pesticideUsage: "あ".repeat(2500) })).code === 200);
+
+// ── 畑全体 × 農薬の境界（最重要）──────────────────────────────
+// 20260906-general-advice-entry.md は「畑全体では薬剤の具体値に一切触れない」と決めた。
+// 今回そのうち**使用回数だけ**を解禁する（20260908-advice-handoff.md）。
+// 述べてよい範囲は作付けの相談と同一（＝回数）で、違うのは適用情報ブロックの有無だけ。
+// この境界が緩むと、作物を照合していない状態で希釈倍数・可否に踏み込むことになる
+console.log("\n畑全体 × 農薬（述べてよいのは回数だけ）:");
+r = await call({ registrations: [REG_FULL], pesticideUsage: USAGE, workTypes: WORK_TYPES });
+t("畑全体でも使用回数は渡る", prompt().includes("使用 3回"));
+t("畑全体でも総使用回数の原文は渡る", prompt().includes("6回以内"));
+t("畑全体でも回数は述べてよいと明示する",
+  prompt().includes("作物を指定していない相談でもそのまま述べてよい"));
+t("希釈倍数・使用方法・可否は畑全体では禁止のまま",
+  prompt().includes("希釈倍数・使用方法・その薬剤を使ってよいかどうかには触れず"));
+// 回数を解禁しても、適用情報の原文（希釈倍数）まで漏れてはいけない
+t("適用情報を同時に渡しても希釈倍数は載らない", !prompt().includes("1000倍"));
+t("適用情報は照合しないまま（registrationFacts は空）", r.body.registrationFacts.length === 0);
+t("薬剤推奨の禁止は維持", prompt().includes("特定の農薬名を新たに推薦してはならない"));
+t("作物を選んで相談し直すよう促す指示は維持",
+  prompt().includes("対象の作物を選んで相談"));
+t("可否は判断していないという限界は維持（可否と回数は別物）",
+  r.body.limits.some(l => l.includes("作物を指定していない") && l.includes("薬剤の使用可否は判断していません")));
+t("畑全体でも「あと◯回使える」は禁止", prompt().includes("あと◯回使える"));
+t("畑全体でも記録漏れの限界は出す",
+  r.body.limits.some(l => l.includes("記録し忘れ")));
+
+// 使用実績を渡さない畑全体は従来どおり（回帰）。この2件が落ちたら境界が広がりすぎている
+r = await call({ registrations: [REG_FULL], workTypes: WORK_TYPES });
+t("使用実績が無ければ商品名も載らない（従来どおり）", !prompt().includes("ﾀﾞｺﾆｰﾙ1000"));
+t("使用実績が無ければ FAMIC を出典に挙げない（従来どおり）",
+  !r.body.sources.some(s => s.includes("FAMIC")));
+
+// 数値化できない上限（FAMIC が「-」や自然文を返す）を「制限なし」に倒さない、の
+// 相談版。summarizeUsage の非対称性（20260805-pesticide-precheck.md）を崩さない
+r = await call({ crop: CROP, pesticideUsage: USAGE_UNKNOWN, workTypes: WORK_TYPES });
+t("判定不可の行もそのまま渡す", prompt().includes("判定: 不可"));
+t("判定不可を可否として述べさせない指示が載る",
+  prompt().includes("使える・使えないを述べず"));
 
 // 普段使いのAI（ChatGPT等）と同じ会話の質感にするための契約。
 // 「結論を先に出す」（docs/decisions/20260829-ai-output-structure.md）は保ったまま、

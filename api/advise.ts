@@ -124,7 +124,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = await requireUser(req);
   if (!auth.ok) return denied(res, auth);
 
-  const { crop, today, forecast, registrations, records, aggregates, references, question, region, messages, adviceHistory, workTypes } =
+  const { crop, today, forecast, registrations, records, aggregates, pesticideUsage, references, question, region, messages, adviceHistory, workTypes } =
     (req.body ?? {}) as {
       crop?: CropInfo;
       today?: string;
@@ -133,6 +133,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       records?: string;
       /** 呼び出し側が事前に数えた値（散布履歴・作業回数）。LLM に数え直させない */
       aggregates?: string;
+      /**
+       * 農薬の使用実績（コードが数えた回数＋ラベル原文の上限）。
+       * src/lib/pesticideUsage.ts の formatPesticideUsageForPrompt が見出しごと整形するので、
+       * ここでは adviceHistory と同じく素通しする。aggregates に混ぜないのは、混ぜると
+       * サーバーが「農薬が入っているか」を判定できず、畑全体での書き分けも
+       * limits / sources の出し分けもできなくなるため。
+       */
+      pesticideUsage?: string;
       /** 公的資料の原文（農水省の防除マニュアル等）。出典を示して引用させる */
       references?: { title?: string; source?: string; text?: string }[];
       question?: string;
@@ -166,6 +174,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (typeof aggregates === "string" && aggregates.length > 4000) {
     return res.status(400).json({ error: "aggregates too long" });
+  }
+  if (typeof pesticideUsage === "string" && pesticideUsage.length > 2500) {
+    return res.status(400).json({ error: "pesticideUsage too long" });
   }
   // 公的資料。1件ずつではなく合計で見る（作目が増えても上限を超えさせない）
   const refs = (Array.isArray(references) ? references : [])
@@ -217,6 +228,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const droppedRows = allFacts.length - facts.length;
   const hasRecords = typeof records === "string" && records.trim() !== "";
   const hasAggregates = typeof aggregates === "string" && aggregates.trim() !== "";
+  const hasPesticideUsage = typeof pesticideUsage === "string" && pesticideUsage.trim() !== "";
   /** 今回の質問。会話の最後の user メッセージとして置く */
   const askNow = typeof question === "string" ? question.trim() : "";
 
@@ -250,6 +262,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           "  散布の時期・間隔・回数に関わる質問では、集計の「前回の散布からの日数」「同じ商品を繰り返し使っている組み合わせ」「昨年の同時期」を**必ず答えに反映する**こと。一般論だけで答えないこと。",
           // 実測で「3回使っているため次も散布を」と逆向きに読んだ。連用は注意する材料
           "  ただし同じ商品を繰り返し使っている事実は、**同じ薬剤を続けてよい根拠にしないこと**。連用は薬剤耐性の観点で注意する材料であり、登録のある別の薬剤を検討するよう促す側に使う（有効成分・系統のデータは無いため、同一系統かどうかの判定はしないこと）。",
+        ].join("\n")
+      : null,
+    // 防除助言は散布履歴を、記録検索は使用回数を受け取っているのに、相談だけが
+    // 農薬の使用回数を受け取っていなかった（docs/decisions/20260908-advice-handoff.md）。
+    // 「あと何回使えるか」は利用者の用事だが、残り回数を言わせるのは別の話：
+    // 画面（src/components/PesticideUsageSummary.tsx）は意図的に残りを出していないので、
+    // 相談だけが「あと3回使えます」と言うと数字が食い違い、しかも「許可」側にずれる
+    hasPesticideUsage
+      ? [
+          "- 「農薬の使える回数と使用実績」は、この農場の作業記録からコードが数えた使用回数と、ラベル（農薬登録情報）の総使用回数の**原文**。回数を聞かれたらこの表の数字をそのまま使い、**記録から数え直さないこと**。",
+          "  **「あと◯回使える」「もう◯回使ってよい」とは言ってはならない。** 上限に達していないことは、その農薬を使ってよいという意味ではない（使用時期・使用方法・同じ成分を含む別の剤・記録漏れを見ていないため）。",
+          "  「記録では◯回使っています。ラベルの総使用回数は『◯回以内』です」のように、**実績と上限を並べて述べる**こと。読み手が引き算できれば用事は足りる。",
+          "  「判定: 上限（◯回）を超えている可能性あり」の行は、その旨をはっきり伝えること。",
+          "  「判定: 不可」の行は回数を見張れない状態として扱い、使える・使えないを述べず、製品ラベルの確認を促すこと。",
+          "  この表に無い農薬・作付けは、集計していないという意味であって、使っていないという意味ではない。載っていないものの回数を述べないこと。",
         ].join("\n")
       : null,
     // 3層目（作業の段取り・病害虫の一般知識）に参照元を持たせる。ただし資料の栽培暦は
@@ -339,8 +366,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       userParts.push(`（ほか${droppedRows}件の適用行は省略。省略ぶんは範囲外として扱い、無いものとして述べないこと）`);
     }
   } else if (isGeneral) {
+    // 畑全体では適用情報を照合できないので、希釈倍数・使用方法・可否は従来どおり禁止。
+    // ただし使用回数だけは別扱いにする —— 作付け単位でコードが数えた自農場の実績と
+    // ラベル原文の上限であって、作物を指定しないと判断できない性質の情報ではない
+    // （docs/decisions/20260908-advice-handoff.md で 20260906 の判断を部分的に上書き）
     userParts.push("", "## 登録のある農薬の適用情報",
-      "作物を指定していない相談のため、農薬登録情報を照合していない。具体的な薬剤・希釈倍数・回数には触れず、農薬が必要な場面では対象の作物を選んで相談するよう伝えること。");
+      "作物を指定していない相談のため、農薬の適用情報（希釈倍数・使用方法・適用のある病害虫）は照合していない。希釈倍数・使用方法・その薬剤を使ってよいかどうかには触れず、薬剤を新たに推薦しないこと。",
+      ...(hasPesticideUsage
+        ? ["ただし「農薬の使える回数と使用実績」に載っている使用回数と総使用回数（ラベル原文）は、作物を指定していない相談でもそのまま述べてよい。それ以外の農薬の具体値には触れず、薬剤の要否を判断する場面では対象の作物を選んで相談するよう伝えること。"]
+        : ["農薬が必要な場面では対象の作物を選んで相談するよう伝えること。"]));
   } else if (famicCropName) {
     userParts.push("", "## 登録のある農薬の適用情報",
       `登録済みの農薬に「${famicCropName}」に適用のある行が見つからなかった。具体的な薬剤・希釈倍数・回数には触れないこと。`);
@@ -357,6 +391,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (hasAggregates) {
     userParts.push("", "## 自農場の集計（コードが数えた確定値・数え直さないこと）", aggregates!.trim());
+  }
+  // クライアント側が見出しごと整形して渡す（adviceHistory と同じ素通し）
+  if (hasPesticideUsage) {
+    userParts.push("", pesticideUsage!.trim());
   }
   if (hasRecords) {
     userParts.push("", "## 最近の作業記録", records!.trim());
@@ -540,6 +578,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     sources.push("天気の実績・予報: Open-Meteo");
   }
   if (hasRecords) sources.push("直近の作業実績: この農場の作業記録");
+  if (hasPesticideUsage) {
+    sources.push("農薬の使用回数: この農場の作業記録をコードが数えた値");
+    sources.push("農薬の総使用回数（上限）: 農薬登録情報（独立行政法人 農林水産消費安全技術センター FAMIC 登録適用部）の原文");
+  }
 
   const limits: string[] = [
     "作業の時期・順序は目安です。産地・品種・栽培方式・その年の天候で変わります。地域の指導機関（JA・普及指導センター）の栽培暦を優先してください。",
@@ -561,6 +603,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (!hasRecords) {
     limits.push("この農場の作業記録は参照していないため、すでに済んだ作業が含まれることがあります。");
+  }
+  // 回数を答えられるようにしたぶん、その回数が何を見ていないかを必ず添える。
+  // 3件とも「実際はもっと多いかもしれない」方向で、安全側に倒している
+  if (hasPesticideUsage) {
+    limits.push("農薬の使用回数は、この農場の作業記録を数えた値です。記録し忘れた作業は含まれないため、実際の回数はこれより多いことがあります。");
+    limits.push("同じ有効成分を含む別の農薬とは合わせて数えていません。成分でみた実際の総使用回数はこれより多いことがあります。");
+    limits.push("上限に達していないことは、その農薬を使ってよいという意味ではありません（使用時期・使用方法の確認が別に要ります）。");
   }
   if (!isGeneral && !crop?.start_date) {
     limits.push("作付け開始日が未登録のため、生育段階は日付からの推定です。");

@@ -2116,18 +2116,43 @@ export default function App() {
         : undefined;
       // 数えるのはコード、言い換えるのが LLM（docs/decisions/20260829-ai-output-structure.md）。
       // 防除助言・記録検索は既に集計済みの値を渡しているが、相談だけが渡していなかった。
-      // 画面（今日の一手）・防除助言と同じ関数を通すので、AI の言うことと画面が食い違わない
+      // 画面（今日の一手）・防除助言と同じ関数を通すので、AI の言うことと画面が食い違わない。
+      //
+      // 予算は差し引きで決める。以前は連結してから 4000 字で切っていたが、それだと
+      // 後ろ（作業回数）が黙って消える。「打ち切りは黙って行わない」は
+      // formatSprayHistoryForPrompt 側が節単位で守っているので、そちらに枠を渡す
+      const AGG_MAX = 4000;
+      // 作業回数を先に確保し（短く固定的）、残りを散布履歴に回す
+      const workCounts = formatWorkCountsForPrompt(targetReports, 2000);
+      const sprayBudget = Math.max(0, AGG_MAX - workCounts.length - 2);
       const aggregates = [
-        formatSprayHistoryForPrompt({ reports: targetReports, crops, pesticides, maxChars: 2000 }),
-        formatWorkCountsForPrompt(targetReports),
-      ].filter(s => s.trim() !== "").join("\n\n").slice(0, 4000);
+        formatSprayHistoryForPrompt({ reports: targetReports, crops, pesticides, maxChars: sprayBudget }),
+        workCounts,
+      ].filter(s => s.trim() !== "").join("\n\n");
+      // 適用情報の照合と使用実績の集計で同じものを見るので、1回だけ引いて使い回す。
+      // 以前は famic があるときだけ引いており、畑全体の相談では一度も呼ばれていなかった
+      const regsByPesticide = await prefetchAllRegistrations();
+      // 農薬の使用実績（あと何回使えるか）。記録検索は受け取っているのに相談だけが
+      // 受け取っていなかった（docs/decisions/20260908-advice-handoff.md）。
+      // 作付けの相談ではその作物だけを数える —— 他の作付けの実績を混ぜると
+      // 「たまねぎで3回使ったからぶどうも」の誤帰属を招く（20260906-advice-reply-tone.md 案E）。
+      // 適用行（ラベル原文）は載せない：作付けの相談では registrationFacts と二重になり、
+      // 畑全体では「述べてよいのは回数だけ」の境界を踏み越えるため
+      const pesticideUsage = formatPesticideUsageForPrompt({
+        pesticides,
+        crops: crop ? [crop] : crops,
+        reports: targetReports,
+        registrationsByPesticide: regsByPesticide,
+        maxChars: 2400,
+        includeLabelRows: false,
+      });
       // famic_crop_name が未設定なら適用行を1件も送らない。紐付けが無い状態で全行を渡すと、
       // 他作物の適用情報をこの作付けのものとして提示してしまう。
       // 畑全体の相談も作物が定まらないため、同じ理由で常に空になる
       const famic = crop?.famic_crop_name?.trim() || null;
       const norm = (s: string) => s.normalize("NFKC").trim().toLowerCase();
       const registrations = famic
-        ? Object.values(await prefetchAllRegistrations()).flat()
+        ? Object.values(regsByPesticide).flat()
             .filter(r => norm(r.crop_name ?? "") === norm(famic))
             .map(r => ({
               product_name: r.product_name, crop_name: r.crop_name, pest_name: r.pest_name,
@@ -2149,6 +2174,7 @@ export default function App() {
           today: new Date().toISOString().slice(0, 10),
           forecast, registrations, records, question, region: weatherCoords?.name,
           aggregates: aggregates || undefined,
+          pesticideUsage: pesticideUsage || undefined,
           // 作業の段取り・病害虫の一般知識だけが参照元を持たず推論のままだったので、
           // 国の防除マニュアル（公共データ利用規約）を原文で渡す。対応する作目が
           // 無ければ空＝従来どおり LLM の一般知識に「目安」と断らせる。

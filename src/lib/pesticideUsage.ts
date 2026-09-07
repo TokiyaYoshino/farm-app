@@ -302,10 +302,22 @@ export function formatPesticideUsageForPrompt(params: {
    * 打ち切ったことは注記に出す（黙って削ると「全部見た」と誤解させる）。
    */
   maxChars?: number;
+  /**
+   * ラベルの適用内容（原文）を載せるか。既定 true（api/search-chat.ts は従来どおり）。
+   *
+   * 相談（api/advise.ts）では false にする。作付けの相談では同じ原文が
+   * registrationFacts として別枠で載るので二重になり、畑全体の相談では
+   * 全作物ぶんの適用行を載せることになって「述べてよいのは回数だけ」という
+   * 境界を踏み越えるため（docs/decisions/20260908-advice-handoff.md）。
+   * false のときは使用実績のある農薬だけを載せる —— 適用行が出ないのに
+   * 「集計期間内の使用実績なし」の行だけが並んでも、読み手に何も足さない。
+   */
+  includeLabelRows?: boolean;
 }): string {
   const today = params.today ?? todayStr();
   const maxRows = params.maxRowsPerPesticide ?? 20;
   const maxChars = params.maxChars ?? 8000;
+  const includeLabelRows = params.includeLabelRows ?? true;
   const blocks: string[] = [];
 
   params.pesticides.forEach(p => {
@@ -316,7 +328,7 @@ export function formatPesticideUsageForPrompt(params: {
     });
     // 使用実績も適用情報も無い農薬は載せない（プロンプトの文字数予算を食うだけ）
     const relevant = summaries.filter(s => s.usedCount > 0);
-    if (relevant.length === 0 && regs.length === 0) return;
+    if (relevant.length === 0 && (regs.length === 0 || !includeLabelRows)) return;
 
     const lines: string[] = [`- ${p.name}`];
     if (relevant.length === 0) {
@@ -338,7 +350,7 @@ export function formatPesticideUsageForPrompt(params: {
       lines.push(`  - ${parts.join(" / ")}`);
     });
 
-    if (regs.length > 0) {
+    if (regs.length > 0 && includeLabelRows) {
       lines.push("  - ラベルの適用内容（原文のまま）:");
       regs.slice(0, maxRows).forEach(r => {
         const detail = [

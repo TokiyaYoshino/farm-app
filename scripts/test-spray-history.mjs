@@ -1,5 +1,7 @@
-// src/lib/pesticideUsage.ts の formatSprayHistoryForPrompt の検証
-// （天気×防除助言に渡す「その農場自身の防除記録」の整形）。
+// AI に渡す「コードが数えた集計」の整形の検証。
+//   - src/lib/pesticideUsage.ts の formatSprayHistoryForPrompt（防除助言・相談）
+//   - src/lib/pesticideUsage.ts の formatPesticideUsageForPrompt（記録検索・相談）
+//   - src/lib/metrics.ts の formatWorkCountsForPrompt（記録検索・相談）
 // テストランナーを入れていないので Node の型ストリップ + assert だけで動かす。
 //
 //   cd ~/Projects/farm-app && node scripts/test-spray-history.mjs
@@ -10,8 +12,10 @@
 // どちらも誤ると、使用者を法令違反や誤った防除判断に導く。
 import { pathToFileURL } from "node:url";
 
-const { formatSprayHistoryForPrompt, isSprayReport } =
+const { formatSprayHistoryForPrompt, isSprayReport, formatPesticideUsageForPrompt } =
   await import(pathToFileURL(new URL("../src/lib/pesticideUsage.ts", import.meta.url).pathname).href);
+const { formatWorkCountsForPrompt } =
+  await import(pathToFileURL(new URL("../src/lib/metrics.ts", import.meta.url).pathname).href);
 
 let pass = 0, fail = 0;
 const t = (name, cond) => { cond ? (pass++, console.log("  ✓", name)) : (fail++, console.log("  ✗", name)); };
@@ -84,6 +88,80 @@ t("文字数上限で節を落としたら節数を明記する",
 console.log("\n事実であることの明示:");
 t("利用者本人の実績で一般論ではないと明記する", /利用者本人が入力した実績で、一般論ではない/.test(out));
 t("集計基準日を出す", new RegExp(`集計基準日: ${TODAY}`).test(out));
+
+// ── formatPesticideUsageForPrompt の includeLabelRows ────────────────
+//
+// 相談（api/advise.ts）にも使用実績を渡すようになったが、相談では
+//   ・作付けの相談 … 同じラベル原文が registrationFacts として別枠で載る＝二重
+//   ・畑全体の相談 … 全作物ぶんの適用行を載せると「回数だけ」の境界を踏み越える
+// ので、適用行だけを落とせるようにした（docs/decisions/20260908-advice-handoff.md）。
+// 既定は true のまま＝ api/search-chat.ts に渡す文字列は一字一句変わらない。
+console.log("\n農薬の使用実績（includeLabelRows）:");
+const uCrops = [{ id: 5, name: "たまねぎ", start_date: "2026-02-20", famic_crop_name: "たまねぎ" }];
+const uPesticides = [{ id: "p1", name: "ダコニール1000" }, { id: "p9", name: "使っていない剤" }];
+const uReports = [
+  { crop_id: 5, date: "2026-07-30", work_type: "防除", pesticides_used: [{ id: "p1", amount: null }] },
+  { crop_id: 5, date: "2026-08-14", work_type: "防除", pesticides_used: [{ id: "p1", amount: null }] },
+];
+const uRegs = {
+  p1: [{ product_name: "ダコニール1000", crop_name: "たまねぎ", pest_name: "べと病",
+        dilution: "1000倍", usage_timing: "収穫7日前まで", usage_count: "6回以内",
+        total_count: "6回以内", application: "散布" }],
+  p9: [{ product_name: "使っていない剤", crop_name: "たまねぎ", pest_name: "アブラムシ",
+        dilution: "2000倍", usage_timing: "収穫前日まで", usage_count: "3回以内",
+        total_count: "3回以内", application: "散布" }],
+};
+const usage = (extra = {}) => formatPesticideUsageForPrompt({
+  pesticides: uPesticides, crops: uCrops, reports: uReports,
+  registrationsByPesticide: uRegs, today: TODAY, ...extra,
+});
+
+const withRows = usage();
+const noRows = usage({ includeLabelRows: false });
+t("既定では適用行が載る（記録検索の回帰）", withRows.includes("ラベルの適用内容"));
+t("既定では使用実績ゼロの農薬も載る（記録検索の回帰）", withRows.includes("使っていない剤"));
+t("includeLabelRows:false で適用行は載らない", !noRows.includes("ラベルの適用内容"));
+t("includeLabelRows:false で希釈倍数も載らない", !noRows.includes("1000倍"));
+t("includeLabelRows:false で使用実績ゼロの農薬は行ごと落とす",
+  !noRows.includes("使っていない剤") && !noRows.includes("集計期間内の使用実績なし"));
+t("includeLabelRows:false でも使用回数は残る", noRows.includes("使用 2回"));
+t("includeLabelRows:false でも上限の原文は残る", noRows.includes("6回以内"));
+t("includeLabelRows:false でも見出しは残る（API はこれを素通しする）",
+  noRows.includes("## 農薬の使える回数と使用実績"));
+t("適用行を落としたぶん短くなる", noRows.length < withRows.length);
+
+// 非対称性の回帰。「使ってよい」側に倒す言い回しを出力に混ぜない
+// （docs/decisions/20260805-pesticide-precheck.md）
+console.log("\n使用可否に倒さない（非対称性の回帰）:");
+[["既定", withRows], ["適用行なし", noRows]].forEach(([label, out2]) => {
+  t(`${label}: 「あと」と書かない`, !out2.includes("あと"));
+  t(`${label}: 「残り」と書かない`, !out2.includes("残り"));
+  t(`${label}: 「使用可能」と書かない`, !out2.includes("使用可能"));
+  t(`${label}: 「安全」と書かない`, !out2.includes("安全"));
+});
+
+// ── formatWorkCountsForPrompt の打ち切り ──────────────────────────
+//
+// 相談の aggregates は 4000 字が上限（api/advise.ts）。以前は連結してから
+// 盲目的に slice していたので、後ろに置いた作業回数が黙って消えていた。
+// 予算を関数側に渡す形にしたので、打ち切りは他の整形関数と同じく明示する。
+console.log("\n作業回数の集計（打ち切りを黙らせない）:");
+const wcReports = [];
+for (let y = 2016; y <= 2026; y++) {
+  for (let k = 0; k < 40; k++) {
+    wcReports.push({ crop_id: 5, date: `${y}-05-01`, work_type: `作業種別の名前が長い${k}` });
+  }
+}
+const wcAll = formatWorkCountsForPrompt(wcReports);
+const wcCut = formatWorkCountsForPrompt(wcReports, 2000);
+t("既定は打ち切らない（記録検索の回帰）", wcAll.length > 2000);
+t("上限を渡すと収まる", wcCut.length <= 2000);
+t("落とした年数を明記する", /ほか\d+年分は省略/.test(wcCut));
+t("省略＝作業が無かった ではないと添える", wcCut.includes("作業が無かったという意味ではない"));
+t("新しい年から残す（相談で参照されやすい側）", wcCut.includes("2026年") && !wcCut.includes("2016年"));
+t("見出しだけ残るくらい狭ければ空文字（見出しの空振りを出さない）",
+  formatWorkCountsForPrompt(wcReports, 50) === "");
+t("記録が無ければ空文字", formatWorkCountsForPrompt([], 2000) === "");
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail > 0 ? 1 : 0);
