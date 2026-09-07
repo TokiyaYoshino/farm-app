@@ -53,6 +53,34 @@ t("表示文言も「未実施」ではない", statusLabel("unmatchable") === "
 t("プロンプトでも未実施と決めつけないよう指示",
   formatAdviceHistoryForPrompt([m]).includes("「やっていない」という意味ではない"));
 
+// 畑全体の相談（crop_id が null）から出た「やること」は、どの作付けの記録とも照合する。
+// null を作物IDと比較すると永遠に一致せず、やったのに「まだ」のまま残る
+// （docs/decisions/20260906-general-advice-entry.md）
+console.log("\n畑全体の相談（crop_id が null）:");
+m = matchAction(action({ crop_id: null }), [report({ crop_id: 9 })], "2026-08-05");
+t("作物を絞らず、別の作付けの記録でも done になる", m.status === "done");
+m = matchAction(action({ crop_id: null }), [report({ crop_id: 5 })], "2026-08-05");
+t("どの作付けの記録でも拾う", m.status === "done");
+m = matchAction(action({ crop_id: null }), [report({ crop_id: 9, work_type: "防除" })], "2026-08-05");
+t("作物を絞らなくても作業種別の条件は効く", m.status === "pending");
+m = matchAction(action({ crop_id: null }), [report({ crop_id: 9, date: "2026-07-20" })], "2026-08-05");
+t("作物を絞らなくても期間の条件は効く", m.status === "pending");
+// 作付けを指定した助言のほうは従来どおり作物で絞る（回帰）
+m = matchAction(action({ crop_id: 5 }), [report({ crop_id: 9 })], "2026-08-05");
+t("作付け指定の助言は別の作付けの記録を拾わない", m.status === "pending");
+
+// 見出しは相談の対象で変える（畑全体の相談で「この作付け」と書くと嘘になる）
+console.log("\nプロンプトの見出し（相談の対象で変わる）:");
+const scoped = [matchAction(action(), [report()], "2026-08-05")];
+t("既定は作付けの見出し",
+  formatAdviceHistoryForPrompt(scoped).includes("この作付けへ出した助言"));
+t("作付けを明示しても同じ",
+  formatAdviceHistoryForPrompt(scoped, 20, "crop").includes("この作付けへ出した助言"));
+t("畑全体は見出しを変える",
+  formatAdviceHistoryForPrompt(scoped, 20, "farm").includes("畑全体の相談で出した助言"));
+t("畑全体でも「この作付け」とは書かない",
+  !formatAdviceHistoryForPrompt(scoped, 20, "farm").includes("この作付け"));
+
 console.log("\n期限の扱い:");
 m = matchAction(action({ due_to: "2026-08-03" }), [], "2026-08-05");
 t("期限を過ぎて記録が無ければ overdue", m.status === "overdue");

@@ -14,6 +14,7 @@ import {
   adviseApi, saveAiOutput, type DiagnosisResult,
 } from "../lib/ai";
 import { formatPesticideUsageForPrompt, formatSprayHistoryForPrompt } from "../lib/pesticideUsage";
+import { formatWorkCountsForPrompt } from "../lib/metrics";
 import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
   type AdviceAction, type ActionMatch, type MatchStatus,
@@ -465,7 +466,26 @@ function RegistrationFactsBlock({ facts }: { facts: NonNullable<CropAdviceMessag
   );
 }
 
-export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose: () => void; cropId?: number }) {
+/**
+ * 保存する assistant 発言の本文。聞き返しは本文の最後の段落として同じ吹き出しに入れる。
+ * 別列を足さないのは、利用者にとっては返答の一部（会話）であり、分けても表示上の利点が無いため。
+ */
+const adviceContent = (a: { reply: string; followUpQuestion?: string | null }): string =>
+  [a.reply, a.followUpQuestion].filter(Boolean).join("\n\n");
+
+export function AdviseSheet({ open, onClose, cropId, photoDiagnosis, onAskRecords, onAskPhoto }: {
+  open: boolean; onClose: () => void;
+  /** 相談対象の作付け。null / 未指定は「作物を指定しない畑全体の相談」
+   *  （docs/decisions/20260906-general-advice-entry.md） */
+  cropId?: number | null;
+  /** 写真診断の結果を持ち込むときの添付。1ターンだけ送って消す
+   *  （docs/decisions/20260908-advice-handoff.md） */
+  photoDiagnosis?: { text: string; label: string } | null;
+  /** 「記録を調べる」を押したときに記録検索シートを開く。渡さなければボタンを出さない */
+  onAskRecords?: (query: string) => void;
+  /** 「写真で調べる」を押したときに画像診断シートを開く。渡さなければボタンを出さない */
+  onAskPhoto?: () => void;
+}) {
   const {
     crops, reports, pesticides, workCategories, cropName, userName, weatherCoords, currentUser,
     prefetchAllRegistrations, loadCropAdvice, saveCropAdviceTurn, dismissAdviceAction,
@@ -478,18 +498,22 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
   const [messages, setMessages] = useState<CropAdviceMessage[]>([]);
   const [actions, setActions] = useState<AdviceAction[]>([]);
   const [error, setError] = useState("");
+  /** 写真診断の結果を相談へ持ち込むときの添付。1ターンだけ送って消す */
+  const [photo, setPhoto] = useState<{ text: string; label: string } | null>(null);
 
-  // 開くたびに呼び出し元の作物に合わせる。未指定なら先頭の作付け
+  // 開くたびに呼び出し元の指定に合わせる。未指定は畑全体の相談。
+  // 以前は先頭の作付けに寄せていたが、それだと「畑全体で相談する」入口が作れない
   useEffect(() => {
     if (!open) return;
-    setSelectedCropId(cropId ?? crops[0]?.id ?? null);
-  }, [open, cropId, crops]);
+    setSelectedCropId(cropId ?? null);
+    setPhoto(photoDiagnosis ?? null);
+  }, [open, cropId, photoDiagnosis]);
 
   const crop = crops.find(c => c.id === selectedCropId) ?? null;
 
   // 作付けを切り替えるたびに、その作付けのスレッドを読み直す（作物ごとに溜まる）
   useEffect(() => {
-    if (!open || selectedCropId == null) { setMessages([]); setActions([]); return; }
+    if (!open) { setMessages([]); setActions([]); return; }
     let alive = true;
     setThreadLoading(true); setError(""); setMessages([]); setActions([]);
     void loadCropAdvice(selectedCropId).then(data => {
@@ -503,7 +527,10 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
 
   // 照合は毎回計算する（保存しない）。作業記録が後から増えても表示が実態とずれない
   const matches = useMemo(
-    () => (selectedCropId == null ? [] : matchActions(actions, reports.filter(r => r.crop_id === selectedCropId))),
+    () => matchActions(
+      actions,
+      selectedCropId == null ? reports : reports.filter(r => r.crop_id === selectedCropId),
+    ),
     [actions, reports, selectedCropId],
   );
   const counts = useMemo(() => countMatches(matches), [matches]);
@@ -514,34 +541,65 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
   }, [workCategories]);
 
   const send = async () => {
-    const question = input.trim();
-    if (!crop || !question || loading) return;
+    // 写真を添えたときは、何も打たずに送れる方が自然（屋外・手袋での利用）。
+    // API は question を会話の最後の user メッセージとして使うので空にはしない
+    const question = input.trim()
+      || (photo ? "この写真の結果について、次にどうすればいい？" : "");
+    // crop が null なら畑全体の相談。作物を1件も登録していなくても成立する
+    if (!question || loading) return;
     setLoading(true); setError("");
     // 送信した質問はすぐ画面に出す（保存の成否を待たせない）。保存できたら本物の行に差し替える
     const pendingId = `pending-${messages.length}`;
     setMessages(prev => [...prev, {
-      id: pendingId, crop_id: crop.id, role: "user", content: question,
+      id: pendingId, crop_id: selectedCropId, role: "user", content: question,
       created_at: new Date().toISOString(),
     }]);
     setInput("");
+    // 添付は1ターンだけ。毎ターン送ると12ターンの窓と文字数の予算を食い続け、
+    // 会話が古い写真に引きずられる
+    setPhoto(null);
     try {
       // 天気は取れなければ無しで続ける（API側も未取得を前提にした指示を出す）
       let forecast: string | undefined;
       if (weatherCoords) {
         forecast = await fetchPestControlForecast(weatherCoords.lat, weatherCoords.lng).catch(() => undefined);
       }
-      // その作付けに紐づく記録だけを渡す。件数ゼロでも成立する
-      const cropReports = reports.filter(r => r.crop_id === crop.id);
-      const records = cropReports.length > 0
-        ? formatRecordsForChat(cropReports, { cropName, userName, pesticides }).text.slice(0, 7500)
+      // 作付けの相談はその作付けの記録だけ、畑全体の相談は全作物の記録を渡す
+      const targetReports = crop ? reports.filter(r => r.crop_id === crop.id) : reports;
+      const records = targetReports.length > 0
+        ? formatRecordsForChat(targetReports, { cropName, userName, pesticides }).text.slice(0, 7500)
         : undefined;
+      // 数えるのはコード、言い換えるのが LLM。画面・防除助言と同じ関数を通すので、
+      // AI の言うことと画面の数字が食い違わない
+      // （docs/decisions/20260906-advice-reply-tone.md）
+      const AGG_MAX = 4000;
+      const workCounts = formatWorkCountsForPrompt(targetReports, 2000);
+      const sprayBudget = Math.max(0, AGG_MAX - workCounts.length - 2);
+      const aggregates = [
+        formatSprayHistoryForPrompt({ reports: targetReports, crops, pesticides, maxChars: sprayBudget }),
+        workCounts,
+      ].filter(x => x.trim() !== "").join("\n\n");
+      // 適用情報の照合と使用実績の集計で同じものを見るので、1回だけ引いて使い回す
+      const regsByPesticide = await prefetchAllRegistrations();
+      // 農薬の使用実績（あと何回使えるか）。作付けの相談ではその作物だけを数える
+      // —— 他の作付けの実績を混ぜると誤帰属を招く。適用行（ラベル原文）は載せない
+      // （docs/decisions/20260908-advice-handoff.md）
+      const pesticideUsage = formatPesticideUsageForPrompt({
+        pesticides,
+        crops: crop ? [crop] : crops,
+        reports: targetReports,
+        registrationsByPesticide: regsByPesticide,
+        maxChars: 2400,
+        includeLabelRows: false,
+      });
       // 登録済み農薬の適用行。1商品で200行を超えることがあるので、送る前にこの作付けに
       // 適用のある行だけに絞る（サーバー側も同じ完全一致で絞り直す。二重でも結果は同じ）。
       // famic_crop_name 未設定なら1件も送らない ＝ API 側は「照合できていない」扱いになる。
-      const famic = crop.famic_crop_name?.trim() || null;
+      // 畑全体の相談も作物が定まらないため、同じ理由で常に空になる
+      const famic = crop?.famic_crop_name?.trim() || null;
       const norm = (s: string) => s.normalize("NFKC").trim().toLowerCase();
       const registrations = famic
-        ? Object.values(await prefetchAllRegistrations()).flat()
+        ? Object.values(regsByPesticide).flat()
             .filter(r => norm(r.crop_name ?? "") === norm(famic))
             .map(r => ({
               product_name: r.product_name, crop_name: r.crop_name, pest_name: r.pest_name,
@@ -551,18 +609,24 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
         : [];
 
       const res = await adviseApi({
-        crop: { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null },
+        // crop を省くと api/advise.ts 側が畑全体の相談として扱う
+        crop: crop
+          ? { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null }
+          : undefined,
         today: new Date().toISOString().slice(0, 10),
         forecast,
         registrations,
         records,
+        aggregates: aggregates || undefined,
+        pesticideUsage: pesticideUsage || undefined,
+        photoDiagnosis: photo?.text,
         question,
         region: weatherCoords?.name,
         // 会話として続ける（今の質問は question で渡すので履歴には入れない）
         messages: messages.map(m => ({ role: m.role, content: m.content })),
         // 前に出した助言と、その実施状況。画面のバッジと同じ matchActions を通すので
         // AI の言うことと画面が食い違わない
-        adviceHistory: formatAdviceHistoryForPrompt(matches).slice(0, 6000),
+        adviceHistory: formatAdviceHistoryForPrompt(matches, 20, crop ? "crop" : "farm").slice(0, 6000),
         workTypes: workTypeVocab,
       });
       if (!res.ok) {
@@ -573,7 +637,7 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
         return;
       }
 
-      const saved = await saveCropAdviceTurn(crop.id, question, res.data);
+      const saved = await saveCropAdviceTurn(selectedCropId, question, res.data);
       if (saved) {
         // 仮表示を保存済みの行に差し替える
         setMessages(prev => [...prev.filter(m => m.id !== pendingId), ...saved.messages]);
@@ -581,16 +645,22 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
       } else {
         // 保存できなくても回答は見せる（相談自体を無駄にしない）。溜まらないことは明示する
         setMessages(prev => [...prev, {
-          id: `local-${prev.length}`, crop_id: crop.id, role: "assistant",
-          content: res.data.advice.reply, sources: res.data.sources, limits: res.data.limits,
+          id: `local-${prev.length}`, crop_id: selectedCropId, role: "assistant",
+          content: adviceContent(res.data.advice), sources: res.data.sources, limits: res.data.limits,
+          watch_points: res.data.advice.watchPoints, unknowns: res.data.advice.unknowns,
+          record_search_query: res.data.advice.recordSearchQuery ?? null,
           registration_facts: res.data.registrationFacts, created_at: new Date().toISOString(),
         }]);
         setError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
       }
       void saveAiOutput(organizationId, currentUser?.id ?? null, "advice", {
-        cropId: crop.id,
-        inputSummary: [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`,
-          `記録:${cropReports.length}件`, `やりとり:${messages.length}件`, `質問:${question}`].join(" / "),
+        cropId: selectedCropId,
+        inputSummary: [
+          ...(crop ? [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`] : ["対象:畑全体"]),
+          `記録:${targetReports.length}件`,
+          ...(photo ? ["写真候補:あり"] : []),
+          `やりとり:${messages.length}件`, `質問:${question}`,
+        ].join(" / "),
         outputJson: { advice: res.data.advice, registrationFacts: res.data.registrationFacts,
           sources: res.data.sources, limits: res.data.limits },
         usage: res.data.usage, costUsd: res.data.costUsd,
@@ -616,24 +686,22 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
 
   return (
     <BottomSheet open={open} onClose={onClose} heightRatio={0.92}>
-      <SheetHeader title={crop ? `${crop.name}の相談` : "作物の相談"} onClose={onClose} />
+      <SheetHeader title={`${crop ? crop.name : "畑全体"}の相談`} onClose={onClose} />
       <ScrollView style={{ paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 16 }}>
-        {/* 呼び出し元が作物を指定していないときだけ選ばせる */}
-        {cropId == null && (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-            {crops.length === 0 ? (
-              <Text style={{ fontSize: 13, color: C.textMuted }}>作物が登録されていません。管理タブから登録してください。</Text>
-            ) : crops.map(c => {
-              const on = c.id === selectedCropId;
-              return (
-                <Pressable key={c.id} onPress={() => setSelectedCropId(c.id)}
-                  style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: on ? C.ink : C.well }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: on ? "#fff" : C.textSub }}>{c.name}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+        {/* 相談する対象。入口は1つで、対象の選択はシートの中で行う
+            （docs/decisions/20260906-general-advice-entry.md）。
+            作物を1件も登録していなくても「畑全体」で成立する */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+          {[{ id: null as number | null, name: "畑全体" }, ...crops.map(c => ({ id: c.id as number | null, name: c.name }))].map(o => {
+            const on = o.id === selectedCropId;
+            return (
+              <Pressable key={o.id ?? "farm"} onPress={() => setSelectedCropId(o.id)}
+                style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: on ? C.ink : C.well }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: on ? "#fff" : C.textSub }}>{o.name}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {crop && (
           <Text style={{ fontSize: 11, color: C.textMuted, marginBottom: 12 }}>
@@ -670,8 +738,18 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
           <ActivityIndicator size="small" color={C.textMuted} style={{ marginVertical: 20 }} />
         ) : messages.length === 0 ? (
           <Text style={{ fontSize: 13, color: C.textMuted, lineHeight: 20, marginBottom: 12 }}>
-            この作付けについて聞いてください。やりとりはこの作付けに残ります。{"\n"}
-            例:「{crop?.name ?? "この作物"}、これどうしたらいい？」「今週やることは？」{"\n\n"}
+            {crop ? (
+              <>
+                この作付けについて聞いてください。やりとりはこの作付けに残ります。{"\n"}
+                例:「{crop.name}、これどうしたらいい？」「今週やることは？」{"\n\n"}
+              </>
+            ) : (
+              <>
+                畑全体について聞いてください。やりとりは畑全体の相談として残ります。{"\n"}
+                例:「今の時期、畑全体で気をつけることは？」「そろそろ何をすればいい？」{"\n"}
+                農薬を具体的に知りたいときは、上で作物を選んでください。{"\n\n"}
+              </>
+            )}
             答えは作業の<Text style={{ fontWeight: "700", color: C.textSub }}>目安</Text>です。
             農薬の使用時期・回数は農薬登録情報の原文をそのまま表示します。
           </Text>
@@ -687,6 +765,39 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
                   <Text style={{ fontSize: 13, lineHeight: 20, color: m.role === "user" ? "#fff" : C.text }}>{m.content}</Text>
                   {m.role === "assistant" && (
                     <>
+                      {/* 見ておくこと。結論の一部なので畳まない（最大3件） */}
+                      {!!m.watch_points?.length && (
+                        <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: C.hairline }}>
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: C.textMuted, marginBottom: 4 }}>見ておくこと</Text>
+                          {m.watch_points.slice(0, 3).map((w, i) => (
+                            <Text key={i} style={{ fontSize: 12, color: C.textSub, lineHeight: 19 }}>· {w}</Text>
+                          ))}
+                        </View>
+                      )}
+                      {/* 相談が見ている記録は直近60件だけ。その外を数える質問は答えようがないので、
+                          記録検索へ検索語を添えて渡す（docs/decisions/20260908-advice-handoff.md）。
+                          押した時点では開くだけで送信はしない */}
+                      {!!m.record_search_query && onAskRecords && (
+                        <Pressable
+                          onPress={() => onAskRecords(m.record_search_query!)}
+                          style={{ marginTop: 8, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6,
+                            paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, backgroundColor: C.card,
+                            borderWidth: 1, borderColor: C.hairline }}
+                        >
+                          <Feather name="message-square" size={12} color={C.ink} />
+                          <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "600", color: C.ink, maxWidth: 200 }}>
+                            記録を調べる:「{m.record_search_query}」
+                          </Text>
+                        </Pressable>
+                      )}
+                      {!!m.unknowns?.length && (
+                        <View style={{ marginTop: 8 }}>
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: C.textMuted, marginBottom: 4 }}>判断できないこと</Text>
+                          {m.unknowns.slice(0, 3).map((u, i) => (
+                            <Text key={i} style={{ fontSize: 12, color: C.textSub, lineHeight: 19 }}>· {u}</Text>
+                          ))}
+                        </View>
+                      )}
                       {!!m.registration_facts?.length && <RegistrationFactsBlock facts={m.registration_facts} />}
                       <SourcesBlock sources={m.sources ?? []} limits={m.limits ?? []} />
                     </>
@@ -707,22 +818,52 @@ export function AdviseSheet({ open, onClose, cropId }: { open: boolean; onClose:
         <ErrorText msg={error} />
       </ScrollView>
 
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20, flexDirection: "row", gap: 8, alignItems: "center" }}>
-        <TextInput
-          style={{ flex: 1, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 999, fontSize: 14, backgroundColor: C.well, color: C.text }}
-          placeholder={crop ? `${crop.name}について聞く...` : "作付けを選んでください"}
-          placeholderTextColor={C.textMuted}
-          value={input}
-          onChangeText={setInput}
-          editable={!!crop && !loading}
-          onSubmitEditing={() => void send()}
-        />
-        <Pressable
-          onPress={() => void send()}
-          style={{ width: 42, height: 42, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: input.trim() && crop && !loading ? C.ink : C.well }}
-        >
-          <Feather name="send" size={15} color={input.trim() && crop && !loading ? "#fff" : C.textMuted} />
-        </Pressable>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 }}>
+        {/* 何を送るのかを見せる。写真そのものではなく「写真から絞り込んだ候補」を渡す */}
+        {photo && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.well,
+            borderRadius: RADIUS.row, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 8 }}>
+            <Feather name="camera" size={13} color={C.textSub} />
+            <Text style={{ flex: 1, fontSize: 12, color: C.textSub, lineHeight: 18 }}>
+              写真の結果を添えて相談します（{photo.label}）
+            </Text>
+            <Pressable onPress={() => setPhoto(null)} hitSlop={8}>
+              <Feather name="x" size={14} color={C.textMuted} />
+            </Pressable>
+          </View>
+        )}
+
+        {/* 写真の用事も同じ窓から始められるようにする。診断そのものは既存のシートに任せる */}
+        {onAskPhoto && !photo && (
+          <Pressable
+            onPress={onAskPhoto}
+            style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8, paddingVertical: 4 }}
+          >
+            <Feather name="camera" size={13} color={C.textSub} />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: C.textSub }}>写真で調べる</Text>
+          </Pressable>
+        )}
+
+        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+          <TextInput
+            style={{ flex: 1, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 999, fontSize: 14, backgroundColor: C.well, color: C.text }}
+            placeholder={photo ? "気になることがあれば書く（空でも送れます）"
+              : crop ? `${crop.name}について聞く...` : "畑全体について聞く..."}
+            placeholderTextColor={C.textMuted}
+            value={input}
+            onChangeText={setInput}
+            editable={!loading}
+            onSubmitEditing={() => void send()}
+          />
+          {/* 写真を添えているときは、何も打たなくても送れる（屋外・手袋での利用） */}
+          <Pressable
+            onPress={() => void send()}
+            style={{ width: 42, height: 42, borderRadius: 999, alignItems: "center", justifyContent: "center",
+              backgroundColor: (input.trim() || photo) && !loading ? C.ink : C.well }}
+          >
+            <Feather name="send" size={15} color={(input.trim() || photo) && !loading ? "#fff" : C.textMuted} />
+          </Pressable>
+        </View>
       </View>
     </BottomSheet>
   );

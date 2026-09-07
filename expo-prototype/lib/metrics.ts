@@ -73,8 +73,14 @@ export interface CountReport {
   work_type: string;
 }
 
-/** 年（降順）× 作業種別（件数降順）の件数表。プロンプトに貼れる形で返す。 */
-export function formatWorkCountsForPrompt(reports: CountReport[]): string {
+/**
+ * 年（降順）× 作業種別（件数降順）の件数表。プロンプトに貼れる形で返す。
+ *
+ * maxChars を渡すと、収まる年（新しい順）までで打ち切り、落とした年数を注記に出す。
+ * 黙って削ると「全部数えた」と誤解させるので、他の整形関数と同じく打ち切りは必ず明示する。
+ * 既定は無制限 —— api/search-chat.ts の呼び出しの出力を変えないため。
+ */
+export function formatWorkCountsForPrompt(reports: CountReport[], maxChars?: number): string {
   const byYear = new Map<string, Map<string, number>>();
   for (const r of reports) {
     const year = (r.date ?? "").slice(0, 4);
@@ -95,9 +101,22 @@ export function formatWorkCountsForPrompt(reports: CountReport[]): string {
       return `${year}年: ${parts.join(" / ")}`;
     });
 
+  const header = ["", "## 作業の集計（下の作業記録を年ごとに数えたもの・この数字が正）"];
+  if (maxChars == null) return [...header, ...lines].join("\n");
+
+  // 新しい年から詰める。古い年から落とすほうが、相談で参照される確率が高い年を残せる
+  const kept: string[] = [];
+  let used = header.join("\n").length;
+  for (const line of lines) {
+    if (used + line.length + 1 > maxChars) break;
+    kept.push(line);
+    used += line.length + 1;
+  }
+  if (kept.length === 0) return "";
+  const dropped = lines.length - kept.length;
   return [
-    "",
-    "## 作業の集計（下の作業記録を年ごとに数えたもの・この数字が正）",
-    ...lines,
+    ...header,
+    ...kept,
+    ...(dropped > 0 ? [`（文字数の都合でほか${dropped}年分は省略。数えていないだけで、作業が無かったという意味ではない）`] : []),
   ].join("\n");
 }

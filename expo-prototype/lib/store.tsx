@@ -96,9 +96,10 @@ interface Store {
   editComment: (id: string, message: string) => Promise<boolean>;
   // 作物ごとの相談スレッド（農業エージェント）。
   // 全件を fetchAll に積まないのは、作物を開いたときだけ必要で件数が伸び続けるため。
-  loadCropAdvice: (cropId: number) => Promise<{ messages: CropAdviceMessage[]; actions: AdviceAction[] } | null>;
+  /** cropId が null なら畑全体のスレッド（crop_id is null）を引く */
+  loadCropAdvice: (cropId: number | null) => Promise<{ messages: CropAdviceMessage[]; actions: AdviceAction[] } | null>;
   // 利用者の質問とAIの返答を1往復ぶんまとめて保存する（やることも同時に切り出す）
-  saveCropAdviceTurn: (cropId: number, question: string, result: AdviseResult)
+  saveCropAdviceTurn: (cropId: number | null, question: string, result: AdviseResult)
     => Promise<{ messages: CropAdviceMessage[]; actions: AdviceAction[] } | null>;
   // 「やらない」判断。行は消さずに dismissed_at を立てる（判断の履歴になる）
   dismissAdviceAction: (actionId: string, dismissed: boolean) => Promise<boolean>;
@@ -652,13 +653,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 発言（crop_advice_messages）と、そこから切り出したやること（crop_advice_actions）。
   // **照合結果は保存しない**。作業記録は後から追加・修正されるので、実施済みを
   // 書き込むと実態とずれる。実施したかは lib/adviceMatch.ts で毎回計算する。
-  const loadCropAdvice = useCallback(async (cropId: number) => {
+  // cropId が null なら畑全体のスレッド（crop_id is null）を引く
+  const loadCropAdvice = useCallback(async (cropId: number | null) => {
     if (!currentOrganizationId) return null;
+    const msgQ = supabase.from("crop_advice_messages").select("*").eq("organization_id", currentOrganizationId);
+    const actQ = supabase.from("crop_advice_actions").select("*").eq("organization_id", currentOrganizationId);
     const [msgRes, actRes] = await Promise.all([
-      supabase.from("crop_advice_messages").select("*")
-        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
-      supabase.from("crop_advice_actions").select("*")
-        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+      (cropId == null ? msgQ.is("crop_id", null) : msgQ.eq("crop_id", cropId)).order("created_at"),
+      (cropId == null ? actQ.is("crop_id", null) : actQ.eq("crop_id", cropId)).order("created_at"),
     ]);
     if (msgRes.error || actRes.error) return null;
     return {
@@ -667,7 +669,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [currentOrganizationId]);
 
-  const saveCropAdviceTurn = useCallback(async (cropId: number, question: string, result: AdviseResult) => {
+  const saveCropAdviceTurn = useCallback(async (cropId: number | null, question: string, result: AdviseResult) => {
     if (!currentOrganizationId) return null;
     const base = { organization_id: currentOrganizationId, crop_id: cropId, created_by: currentUser?.id ?? null };
     // 質問と返答を1往復として入れる。返答だけ・質問だけが残るとスレッドが読めなくなるので、
@@ -680,6 +682,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...base, role: "assistant", content: result.advice.reply,
       // 出典・限界・FAMIC原文は生成時のものを残す。あとで文言を変えても過去の発言は当時のまま
       sources: result.sources, limits: result.limits,
+      watch_points: result.advice.watchPoints, unknowns: result.advice.unknowns,
+      // 値があるときだけ列を含める。マイグレーション
+      // （2026-09-08-crop-advice-record-search.sql）が未適用でも保存できる
+      ...(result.advice.recordSearchQuery
+        ? { record_search_query: result.advice.recordSearchQuery }
+        : {}),
       registration_facts: result.registrationFacts,
       model: "gpt-4o-mini", usage: result.usage ?? null, cost_usd: result.costUsd ?? null,
     }]).select().single();

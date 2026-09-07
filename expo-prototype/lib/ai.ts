@@ -269,6 +269,10 @@ export interface AdviseResult {
     actions: AdviseAction[];
     watchPoints: string[];
     unknowns: string[];
+    /** 症状・場所・時期など、答えを絞るのに要る情報が足りないときの聞き返し1つ */
+    followUpQuestion?: string | null;
+    /** 記録を数え直さないと答えられない質問のときだけ入る、記録検索へ渡す検索語 */
+    recordSearchQuery?: string | null;
   };
   registrationFacts: AdviseRegistrationFact[];
   sources: string[];
@@ -287,11 +291,18 @@ export interface AdviseRegistrationInput {
   application?: string;
 }
 export const adviseApi = (body: {
-  crop: { name: string; famic_crop_name?: string | null; start_date?: string | null };
+  /** 省略すると api/advise.ts 側が「作物を指定しない畑全体の相談」として扱う */
+  crop?: { name: string; famic_crop_name?: string | null; start_date?: string | null };
   today?: string;
   forecast?: string;
   registrations?: AdviseRegistrationInput[];
   records?: string;
+  /** 呼び出し側が事前に数えた値（散布履歴・作業回数）。LLM に数え直させない */
+  aggregates?: string;
+  /** 農薬の使用実績（コードが数えた回数＋ラベル原文の上限） */
+  pesticideUsage?: string;
+  /** 写真から絞り込んだ候補（画像診断の結果を整形した文字列） */
+  photoDiagnosis?: string;
   question?: string;
   region?: string;
   /** これまでのやりとり（古い順）。直近12件までがプロンプトに乗る */

@@ -79,11 +79,19 @@ export interface Project {
 // —— 後から読み返したときに、目安と公的情報の区別が失われないようにするため。
 export interface CropAdviceMessage {
   id: string;
-  crop_id: number;
+  /** 相談対象の作物。null は畑全体の相談（作物を指定しないスレッド） */
+  crop_id: number | null;
   role: "user" | "assistant";
   content: string;
   sources?: string[] | null;
   limits?: string[] | null;
+  // 生成はしていたが保存先が無く画面に出ていなかった
+  // （scripts/migrations/2026-08-29-crop-advice-watch-unknowns.sql で列を追加）
+  watch_points?: string[] | null;
+  unknowns?: string[] | null;
+  /** この返答に添える記録検索の検索語。null は「記録を調べる必要なし」
+   *  （scripts/migrations/2026-09-08-crop-advice-record-search.sql で列を追加） */
+  record_search_query?: string | null;
   registration_facts?: {
     productName: string; cropName: string; pestName: string; dilution: string;
     usageTiming: string; usageCount: string; totalCount: string; application: string;
