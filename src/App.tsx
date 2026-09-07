@@ -559,6 +559,8 @@ export default function App() {
   const [diagPhotoPreview, setDiagPhotoPreview]   = useState("");
   const [diagPhotoLoading, setDiagPhotoLoading]   = useState(false);
   const [diagPhotoResult, setDiagPhotoResult]     = useState<DiagnosisResult | null>(null);
+  /** 写真診断の結果を相談へ持ち込むときの添付。1ターンだけ送って消す（下記 sendAdvise） */
+  const [advisePhoto, setAdvisePhoto] = useState<{ text: string; label: string } | null>(null);
   const [diagPhotoError, setDiagPhotoError]       = useState("");
 
   // ─── Auth セッション監視 ──────────────────────────────────
@@ -2083,7 +2085,11 @@ export default function App() {
   };
 
   const sendAdvise = async () => {
-    const question = adviseInput.trim();
+    // 写真を添えたときは、何も打たずに送れる方が自然（屋外・手袋での利用）。
+    // API は question を会話の最後の user メッセージとして使うので空にはしない
+    const photo = advisePhoto;
+    const question = adviseInput.trim()
+      || (photo ? "この写真の結果について、次にどうすればいい？" : "");
     // adviseCropId が null なら畑全体の相談。作物を1件も登録していなくても成立する
     const crop = adviseCropId != null ? crops.find(c => c.id === adviseCropId) ?? null : null;
     if ((adviseCropId != null && !crop) || !question || adviseLoading) return;
@@ -2095,6 +2101,9 @@ export default function App() {
       created_at: new Date().toISOString(),
     }]);
     setAdviseInput("");
+    // 添付は1ターンだけ。毎ターン送ると12ターンの窓と文字数の予算を食い続け、
+    // 会話が古い写真に引きずられる
+    setAdvisePhoto(null);
     try {
       let forecast: string | undefined;
       if (weatherCoords) {
@@ -2175,6 +2184,7 @@ export default function App() {
           forecast, registrations, records, question, region: weatherCoords?.name,
           aggregates: aggregates || undefined,
           pesticideUsage: pesticideUsage || undefined,
+          photoDiagnosis: photo?.text,
           // 作業の段取り・病害虫の一般知識だけが参照元を持たず推論のままだったので、
           // 国の防除マニュアル（公共データ利用規約）を原文で渡す。対応する作目が
           // 無ければ空＝従来どおり LLM の一般知識に「目安」と断らせる。
@@ -2215,7 +2225,9 @@ export default function App() {
         cropId: crop ? crop.id : null,
         inputSummary: [
           ...(crop ? [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`] : ["対象:畑全体"]),
-          `記録:${targetReports.length}件`, `質問:${question}`,
+          `記録:${targetReports.length}件`,
+          ...(photo ? ["写真候補:あり"] : []),
+          `質問:${question}`,
         ].join(" / "),
         outputJson: { advice: result.advice, registrationFacts: result.registrationFacts,
           sources: result.sources, limits: result.limits },
@@ -2224,7 +2236,8 @@ export default function App() {
     } catch {
       setAdviseError("通信に失敗しました。");
       setAdviseMsgs(prev => prev.filter(m => m.id !== pendingId));
-      setAdviseInput(question);
+      setAdviseInput(adviseInput.trim());
+      if (photo) setAdvisePhoto(photo);
     }
     setAdviseLoading(false);
   };
@@ -2341,6 +2354,33 @@ export default function App() {
     } finally {
       setDiagPhotoLoading(false);
     }
+  };
+
+  /**
+   * 写真診断の結果を相談へ渡す形に整える。画面の renderDiagnosis と同じ項目を使うので、
+   * AI が見ているものと利用者が見ているものが食い違わない。
+   * label は「何を送るか」を相談シートに出すための短い見出し。
+   */
+  const diagnosisForAdvise = (d: DiagnosisResult): { text: string; label: string } => {
+    const rows = d.possibilities.map(p => `- ${p.name}（${p.category} / 確信度 ${p.confidence}%）: ${p.reason}`);
+    const text = [
+      ...(d.inconclusive ? ["写真だけでは判断が難しいとのことです。"] : []),
+      ...rows,
+      ...(d.note?.trim() ? [d.note.trim()] : []),
+    ].join("\n").slice(0, 800);
+    const first = d.possibilities[0]?.name;
+    const label = !first ? "候補なし"
+      : d.possibilities.length > 1 ? `${first} ほか${d.possibilities.length - 1}件`
+      : first;
+    return { text, label };
+  };
+
+  /** 診断結果を相談へ引き渡す。作付けが分かるならその作付けのスレッドに入れる */
+  const advisePhotoResult = (d: DiagnosisResult, cropId: number | null) => {
+    setAdvisePhoto(diagnosisForAdvise(d));
+    setShowDiagPhotoSheet(false);
+    setSelectedReport(null);
+    void openAdviseSheet(cropId);
   };
 
   const confidenceColor = (c: number) =>
@@ -3913,9 +3953,21 @@ export default function App() {
                       </div>
                     )}
                     {diagResult && (
-                      <div style={{ ...S.wellBox, padding:16, marginBottom:10 }}>
-                        {renderDiagnosis(diagResult)}
-                      </div>
+                      <>
+                        <div style={{ ...S.wellBox, padding:16, marginBottom:10 }}>
+                          {renderDiagnosis(diagResult)}
+                        </div>
+                        {/* 診断だけで終わらせず、次の一手の相談へ渡す。作付けが分かるので
+                            そのスレッドに入れる＝農薬の適用情報まで照合できる側に着地する */}
+                        {canUseAiFeature("nextActionAdvice") && (
+                          <button
+                            onClick={() => advisePhotoResult(diagResult, r.crop_id ?? null)}
+                            style={{ ...btn("secondary", "sm"), width:"100%", marginBottom:10 }}
+                          >
+                            <MessageSquare size={13} strokeWidth={2} />この結果をもとに相談する
+                          </button>
+                        )}
+                      </>
                     )}
                     <button
                       onClick={() => diagnoseImage(r)}
@@ -5214,15 +5266,51 @@ export default function App() {
           <div style={{ fontSize:11, color:C.textMuted, lineHeight:1.6, marginBottom:8 }}>
             農薬を使うときは製品ラベルの表示を最終確認してください。作業の時期は目安です。
           </div>
+
+          {/* 何を送るのかを見せる。写真そのものではなく「写真から絞り込んだ候補」を
+              渡すので、そう分かる言い方にする */}
+          {advisePhoto && (
+            <div style={{ display:"flex", alignItems:"center", gap:8, background:C.well, borderRadius:RADIUS.row, padding:"8px 12px", marginBottom:8 }}>
+              <Camera size={13} color={C.textSub} strokeWidth={2} style={{ flexShrink:0 }} />
+              <span style={{ flex:1, fontSize:12, color:C.textSub, lineHeight:1.5 }}>
+                写真の結果を添えて相談します（{advisePhoto.label}）
+              </span>
+              <button
+                onClick={() => setAdvisePhoto(null)}
+                aria-label="写真の結果を外す"
+                style={{ background:"none", border:"none", padding:2, cursor:"pointer", display:"flex", color:C.textMuted, flexShrink:0 }}
+              >
+                <X size={14} strokeWidth={2.5} />
+              </button>
+            </div>
+          )}
+
+          {/* 写真の用事も同じ窓から始められるようにする。診断そのものは既存のシートに任せ、
+              結果から相談へ戻ってこられる（docs/decisions/20260908-advice-handoff.md） */}
+          {canUseAiFeature("pestDiagnosis") && !advisePhoto && (
+            <button
+              onClick={() => setShowDiagPhotoSheet(true)}
+              style={{ ...btn("tertiary", "sm"), marginBottom:8 }}
+            >
+              <Camera size={13} strokeWidth={2} />写真で調べる
+            </button>
+          )}
+
           <div style={{ display:"flex", gap:8 }}>
             <input
               value={adviseInput}
               onChange={e => setAdviseInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAdvise(); } }}
-              placeholder={adviseCropId != null ? "この作付けについて聞く" : "畑全体について聞く"}
+              placeholder={advisePhoto ? "気になることがあれば書く（空でも送れます）"
+                : adviseCropId != null ? "この作付けについて聞く" : "畑全体について聞く"}
               style={{ flex:1, minWidth:0, fontSize:16, padding:"11px 14px", borderRadius:999, border:`1px solid ${C.hairline}`, outline:"none", background:C.card, color:C.text }}
             />
-            <button onClick={sendAdvise} disabled={adviseLoading || !adviseInput.trim()} style={{ ...btn("primary", "md"), opacity: adviseLoading || !adviseInput.trim() ? 0.5 : 1 }}>
+            {/* 写真を添えているときは、何も打たなくても送れる（屋外・手袋での利用） */}
+            <button
+              onClick={sendAdvise}
+              disabled={adviseLoading || (!adviseInput.trim() && !advisePhoto)}
+              style={{ ...btn("primary", "md"), opacity: adviseLoading || (!adviseInput.trim() && !advisePhoto) ? 0.5 : 1 }}
+            >
               送信
             </button>
           </div>
@@ -5354,9 +5442,21 @@ export default function App() {
             </div>
           )}
           {diagPhotoResult && (
-            <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
-              {renderDiagnosis(diagPhotoResult)}
-            </div>
+            <>
+              <div style={{ ...S.wellBox, padding:16, marginBottom:14 }}>
+                {renderDiagnosis(diagPhotoResult)}
+              </div>
+              {/* 記録を介さない単体診断なので作付けが分からない。畑全体の相談に入れ、
+                  作物を選んだ方がよい場面は相談側が促す */}
+              {canUseAiFeature("nextActionAdvice") && (
+                <button
+                  onClick={() => advisePhotoResult(diagPhotoResult, null)}
+                  style={{ ...btn("secondary", "md"), width:"100%", marginBottom:14 }}
+                >
+                  <MessageSquare size={15} strokeWidth={2} />この結果をもとに相談する
+                </button>
+              )}
+            </>
           )}
 
           <button

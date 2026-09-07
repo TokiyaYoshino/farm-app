@@ -124,7 +124,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = await requireUser(req);
   if (!auth.ok) return denied(res, auth);
 
-  const { crop, today, forecast, registrations, records, aggregates, pesticideUsage, references, question, region, messages, adviceHistory, workTypes } =
+  const { crop, today, forecast, registrations, records, aggregates, pesticideUsage, photoDiagnosis, references, question, region, messages, adviceHistory, workTypes } =
     (req.body ?? {}) as {
       crop?: CropInfo;
       today?: string;
@@ -141,6 +141,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
        * limits / sources の出し分けもできなくなるため。
        */
       pesticideUsage?: string;
+      /**
+       * 写真から絞り込んだ候補（api/diagnose-image.ts の結果をクライアントが整形した文字列）。
+       *
+       * messages に user 発言として混ぜない。画像診断の出力は**LLM の推定**であって
+       * 利用者の申告ではないので、user 発言に入れると「べと病である」が確定事実として
+       * 洗浄され、limits を付ける場所も無くなる（冒頭の情報源3分割の原則）。
+       */
+      photoDiagnosis?: string;
       /** 公的資料の原文（農水省の防除マニュアル等）。出典を示して引用させる */
       references?: { title?: string; source?: string; text?: string }[];
       question?: string;
@@ -177,6 +185,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (typeof pesticideUsage === "string" && pesticideUsage.length > 2500) {
     return res.status(400).json({ error: "pesticideUsage too long" });
+  }
+  if (typeof photoDiagnosis === "string" && photoDiagnosis.length > 800) {
+    return res.status(400).json({ error: "photoDiagnosis too long" });
   }
   // 公的資料。1件ずつではなく合計で見る（作目が増えても上限を超えさせない）
   const refs = (Array.isArray(references) ? references : [])
@@ -229,6 +240,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const hasRecords = typeof records === "string" && records.trim() !== "";
   const hasAggregates = typeof aggregates === "string" && aggregates.trim() !== "";
   const hasPesticideUsage = typeof pesticideUsage === "string" && pesticideUsage.trim() !== "";
+  const hasPhotoDiagnosis = typeof photoDiagnosis === "string" && photoDiagnosis.trim() !== "";
   /** 今回の質問。会話の最後の user メッセージとして置く */
   const askNow = typeof question === "string" ? question.trim() : "";
 
@@ -277,6 +289,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           "  「判定: 上限（◯回）を超えている可能性あり」の行は、その旨をはっきり伝えること。",
           "  「判定: 不可」の行は回数を見張れない状態として扱い、使える・使えないを述べず、製品ラベルの確認を促すこと。",
           "  この表に無い農薬・作付けは、集計していないという意味であって、使っていないという意味ではない。載っていないものの回数を述べないこと。",
+        ].join("\n")
+      : null,
+    // 写真の候補は LLM の推定。断定させると「診断された」と受け取られる
+    hasPhotoDiagnosis
+      ? [
+          "- 「写真から絞り込んだ候補」は写真だけを見て挙げた**可能性**であり、確定した診断ではない。断定せず「〜の可能性」として扱い、**確かめ方**（見る場所・撮り直し・専門家への相談）を併せて示すこと。",
+          "  候補に病害虫名が挙がっていても、薬剤の可否・希釈倍数は渡された農薬登録情報の範囲でしか述べないこと。登録情報が渡されていない場合は、対象の作物を選んで相談するよう伝えること。",
         ].join("\n")
       : null,
     // 3層目（作業の段取り・病害虫の一般知識）に参照元を持たせる。ただし資料の栽培暦は
@@ -395,6 +414,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // クライアント側が見出しごと整形して渡す（adviceHistory と同じ素通し）
   if (hasPesticideUsage) {
     userParts.push("", pesticideUsage!.trim());
+  }
+  if (hasPhotoDiagnosis) {
+    userParts.push("", "## 写真から絞り込んだ候補（写真だけを見た可能性・確定診断ではない）", photoDiagnosis!.trim());
   }
   if (hasRecords) {
     userParts.push("", "## 最近の作業記録", records!.trim());
@@ -578,6 +600,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     sources.push("天気の実績・予報: Open-Meteo");
   }
   if (hasRecords) sources.push("直近の作業実績: この農場の作業記録");
+  if (hasPhotoDiagnosis) {
+    sources.push("写真からの候補: AI（gpt-4o-mini）の画像診断。確定診断ではありません");
+  }
   if (hasPesticideUsage) {
     sources.push("農薬の使用回数: この農場の作業記録をコードが数えた値");
     sources.push("農薬の総使用回数（上限）: 農薬登録情報（独立行政法人 農林水産消費安全技術センター FAMIC 登録適用部）の原文");
@@ -606,6 +631,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   // 回数を答えられるようにしたぶん、その回数が何を見ていないかを必ず添える。
   // 3件とも「実際はもっと多いかもしれない」方向で、安全側に倒している
+  if (hasPhotoDiagnosis) {
+    limits.push("写真から挙げた候補は可能性であって確定診断ではありません。判断が分かれるときはJA・普及指導センターに相談してください。");
+  }
   if (hasPesticideUsage) {
     limits.push("農薬の使用回数は、この農場の作業記録を数えた値です。記録し忘れた作業は含まれないため、実際の回数はこれより多いことがあります。");
     limits.push("同じ有効成分を含む別の農薬とは合わせて数えていません。成分でみた実際の総使用回数はこれより多いことがあります。");

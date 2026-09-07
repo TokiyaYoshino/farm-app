@@ -286,6 +286,52 @@ t("判定不可の行もそのまま渡す", prompt().includes("判定: 不可")
 t("判定不可を可否として述べさせない指示が載る",
   prompt().includes("使える・使えないを述べず"));
 
+// ── 写真から絞り込んだ候補（photoDiagnosis）────────────────────
+// 写真診断の結果を相談に持ち込めるようにする（docs/decisions/20260908-advice-handoff.md）。
+// **messages に user 発言として混ぜない**のが要点。画像診断の出力は LLM の推定であって
+// 利用者の申告ではないので、user 発言に入れると「べと病である」が確定事実として
+// 洗浄され、limits を付ける場所も無くなる（api/advise.ts 冒頭の情報源3分割の原則）。
+const PHOTO = `写真だけでは判断が難しいとのことです。
+- べと病（病害 / 確信度 55%）: 葉裏に灰白色のかびが見える
+- 灰色かび病（病害 / 確信度 25%）: 病斑の縁がぼやけている`;
+
+console.log("\n写真から絞り込んだ候補:");
+r = await call({ crop: CROP, photoDiagnosis: PHOTO, question: "これ何の病気？", workTypes: WORK_TYPES });
+t("専用の見出しで載る", prompt().includes("## 写真から絞り込んだ候補"));
+t("候補の原文が載る", prompt().includes("べと病（病害 / 確信度 55%）"));
+t("確定診断ではないと明示する", prompt().includes("確定した診断ではない"));
+t("断定させず可能性として扱わせる", prompt().includes("〜の可能性"));
+t("確かめ方を併せて示させる", prompt().includes("確かめ方"));
+t("候補が出ても薬剤の可否は登録情報の範囲に限る",
+  prompt().includes("薬剤の可否・希釈倍数は"));
+t("出典に画像診断を挙げる",
+  r.body.sources.some(x => x.includes("写真からの候補") && x.includes("確定診断ではありません")));
+t("限界に「確定診断ではない」と相談先を挙げる",
+  r.body.limits.some(l => l.includes("写真から挙げた候補") && l.includes("確定診断ではありません")));
+// 情報源の区別を守る要。候補は材料ブロック（system 直後の1通目）にだけ置き、
+// 利用者の発言として扱わせない
+t("材料ブロックにだけ現れ、会話には混ぜない",
+  captured.messages[1].content.includes("灰白色のかび")
+  && captured.messages.slice(2).every(m => !m.content.includes("灰白色のかび")));
+t("今回の質問は質問だけが会話の最後に置かれる",
+  captured.messages.at(-1).role === "user"
+  && captured.messages.at(-1).content === "これ何の病気？");
+
+r = await call({ crop: CROP, workTypes: WORK_TYPES });
+t("渡さなければブロックは出ない", !prompt().includes("写真から絞り込んだ候補"));
+t("渡さなければ出典にも限界にも出ない",
+  !r.body.sources.some(x => x.includes("写真からの候補"))
+  && !r.body.limits.some(l => l.includes("写真から挙げた候補")));
+t("photoDiagnosis が長すぎれば 400",
+  (await call({ crop: CROP, photoDiagnosis: "あ".repeat(801) })).code === 400);
+t("上限ちょうどは通る",
+  (await call({ crop: CROP, photoDiagnosis: "あ".repeat(800) })).code === 200);
+// 畑全体でも写真は持ち込める（作物を登録していない利用者の入口）
+r = await call({ photoDiagnosis: PHOTO, workTypes: WORK_TYPES });
+t("畑全体の相談でも写真の候補を渡せる", prompt().includes("## 写真から絞り込んだ候補"));
+t("畑全体では薬剤の可否に触れない指示が残る",
+  prompt().includes("希釈倍数・使用方法・その薬剤を使ってよいかどうかには触れず"));
+
 // 普段使いのAI（ChatGPT等）と同じ会話の質感にするための契約。
 // 「結論を先に出す」（docs/decisions/20260829-ai-output-structure.md）は保ったまま、
 // 文数の固定縛りだけを外す。長さは質問側に合わせさせる
