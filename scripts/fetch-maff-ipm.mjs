@@ -20,9 +20,9 @@
 //   本番の作付けと重なるものだけ。**近い作物で代用しない**——ネギ編があるからといって
 //   たまねぎ・にんにくに当てるのは、famic_crop_name の誤紐付けと同じ種類の誤りになる
 //   （docs/decisions/20260824-plain-language-and-crop-mapping.md の追記）。
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 
-const OUT_DIR = "src/data/maff-ipm";
+const OUT_FILE = "src/data/maffIpmData.ts";
 const LICENSE = "公共データ利用規約（第1.0版）https://www.maff.go.jp/j/use/link.html";
 const MANUAL_PAGE = "https://www.maff.go.jp/j/syouan/syokubo/gaicyu/g_ipm/";
 
@@ -46,10 +46,10 @@ const extract = async (url) => {
   return pages;
 };
 
-mkdirSync(OUT_DIR, { recursive: true });
+const manuals = [];
 for (const t of TARGETS) {
   const pages = await extract(t.url);
-  const out = {
+  manuals.push({
     crop: t.key,
     title: `総合防除実践マニュアル ${t.key}編`,
     source: t.url,
@@ -59,9 +59,34 @@ for (const t of TARGETS) {
     retrievedAt: new Date().toISOString().slice(0, 10),
     note: "PDFからテキストのみ抽出（図表の配置は失われる・画像は取り込まない）。原文は上記URL。",
     pages,
-  };
-  writeFileSync(`${OUT_DIR}/${t.key}.json`, JSON.stringify(out, null, 2));
+  });
   const chars = pages.reduce((a, p) => a + p.text.length, 0);
-  console.log(`${t.key}: ${pages.length}ページ / ${chars}字 → ${OUT_DIR}/${t.key}.json`);
+  console.log(`${t.key}: ${pages.length}ページ / ${chars}字`);
 }
-console.log("\n取り込み完了。出典表示が必要な素材なので、画面・プロンプトの両方で出典を示すこと。");
+
+// JSON ではなく TS モジュールとして書き出す。JSON の import は実行環境ごとに
+// 属性（with { type: "json" }）の要否が違い、素の Node で読めずテストが書けないため。
+const header = `// 自動生成。手で編集しない。生成: scripts/fetch-maff-ipm.mjs
+//
+// 出典: 農林水産省「総合防除実践マニュアル」 ${MANUAL_PAGE}
+// ライセンス: ${LICENSE}
+//   出典表示と加工の明記が条件。画面（この回答の前提）に出典を必ず出すこと。
+// 加工: PDFからテキストのみ抽出（図表の配置は失われる・画像は取り込まない）。
+
+export interface MaffManual {
+  crop: string;
+  title: string;
+  source: string;
+  sourcePage: string;
+  publisher: string;
+  license: string;
+  retrievedAt: string;
+  note: string;
+  pages: { page: number; text: string }[];
+}
+
+export const MAFF_MANUALS: MaffManual[] = ${JSON.stringify(manuals, null, 2)};
+`;
+writeFileSync(OUT_FILE, header);
+console.log(`\n→ ${OUT_FILE}`);
+console.log("出典表示が必要な素材なので、画面・プロンプトの両方で出典を示すこと。");

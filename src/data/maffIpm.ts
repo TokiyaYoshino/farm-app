@@ -7,19 +7,9 @@
 // famic_crop_name の誤紐付けと同じ種類の誤りになる（他作物の基準を提示してしまう）。
 // 対応表に無い作物は「資料なし」として扱い、LLM の一般知識に「目安」と断らせる。
 import { normalizeCropName } from "../lib/cropAlias";
-import cabbage from "./maff-ipm/キャベツ.json";
-import grape from "./maff-ipm/ぶどう.json";
+import { MAFF_MANUALS } from "./maffIpmData";
 
-export interface MaffManual {
-  crop: string;
-  title: string;
-  source: string;
-  license: string;
-  retrievedAt: string;
-  pages: { page: number; text: string }[];
-}
-
-const MANUALS: MaffManual[] = [cabbage as MaffManual, grape as MaffManual];
+const MANUALS = MAFF_MANUALS;
 
 /** 資料の作物名に寄せる別名。登録名の別名表（cropAlias）とは目的が違うので分けて持つ */
 const ALIAS: Record<string, string> = {

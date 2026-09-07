@@ -20,7 +20,7 @@
 
 農林水産省「[総合防除実践マニュアル](https://www.maff.go.jp/j/syouan/syokubo/gaicyu/g_ipm/)」の作目別PDFからテキストを抽出し、相談の材料として原文のまま渡す。
 
-- 取り込みは `scripts/fetch-maff-ipm.mjs`（`npm i -D pdfjs-dist` が前提）。出力は `src/data/maff-ipm/<作物>.json`（出典URL・取得日・ライセンスを同梱）
+- 取り込みは `scripts/fetch-maff-ipm.mjs`（`npm i -D pdfjs-dist` が前提）。出力は `src/data/maffIpmData.ts`（出典URL・取得日・ライセンスを同梱した自動生成モジュール。JSON にしないのは、import 属性の要否が実行環境で違い素の Node でテストできないため）
 - **写真・画像は取り込まない**。第三者の権利を含むことが多く、公共データ利用規約の適用外（`https://www.maff.go.jp/j/use/link.html`）
 - API は `references`（`{title, source, text}[]`・合計12000字まで）で受け、`## 公的な防除マニュアル（原文・この範囲は資料に基づく）` としてプロンプトに置く
 - **出典を `sources` に必ず載せる**。画面の「この回答の前提」に資料名とURLが出るので、利用者が原文まで辿れる（利用規約が求める出典表示でもある）
