@@ -678,19 +678,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .insert([{ ...base, role: "user", content: question }]).select().single();
     if (userErr || !userRow) return null;
 
-    const { data: aiRow, error: aiErr } = await supabase.from("crop_advice_messages").insert([{
+    const aiBase = {
       ...base, role: "assistant", content: result.advice.reply,
       // 出典・限界・FAMIC原文は生成時のものを残す。あとで文言を変えても過去の発言は当時のまま
       sources: result.sources, limits: result.limits,
       watch_points: result.advice.watchPoints, unknowns: result.advice.unknowns,
-      // 値があるときだけ列を含める。マイグレーション
-      // （2026-09-08-crop-advice-record-search.sql）が未適用でも保存できる
-      ...(result.advice.recordSearchQuery
-        ? { record_search_query: result.advice.recordSearchQuery }
-        : {}),
       registration_facts: result.registrationFacts,
       model: "gpt-4o-mini", usage: result.usage ?? null, cost_usd: result.costUsd ?? null,
-    }]).select().single();
+    };
+    // 検索語の列がまだ無い環境では insert が失敗するので、列を外して1度だけ入れ直す。
+    // 失われるのは検索語1つ＝再訪時のボタンだけで、会話そのものは保存できる（Web版と同じ）
+    const withQuery = result.advice.recordSearchQuery
+      ? { ...aiBase, record_search_query: result.advice.recordSearchQuery }
+      : aiBase;
+    let { data: aiRow, error: aiErr } = await supabase.from("crop_advice_messages")
+      .insert([withQuery]).select().single();
+    if ((aiErr || !aiRow) && withQuery !== aiBase) {
+      ({ data: aiRow, error: aiErr } = await supabase.from("crop_advice_messages")
+        .insert([aiBase]).select().single());
+    }
     if (aiErr || !aiRow) {
       await supabase.from("crop_advice_messages").delete().eq("id", (userRow as CropAdviceMessage).id);
       return null;
