@@ -93,4 +93,39 @@
 
 ## 検証
 
-（実装完了後に記入）
+```
+npm run lint                             0 errors（着手前は 36 errors で CI が赤だった）
+npm run typecheck                        clean（src + api。api/ はこれまで型チェックされていなかった）
+npm run build                            成功
+npm test                                 384 passed, 0 failed（着手前 292）
+  scripts/test-advise.mjs                198（130 → +68）
+  scripts/test-spray-history.mjs          50（26 → +24）
+  他4本                                  変更なし（search-chat 43 は回帰確認）
+cd expo-prototype && npm test             59 passed, 0 failed（着手前 24 passed / 5 failed）
+cd expo-prototype && npm run typecheck    clean
+npx expo export --platform ios            成功
+```
+
+**バンドルサイズ**（Expo に国の防除マニュアルを載せる判断の根拠）: 資料あり 3.63 MB / 資料なし 3.59 MB → **純増 41 KB（1.1%）**。動的 import や API 側での取り回しは不要と判断した。
+
+**契約テストで固定した境界**（緩むと実害に直結する順）:
+
+1. 畑全体 × 農薬 —— 使用回数と上限の原文は述べてよい / 希釈倍数・使用方法・可否・薬剤推奨は禁止 / `registrations` を同時に渡しても適用行の原文は載らない / `registrationFacts` は空のまま
+2. 「あと◯回使える」の禁止が両モードで載ること
+3. `includeLabelRows` の既定 true —— `/api/search-chat` の出力が一字一句変わらないこと
+4. `record_search_query` の握りつぶし —— 記録なしなら null / 聞き返しがあるなら null
+5. `photoDiagnosis` が `messages` の user 発言に混ざらず、材料ブロックにだけ現れること
+
+**未検証**:
+
+- **実モデルでの挙動**。`20260906-advice-reply-tone.md` の実測で「**渡すだけでは使わない**」ことが分かっているので、次の4点は実 API で目視確認する必要がある（Supabase ログインが要るためオーナーが実施）:
+  1. 畑全体で「ダコニールはあと何回使える？」→ 実績と上限を並べて答え、「あと3回使えます」とは言わず、希釈倍数に触れない
+  2. 畑全体で「去年の秋は何回防除した？」→「記録を調べる」ボタンが出る
+  3. 「摘果のやり方は？」→ ボタンが**出ない**（過剰ルーティングの確認）
+  4. 写真診断 →「この結果をもとに相談する」→ 候補を「可能性」として扱い、確かめ方を示す
+- **Expo は実機での往復**（起動確認をしていない）
+- **実利用での効果**。`ai_outputs` の呼び出し実績は開発時の動作確認のみで、比較の母数が無い（`20260906-general-advice-entry.md` と同じ制約）。ただし `record_search_query` は `output_json` に、写真の有無は `input_summary` に残るので、母数が貯まれば過剰ルーティング率と利用実態を後から SQL で測れる
+
+## 適用が必要な作業（未実施）
+
+`scripts/migrations/2026-09-08-crop-advice-record-search.sql` を Supabase SQL Editor で実行する。未適用でも大多数のターンは保存できる（検索語が null のときは列を含めないため）が、検索語が出たターンの保存が失敗し、スレッドを開き直すと導線が消える。
