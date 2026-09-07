@@ -7,7 +7,7 @@ import { useStore } from "../lib/store";
 import { canUseAiFeature } from "../lib/ai";
 import { lastSpray } from "../lib/pesticideUsage";
 import FieldMapSheet from "./FieldMapSheet";
-import { PestAdviceSheet, AdviseSheet } from "./AiSheets";
+import { PestAdviceSheet, AdviseSheet, SearchChatSheet, PhotoDiagnosisSheet, diagnosisForAdvise } from "./AiSheets";
 
 // ─── ダッシュボード（src/App.tsx tab==="home" ブロックの移植・実データ）───
 interface Props {
@@ -29,6 +29,10 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
   const [showMap, setShowMap] = useState(false);
   const [showPestAdvice, setShowPestAdvice] = useState(false);
   const [showAdvise, setShowAdvise] = useState(false);
+  // 相談から開く先（橋渡し）。docs/decisions/20260908-advice-handoff.md
+  const [homeSheet, setHomeSheet] = useState<"chat" | "diag" | null>(null);
+  const [advisePhoto, setAdvisePhoto] = useState<{ text: string; label: string } | null>(null);
+  const [recordQuery, setRecordQuery] = useState("");
 
   // 作業タイマーの経過秒（Web版 workElapsed と同一の1秒更新）
   const [elapsed, setElapsed] = useState(0);
@@ -228,9 +232,11 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
         <Pressable onPress={() => setShowAdvise(true)} style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Feather name="message-circle" size={16} color={C.ink} />
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>作物のことを相談する</Text>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>
+              {crops.length === 1 ? `${crops[0].name}のことを相談する` : "相談する"}
+            </Text>
             <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
-              「これどうしたらいい？」に答えます。相談は作付けごとに残り、やることは記録と照合されます
+              「これどうしたらいい？」に答えます。相談は対象ごとに残り、やることは記録と照合されます
             </Text>
           </View>
           <Feather name="chevron-right" size={16} color={C.textMuted} />
@@ -280,7 +286,23 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
 
       <FieldMapSheet open={showMap} onClose={() => setShowMap(false)} />
       <PestAdviceSheet open={showPestAdvice} onClose={() => setShowPestAdvice(false)} />
-      <AdviseSheet open={showAdvise} onClose={() => setShowAdvise(false)} />
+      {/* 作物が1件ならその作付け、0件・複数なら畑全体。目立つ入口を常に畑全体
+          （＝農薬の登録情報を照合できない側）へ固定しない
+          （docs/decisions/20260906-general-advice-entry.md） */}
+      <AdviseSheet
+        open={showAdvise}
+        onClose={() => { setShowAdvise(false); setAdvisePhoto(null); }}
+        cropId={crops.length === 1 ? crops[0].id : null}
+        photoDiagnosis={advisePhoto}
+        onAskRecords={q => { setRecordQuery(q); setShowAdvise(false); setHomeSheet("chat"); }}
+        onAskPhoto={() => { setShowAdvise(false); setHomeSheet("diag"); }}
+      />
+      <SearchChatSheet open={homeSheet === "chat"} onClose={() => setHomeSheet(null)} initialQuestion={recordQuery} />
+      <PhotoDiagnosisSheet
+        open={homeSheet === "diag"}
+        onClose={() => setHomeSheet(null)}
+        onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setHomeSheet(null); setShowAdvise(true); }}
+      />
     </ScrollView>
   );
 }

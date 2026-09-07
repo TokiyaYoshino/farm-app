@@ -8,7 +8,7 @@ import ReportDetailSheet from "./ReportDetailSheet";
 import Picker from "../ui/Picker";
 import { useStore } from "../lib/store";
 import { canUseAiFeature } from "../lib/ai";
-import { DailyReportSheet, SearchChatSheet, PhotoDiagnosisSheet } from "./AiSheets";
+import { DailyReportSheet, SearchChatSheet, PhotoDiagnosisSheet, AdviseSheet, diagnosisForAdvise } from "./AiSheets";
 import { WORK_TEMPLATES, type Report } from "../lib/types";
 
 // ─── 作業記録（src/App.tsx tab==="report" ブロックの移植・実データ）──────
@@ -39,7 +39,12 @@ export default function ReportScreen() {
   const [filterWorkType, setFilterWorkType] = useState("");
   const [filterUser, setFilterUser] = useState(0);
   const [pickerFor, setPickerFor] = useState<"crop" | "field" | "work" | "user" | null>(null);
-  const [aiSheet, setAiSheet] = useState<"report" | "chat" | "diag" | null>(null);
+  const [aiSheet, setAiSheet] = useState<"report" | "chat" | "diag" | "advise" | null>(null);
+  // 相談 ⇄ 記録検索 ⇄ 写真診断 の橋渡し（docs/decisions/20260908-advice-handoff.md）。
+  // 用事を持ち込んだ窓で完結させるか、正しい場所へ渡す
+  const [advisePhoto, setAdvisePhoto] = useState<{ text: string; label: string } | null>(null);
+  const [recordQuery, setRecordQuery] = useState("");
+  const [adviseCropId, setAdviseCropId] = useState<number | null>(null);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -280,10 +285,31 @@ export default function ReportScreen() {
         </>
       )}
 
-      <ReportDetailSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
+      <ReportDetailSheet
+        report={selectedReport}
+        onClose={() => setSelectedReport(null)}
+        onAdvise={(d, cropId) => {
+          setAdvisePhoto(diagnosisForAdvise(d));
+          setAdviseCropId(cropId);
+          setSelectedReport(null);
+          setAiSheet("advise");
+        }}
+      />
       <DailyReportSheet open={aiSheet === "report"} onClose={() => setAiSheet(null)} />
-      <SearchChatSheet open={aiSheet === "chat"} onClose={() => setAiSheet(null)} />
-      <PhotoDiagnosisSheet open={aiSheet === "diag"} onClose={() => setAiSheet(null)} />
+      <SearchChatSheet open={aiSheet === "chat"} onClose={() => setAiSheet(null)} initialQuestion={recordQuery} />
+      <PhotoDiagnosisSheet
+        open={aiSheet === "diag"}
+        onClose={() => setAiSheet(null)}
+        onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setAiSheet("advise"); }}
+      />
+      <AdviseSheet
+        open={aiSheet === "advise"}
+        onClose={() => { setAiSheet(null); setAdvisePhoto(null); setAdviseCropId(null); }}
+        cropId={adviseCropId}
+        photoDiagnosis={advisePhoto}
+        onAskRecords={q => { setRecordQuery(q); setAiSheet("chat"); }}
+        onAskPhoto={() => setAiSheet("diag")}
+      />
 
       {/* フィルタピッカー */}
       <Picker

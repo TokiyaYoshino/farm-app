@@ -13,9 +13,12 @@ import type { Report } from "../lib/types";
 interface Props {
   report: Report | null;
   onClose: () => void;
+  /** 診断結果を相談へ引き渡す。渡さなければボタンを出さない
+   *  （docs/decisions/20260908-advice-handoff.md） */
+  onAdvise?: (d: DiagnosisResult, cropId: number | null) => void;
 }
 
-export default function ReportDetailSheet({ report, onClose }: Props) {
+export default function ReportDetailSheet({ report, onClose, onAdvise }: Props) {
   const { currentUser, isAdmin, pesticides, cropName, userName, deleteReport } = useStore();
   const r = report;
 
@@ -181,14 +184,14 @@ export default function ReportDetailSheet({ report, onClose }: Props) {
                       ? <ActivityIndicator size="small" color={C.ink} />
                       : <Feather name="search" size={13} color={C.ink} />}
                     <Text style={{ fontSize: 13, fontWeight: "700", color: C.ink }}>
-                      {diagLoading ? "診断中..." : diagResult ? "もう一度AI診断" : "この写真をAI診断"}
+                      {diagLoading ? "診断中..." : diagResult ? "もう一度診断" : "この写真で病害虫を調べる"}
                     </Text>
                   </Pressable>
                 )}
                 {!!diagError && <Text style={{ color: C.danger, fontSize: 12, marginTop: 6 }}>{diagError}</Text>}
                 {diagResult && (
                   <View style={{ backgroundColor: C.card, borderRadius: RADIUS.row, padding: 12, marginTop: 8, gap: 8 }}>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: C.textSub }}>AI画像診断（推定・確定診断ではありません）</Text>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: C.textSub }}>写真からの候補（推定・確定診断ではありません）</Text>
                     {diagResult.inconclusive ? (
                       <Text style={{ fontSize: 12, color: C.textSub }}>この写真からは判断できませんでした。{diagResult.note}</Text>
                     ) : (
@@ -204,6 +207,19 @@ export default function ReportDetailSheet({ report, onClose }: Props) {
                           <Text style={{ fontSize: 12, color: C.textSub, lineHeight: 17, marginTop: 2 }}>{p.reason}</Text>
                         </View>
                       ))
+                    )}
+                    {/* 診断だけで終わらせず、次の一手の相談へ渡す。作付けが分かるので
+                        そのスレッドに入る ＝ 農薬の適用情報まで照合できる側に着地する */}
+                    {onAdvise && canUseAiFeature("nextActionAdvice") && (
+                      <Pressable
+                        onPress={() => onAdvise(diagResult, r.crop_id ?? null)}
+                        style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+                          marginTop: 4, paddingVertical: 9, borderRadius: 999,
+                          backgroundColor: C.card, borderWidth: 1, borderColor: C.hairline }}
+                      >
+                        <Feather name="message-circle" size={13} color={C.ink} />
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: C.ink }}>この結果をもとに相談する</Text>
+                      </Pressable>
                     )}
                   </View>
                 )}

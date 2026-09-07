@@ -140,7 +140,12 @@ export function DailyReportSheet({ open, onClose }: { open: boolean; onClose: ()
 }
 
 // ── ② 記録検索チャット ──
-export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SearchChatSheet({ open, onClose, initialQuestion }: {
+  open: boolean; onClose: () => void;
+  /** 相談から「記録を調べる」で渡された検索語。入力欄に入れるだけで自動送信はしない
+   *  —— 利用者が押していない課金呼び出しを起こさないため */
+  initialQuestion?: string;
+}) {
   const { reports, crops, pesticides, cropName, userName, prefetchAllRegistrations } = useStore();
   // assistant 行は結論（content）と根拠・注意を分けて持つ。api/search-chat.ts が
   // スキーマで分けて返すので、自由文を目視で切っているわけではない（Web版と同一）
@@ -153,6 +158,10 @@ export function SearchChatSheet({ open, onClose }: { open: boolean; onClose: () 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open && initialQuestion) { setInput(initialQuestion); setError(""); }
+  }, [open, initialQuestion]);
 
   const send = async () => {
     const question = input.trim();
@@ -465,6 +474,25 @@ function RegistrationFactsBlock({ facts }: { facts: NonNullable<CropAdviceMessag
     </View>
   );
 }
+
+/**
+ * 写真診断の結果を相談へ渡す形に整える。画面に出している項目と同じものを使うので、
+ * AI が見ているものと利用者が見ているものが食い違わない。
+ * label は「何を送るか」を相談シートに出すための短い見出し。
+ */
+export const diagnosisForAdvise = (d: DiagnosisResult): { text: string; label: string } => {
+  const rows = d.possibilities.map(p => `- ${p.name}（${p.category} / 確信度 ${p.confidence}%）: ${p.reason}`);
+  const text = [
+    ...(d.inconclusive ? ["写真だけでは判断が難しいとのことです。"] : []),
+    ...rows,
+    ...(d.note?.trim() ? [d.note.trim()] : []),
+  ].join("\n").slice(0, 800);
+  const first = d.possibilities[0]?.name;
+  const label = !first ? "候補なし"
+    : d.possibilities.length > 1 ? `${first} ほか${d.possibilities.length - 1}件`
+    : first;
+  return { text, label };
+};
 
 /**
  * 保存する assistant 発言の本文。聞き返しは本文の最後の段落として同じ吹き出しに入れる。
@@ -870,7 +898,11 @@ export function AdviseSheet({ open, onClose, cropId, photoDiagnosis, onAskRecord
 }
 
 // ── ⑤ AI画像診断（単体・写真から直接） ──
-export function PhotoDiagnosisSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function PhotoDiagnosisSheet({ open, onClose, onAdvise }: {
+  open: boolean; onClose: () => void;
+  /** 診断結果を相談へ引き渡す。渡さなければボタンを出さない */
+  onAdvise?: (d: DiagnosisResult) => void;
+}) {
   const { currentUser } = useStore();
   const organizationId = currentUser?.organization_id ?? null;
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -971,6 +1003,18 @@ export function PhotoDiagnosisSheet({ open, onClose }: { open: boolean; onClose:
                 {!!result.note && <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 18 }}>{result.note}</Text>}
               </>
             )}
+          </View>
+        )}
+
+        {/* 診断だけで終わらせず、次の一手の相談へ渡す。記録を介さない単体診断なので
+            作付けは分からない ＝ 畑全体の相談に入れ、作物を選んだ方がよい場面は
+            相談側が促す（docs/decisions/20260908-advice-handoff.md） */}
+        {result && onAdvise && (
+          <View style={{ marginBottom: 12 }}>
+            <Btn variant="secondary" size="md" onPress={() => onAdvise(result)}
+              icon={<Feather name="message-circle" size={14} color={C.ink} />}>
+              この結果をもとに相談する
+            </Btn>
           </View>
         )}
 
