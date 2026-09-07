@@ -23,7 +23,7 @@
 // 書かれなかったりする。サーバー側の固定文言 notes として分けて返す
 // （advise.ts の sources / limits と同じ方式）。
 
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 import { requireUser, denied } from "./_auth.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -144,7 +144,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(502).json({ error: "検索に失敗しました。時間をおいて再度お試しください。" });
   }
 
-  const data = await r.json();
+  const data: ExternalJson = await r.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) return res.status(502).json({ error: "回答が空でした。" });
 

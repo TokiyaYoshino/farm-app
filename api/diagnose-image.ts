@@ -6,7 +6,7 @@
 // 画像本体はサーバーを経由させず公開URLをそのままOpenAIに渡す疎結合設計
 // （generate-report.ts / search-chat.ts / pest-control-advice.tsと同じ方針）。
 
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 import { requireUser, denied } from "./_auth.js";
 
 /** 画像が実在して画像として読めるかを確かめる。
@@ -144,7 +144,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(502).json({ error: "診断に失敗しました。時間をおいて再度お試しください。" });
   }
 
-  const data = await r.json();
+  const data: ExternalJson = await r.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) return res.status(502).json({ error: "診断結果が空でした。" });
 

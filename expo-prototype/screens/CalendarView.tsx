@@ -104,7 +104,6 @@ export default function CalendarView() {
   }, [schedules]);
 
   const pesticideName = (id?: string) => (id ? pesticides.find(p => p.id === id)?.name ?? "" : "");
-  const scheduleTitle = (s: Schedule) => (s.title && s.title !== s.work_type ? s.title : "");
 
   const closePopup = () => {
     setSelectedDate(null);

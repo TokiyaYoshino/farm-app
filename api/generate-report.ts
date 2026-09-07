@@ -5,7 +5,7 @@
 // クライアント側で整形済みのテキストを受け取る疎結合設計にしているため、
 // reportsテーブルのスキーマ変更の影響を受けない。
 
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 import { requireUser, denied } from "./_auth.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -86,7 +86,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(502).json({ error: "生成に失敗しました。時間をおいて再度お試しください。" });
   }
 
-  const data = await r.json();
+  const data: ExternalJson = await r.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) return res.status(502).json({ error: "生成結果が空でした。" });
 

@@ -16,7 +16,7 @@
 // （整形は src/lib/pesticideUsage.ts の formatSprayHistoryForPrompt、
 //   判断の経緯は docs/decisions/20260823-pest-advice-history.md）。
 
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 import { requireUser, denied } from "./_auth.js";
 
 interface RegistrationInfo {
@@ -42,7 +42,7 @@ async function resolveJmaAreaCode(lat: number, lng: number): Promise<string | nu
       { signal: AbortSignal.timeout(5000) },
     );
     if (!r.ok) return null;
-    const d = await r.json();
+    const d: ExternalJson = await r.json();
     const muniCd: string | undefined = d?.results?.muniCd;
     if (!muniCd || muniCd.length < 2) return null;
     const pref = muniCd.padStart(5, "0").slice(0, 2);
@@ -62,7 +62,7 @@ async function fetchJmaWarnings(areaCode: string): Promise<string | null> {
       { signal: AbortSignal.timeout(5000) },
     );
     if (!r.ok) return null;
-    const d = await r.json();
+    const d: ExternalJson = await r.json();
     const names = new Set<string>();
     for (const at of d?.areaTypes ?? []) {
       for (const area of at?.areas ?? []) {
@@ -244,7 +244,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(502).json({ error: "助言生成に失敗しました。時間をおいて再度お試しください。" });
   }
 
-  const data = await r.json();
+  const data: ExternalJson = await r.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) return res.status(502).json({ error: "助言結果が空でした。" });
 

@@ -28,7 +28,7 @@
 //
 // 環境変数: OPENAI_API_KEY（Vercelダッシュボードで設定。リポジトリに書かない）
 
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 import { requireUser, denied } from "./_auth.js";
 
 interface RegistrationInfo {
@@ -440,7 +440,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(502).json({ error: "助言の生成に失敗しました。時間をおいて再度お試しください。" });
   }
 
-  const data = await r.json();
+  const data: ExternalJson = await r.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) return res.status(502).json({ error: "助言結果が空でした。" });
 

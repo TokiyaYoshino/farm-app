@@ -25,7 +25,7 @@
 //
 // 環境変数: VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY（既存のものを流用）
 
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 
 export interface AuthedUser {
   /** Supabase Auth のユーザーID（JWT の sub） */
@@ -74,7 +74,7 @@ export async function requireUser(req: ApiRequest): Promise<{ ok: true; user: Au
       signal: AbortSignal.timeout(5000),
     });
     if (!r.ok) return { ok: false, status: 401, error: "認証が無効です。ログインし直してください。" };
-    const u = await r.json();
+    const u: ExternalJson = await r.json();
     // service_role や anon のキーを渡された場合ここに来る（ユーザーではないので id が無い）
     if (!u?.id || typeof u.id !== "string") {
       return { ok: false, status: 401, error: "認証が無効です。ログインし直してください。" };

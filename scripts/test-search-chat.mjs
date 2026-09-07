@@ -1,7 +1,7 @@
 // api/search-chat.ts の検証（記録検索チャット）。
 // テストランナーを入れていないので Node の型ストリップ + assert だけで動かす。
 //
-//   cd ~/farm-app && node scripts/test-search-chat.mjs
+//   cd ~/Projects/farm-app && node scripts/test-search-chat.mjs
 //
 // OpenAI は叩かずに global.fetch を差し替える。検証したいのは LLM の出力品質ではなく
 //   1. 根拠の日付を、渡した記録に実在するものだけに絞れているか  ← 誤ると確かめられない根拠を出す

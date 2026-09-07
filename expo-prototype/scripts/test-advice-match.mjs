@@ -1,7 +1,7 @@
 // lib/adviceMatch.ts の検証（助言 × 作業記録の照合）。
 // テストランナーを入れていないので Node の型ストリップ + assert だけで動かす。
 //
-//   cd ~/farm-app/expo-prototype && node scripts/test-advice-match.mjs
+//   cd ~/Projects/farm-app/expo-prototype && node scripts/test-advice-match.mjs
 //
 // 検証の主眼は「未実施」と「照合できない」を混ぜていないこと。混ぜると
 // 「やったのに未実施と言われる」か「できていないのに見逃す」のどちらかが起きる。
@@ -48,10 +48,10 @@ m = matchAction(action({ work_type: null }), [], "2026-08-05");
 t("work_type が null は unmatchable", m.status === "unmatchable");
 t("unmatchable は pending ではない", m.status !== "pending");
 t("unmatchable の説明で未実施と断定しない",
-  matchDetail(m).includes("記録から判断できません") && !matchDetail(m).includes("未実施"));
-t("表示文言も「未実施」ではない", statusLabel("unmatchable") === "記録と照合できません");
+  matchDetail(m).includes("分かりません") && !matchDetail(m).includes("未実施"));
+t("表示文言も「未実施」ではない", statusLabel("unmatchable") === "記録から分かりません");
 t("プロンプトでも未実施と決めつけないよう指示",
-  formatAdviceHistoryForPrompt([m]).includes("未実施を意味しない"));
+  formatAdviceHistoryForPrompt([m]).includes("「やっていない」という意味ではない"));
 
 console.log("\n期限の扱い:");
 m = matchAction(action({ due_to: "2026-08-03" }), [], "2026-08-05");
@@ -88,8 +88,8 @@ t("集計の合計が件数と一致", Object.values(c).reduce((a, b) => a + b, 
 console.log("\nプロンプト整形（エージェントの要点）:");
 const txt = formatAdviceHistoryForPrompt(list);
 t("同じ助言を繰り返さないよう指示", txt.includes("同じ助言を繰り返さず"));
-t("実施済みは日付つきで載る", txt.includes("実施済み") && txt.includes("2026-08-03"));
-t("未実施も載る", txt.includes("未実施"));
+t("実施済みは日付つきで載る", txt.includes("やった") && txt.includes("2026-08-03"));
+t("未実施も「まだ」として載る", txt.includes("まだ"));
 t("空なら空文字（プロンプトを汚さない）", formatAdviceHistoryForPrompt([]) === "");
 const many = Array.from({ length: 25 }, (_, i) =>
   matchAction(action({ id: `x${i}`, work_type: null }), [], "2026-08-05"));

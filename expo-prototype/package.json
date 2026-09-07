@@ -6,7 +6,9 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo start --ios",
-    "android": "expo start --android"
+    "android": "expo start --android",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test-advice-match.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.0",

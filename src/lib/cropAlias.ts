@@ -34,7 +34,7 @@ export function normalizeCropName(s: string): string {
     // カタカナ → ひらがな（U+30A1〜U+30F6）
     .replace(/[ァ-ヶ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60))
     // 長音・中黒・各種空白・区切りを落とす
-    .replace(/[ー・･\s　‐‑‒–—―]/g, "");
+    .replace(/[ー・･\s\u3000‐‑‒–—―]/g, "");
 }
 
 /**

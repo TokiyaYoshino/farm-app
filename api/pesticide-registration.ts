@@ -17,7 +17,7 @@
 //   - CSV: 引用符が1つも含まれないことを実データで確認済みのため単純分割でよい
 
 import zlib from "node:zlib";
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse } from "./types.js";
 import { requireUser, denied } from "./_auth.js";
 
 const FAMIC_INDEX = "https://www.acis.famic.go.jp/ddata/index2.htm";

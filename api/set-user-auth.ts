@@ -1,4 +1,4 @@
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 import { requireAdmin, denied } from "./_auth.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -46,7 +46,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     headers: { "Authorization": `Bearer ${SERVICE_ROLE}`, "apikey": SERVICE_ROLE, "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, email_confirm: true }),
   });
-  const authData = await authRes.json();
+  const authData: ExternalJson = await authRes.json();
   if (!authRes.ok) return res.status(500).json({ error: authData.msg ?? authData.message });
 
   if (user_id) {
@@ -68,7 +68,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       body: JSON.stringify({ name, role, login_id, auth_id: authData.id, email, org: org ?? "kishu", organization_id }),
     });
     if (!dbRes.ok) return res.status(500).json({ error: await dbRes.text() });
-    const newUser = await dbRes.json();
+    const newUser: ExternalJson = await dbRes.json();
     return res.status(200).json({ ok: true, user: newUser[0], auth_id: authData.id });
   }
 }

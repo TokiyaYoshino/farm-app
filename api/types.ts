@@ -15,3 +15,13 @@ export interface ApiResponseValue {
 export interface ApiResponse {
   status(code: number): ApiResponseValue;
 }
+
+/**
+ * 外部 API（OpenAI・気象庁・Supabase Auth）のレスポンス JSON。
+ *
+ * `res.json()` は `unknown` を返すが、ここで受けた値は必ず呼び出し側で
+ * 存在チェック・型チェックをしてから使う（信用しない前提のコードになっている）。
+ * その narrowing を毎回書き下すより、境界であることを型名で示すほうが読みやすい。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ExternalJson = any;

@@ -17,4 +17,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npx tsc -b --noEmit
+      # src（tsc -b）に加えて api/ も型チェックする。api/ は長らく
+      # どの tsconfig の include にも入っておらず、型が一度も見られていなかった
+      - run: npm run typecheck
+      # scripts/test-*.mjs の契約テスト。OpenAI は叩かない（fetch を差し替える）ので
+      # APIキー不要・無課金で回る
+      - run: npm test
+
+  expo:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: expo-prototype
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test

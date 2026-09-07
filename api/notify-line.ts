@@ -1,4 +1,4 @@
-import type { ApiRequest, ApiResponse } from "./types";
+import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 import { requireUser, denied } from "./_auth.js";
 
 // マルチテナント化: LINE通知先を organizations テーブルの組織別設定から取得できるようにする。
@@ -28,7 +28,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           { headers: { "Authorization": `Bearer ${SERVICE_ROLE}`, "apikey": SERVICE_ROLE } }
         );
         if (orgRes.ok) {
-          const rows = await orgRes.json();
+          const rows: ExternalJson = await orgRes.json();
           const orgConf = rows?.[0];
           if (orgConf?.line_channel_token) token = orgConf.line_channel_token;
           if (orgConf?.line_group_id)      groupId = orgConf.line_group_id;

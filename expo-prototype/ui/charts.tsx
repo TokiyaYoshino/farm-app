@@ -47,13 +47,12 @@ export function Legend({ items }: { items: { label: string; color: string; line?
 }
 
 /** 縦棒(今年) + 折れ線(前年) + 破線(目標)。Web版の収穫量 ComposedChart 相当 */
-export function ComboChart({ labels, bars, line, dashed, height = 200, unit = "" }: {
+export function ComboChart({ labels, bars, line, dashed, height = 200 }: {
   labels: string[];
   bars: number[];
   line?: number[];
   dashed?: number[];
   height?: number;
-  unit?: string;
 }) {
   const [w, onLayout] = useWidth();
   const maxV = niceMax(Math.max(...bars, ...(line ?? [0]), ...(dashed ?? [0]), 1));

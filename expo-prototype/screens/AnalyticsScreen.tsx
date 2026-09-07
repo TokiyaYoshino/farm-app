@@ -282,7 +282,6 @@ export default function AnalyticsScreen() {
               line={prevMonths}
               dashed={monthTarget != null ? Array(12).fill(monthTarget) : undefined}
               height={210}
-              unit="kg"
             />
             <Legend items={[
               { label: `${safeYear}年`, color: C.ink },

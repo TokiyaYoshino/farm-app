@@ -1,7 +1,7 @@
 // api/advise.ts の検証（作物ごとの相談＝農業エージェント）。
 // テストランナーを入れていないので Node の型ストリップ + assert だけで動かす。
 //
-//   cd ~/farm-app && node scripts/test-advise.mjs
+//   cd ~/Projects/farm-app && node scripts/test-advise.mjs
 //
 // OpenAI は叩かずに global.fetch を差し替える。検証したいのは LLM の出力品質ではなく
 //   1. 農薬の「-」（記載なし）を「制限なし」に倒していないか  ← 誤ると法令違反に導く

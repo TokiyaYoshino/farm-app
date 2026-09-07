@@ -10,8 +10,9 @@
 //      null を作物IDと比較すると永遠に一致せず、やったのに「まだ」のまま残る
 //   3. 期限が無い助言を期限切れにしないこと
 //
-// Expo版（expo-prototype/scripts/test-advice-match.mjs）と対になるが、**表示文言が
-// 両者で異なる**ため期待値は共有できない（Web: 「まだ」「記録から分かりません」）。
+// Expo版（expo-prototype/scripts/test-advice-match.mjs）と対になる。表示文言は
+// 2026-08-24 の平易な語への統一で両者同じになった（「やった」「まだ」「記録から分かりません」）。
+// 違うのは受け取る記録の型と、畑全体スコープの見出しだけ。
 import { pathToFileURL } from "node:url";
 
 const {
