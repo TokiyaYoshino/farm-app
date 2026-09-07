@@ -218,6 +218,9 @@ interface CropAdviceMessage {
   // （scripts/migrations/2026-08-29-crop-advice-watch-unknowns.sql で列を追加）
   watch_points?: string[] | null;
   unknowns?: string[] | null;
+  /** この返答に添える記録検索の検索語。null は「記録を調べる必要なし」
+   *  （scripts/migrations/2026-09-08-crop-advice-record-search.sql で列を追加） */
+  record_search_query?: string | null;
   registration_facts?: AdviseRegistrationFact[] | null;
   created_at: string;
 }
@@ -234,6 +237,8 @@ interface AdviseAction {
 interface AdviseResult {
   advice: {
     reply: string; actions: AdviseAction[]; watchPoints: string[]; unknowns: string[];
+    /** 記録を数え直さないと答えられない質問のときだけ入る検索語 */
+    recordSearchQuery?: string | null;
     /** 答えを絞るのに要る情報が足りないときの聞き返し。無ければ null */
     followUpQuestion?: string | null;
   };
@@ -2217,6 +2222,7 @@ export default function App() {
           id: `local-${prev.length}`, crop_id: adviseCropId, role: "assistant",
           content: adviceContent(result.advice), sources: result.sources, limits: result.limits,
           watch_points: result.advice.watchPoints, unknowns: result.advice.unknowns,
+          record_search_query: result.advice.recordSearchQuery ?? null,
           registration_facts: result.registrationFacts, created_at: new Date().toISOString(),
         }]);
         setAdviseError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
@@ -2260,6 +2266,12 @@ export default function App() {
       // 出典・限界・登録情報の原文は生成時のものを残す。あとで文言を変えても過去の発言は当時のまま
       sources: result.sources, limits: result.limits,
       watch_points: result.advice.watchPoints, unknowns: result.advice.unknowns,
+      // 値があるときだけ列を含める。マイグレーション
+      // （2026-09-08-crop-advice-record-search.sql）が未適用でも、検索語が無い
+      // 大多数のターンはそのまま保存できる
+      ...(result.advice.recordSearchQuery
+        ? { record_search_query: result.advice.recordSearchQuery }
+        : {}),
       registration_facts: result.registrationFacts,
       model: AI_MODEL, usage: result.usage ?? null, cost_usd: result.costUsd ?? null,
     }]).select().single();
@@ -5180,6 +5192,27 @@ export default function App() {
                   whiteSpace:"pre-wrap" as const,
                 }}>
                   {m.content}
+                  {/* 相談が見ている記録は直近60件だけ。その外を数える質問は答えようがないので、
+                      記録検索へ検索語を添えて渡す（docs/decisions/20260908-advice-handoff.md）。
+                      押した時点では開くだけで送信はしない —— 利用者が押していない課金呼び出しを
+                      起こさないため。記録検索の対象範囲はシートの冒頭に出ている */}
+                  {m.role === "assistant" && m.record_search_query && canUseAiFeature("recordSearchChat") && (
+                    <div style={{ marginTop:8 }}>
+                      <button
+                        onClick={() => {
+                          setSearchChatError("");
+                          setSearchChatInput(m.record_search_query!);
+                          setShowSearchChatSheet(true);
+                        }}
+                        style={{ ...btn("secondary", "sm"), maxWidth:"100%" }}
+                      >
+                        <MessageSquare size={13} strokeWidth={2} style={{ flexShrink:0 }} />
+                        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+                          記録を調べる:「{m.record_search_query}」
+                        </span>
+                      </button>
+                    </div>
+                  )}
                   {/* 見ておくこと。結論の一部なので畳まない（最大3件） */}
                   {m.watch_points && m.watch_points.length > 0 && (
                     <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${C.hairline}` }}>

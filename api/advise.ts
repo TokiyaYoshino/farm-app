@@ -324,6 +324,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     "- follow_up_question: 症状・場所・時期・作業の状況など、答えを絞るのに要る情報が質問に無いときに、確認したいこと1つ。40字以内の疑問文。足りているときは null。",
     "  **unknowns は判断の限界**（渡された情報では分からないこと）で、**follow_up_question は利用者に尋ねること**。同じ内容を両方に書かないこと。",
     "  reply は分かる範囲の答えで完結させること。質問だけを返してはならない（聞き返しは follow_up_question に置く）。",
+    // 相談が見ている作業記録は直近60件・7500字。その窓の外を数える質問には答えようがないので、
+    // 記録検索（api/search-chat.ts）へ検索語を添えて渡す。
+    // ただし follow_up_question の教訓（置き場のある方へ行く）の裏返しで、枠を作ると
+    // 入れたがる。条件を絞り、迷ったら出さない側へ倒す
+    "- record_search_query: **作業記録を数え直す/探し直すことでしか確かめられない質問**のときだけ、記録検索に渡す検索語（20字以内・名詞句）。それ以外は null。",
+    "  当てはまる例: 渡した集計に無い期間・作物・作業を数える質問（「去年の秋の防除は何回？」）、特定の記録を探す質問（「◯◯を使ったのはいつ？」）、担当者・圃場で絞る質問。",
+    "  null にする例: 上の材料（集計・農薬の使用回数・最近の作業記録）に答えが載っている / 作業の段取り・時期・病害虫など知識で答える質問 / 記録と関係のない相談。",
+    "  検索語を出す場合も reply は分かる範囲の答えで完結させること（**検索語だけを返してはならない**）。",
+    "  **迷ったら null にすること。**",
     "- actions[].title: 作業名 / when: いつ（例: 今週中 / 開花後10日ごろ） / why: 理由（1〜2文）",
     "- watch_points: 今の時期に見ておくべき点（病害虫の兆候・気象リスクなど）",
     "- unknowns: 渡された情報では判断できないこと・確認が必要なこと",
@@ -485,8 +494,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               unknowns: { type: "array", maxItems: 4, items: { type: "string" } },
               // 聞き返しは無いことのほうが多いので null を許す。strict なので required には入れる
               follow_up_question: { type: ["string", "null"] },
+              // 記録検索へ渡す検索語。無いことのほうが多いので同じく null を許す
+              record_search_query: { type: ["string", "null"] },
             },
-            required: ["reply", "actions", "watch_points", "unknowns", "follow_up_question"],
+            required: ["reply", "actions", "watch_points", "unknowns", "follow_up_question", "record_search_query"],
             additionalProperties: false,
           },
         },
@@ -511,6 +522,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     watch_points?: string[];
     unknowns?: string[];
     follow_up_question?: string | null;
+    record_search_query?: string | null;
   };
   try {
     parsed = JSON.parse(content);
@@ -576,12 +588,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   // 「聞き返さない」を "null" や空文字で表してくることがあるので、どちらも null に倒す
   const followUp = typeof parsed.follow_up_question === "string" ? parsed.follow_up_question.trim() : "";
+  const followUpQuestion = followUp === "" || followUp === "null" ? null : followUp.slice(0, 120);
+
+  // 記録検索への引き渡し。プロンプトで縛ってもなお出しすぎるので、意味の側はコードで守る:
+  //   1. 記録を渡していないなら送り先が空 —— 行き止まりへ誘導しない
+  //   2. 聞き返しがあるなら出さない —— 1ターンに出す「次の一手」は1つ。
+  //      聞き返しとボタンが同時に出ると、どちらに答えればよいか分からなくなる
+  // 落としているのは事実ではなく提案なので、limits には出さない
+  //（work_type を null に倒したときに限界を出すのとは性質が違う）
+  const rawQuery = typeof parsed.record_search_query === "string" ? parsed.record_search_query.trim() : "";
+  const recordSearchQuery = rawQuery === "" || rawQuery === "null" || !hasRecords || followUpQuestion
+    ? null
+    : rawQuery.slice(0, 60);
+
   const advice = {
     reply,
     actions,
     watchPoints: asStrings(parsed.watch_points),
     unknowns: asStrings(parsed.unknowns),
-    followUpQuestion: followUp === "" || followUp === "null" ? null : followUp.slice(0, 120),
+    followUpQuestion,
+    recordSearchQuery,
   };
 
   // ── 出典と限界は必ず返す（LLM に書かせない）────────────────────────

@@ -332,6 +332,62 @@ t("畑全体の相談でも写真の候補を渡せる", prompt().includes("## �
 t("畑全体では薬剤の可否に触れない指示が残る",
   prompt().includes("希釈倍数・使用方法・その薬剤を使ってよいかどうかには触れず"));
 
+// ── 記録の橋渡し（record_search_query）────────────────────────
+// 相談は直近60件・7500字しか記録を見ていないので、窓の外を数える質問には答えられない。
+// 答えられないまま終わらせず、記録検索へ検索語を添えて渡す。
+// ただし follow_up_question の教訓（「置き場のある方へ行く」）の裏返しで、枠を作ると
+// 入れたがる。プロンプトの縛りとサーバー側の握りつぶしの両方で抑える。
+const withQuery = q => ({ ...DEFAULT_LLM_JSON, record_search_query: q });
+
+console.log("\n記録の橋渡し（record_search_query）:");
+r = await call({ crop: CROP, records: "2026-08-20 防除", workTypes: WORK_TYPES });
+const advSchema = captured.response_format.json_schema.schema;
+t("スキーマに record_search_query がある", "record_search_query" in advSchema.properties);
+t("string か null を許す（follow_up_question と同型）",
+  JSON.stringify(advSchema.properties.record_search_query?.type) === JSON.stringify(["string", "null"]));
+t("strict なので required に入る", advSchema.required.includes("record_search_query"));
+t("判定条件を指示する", prompt().includes("数え直す/探し直すことでしか確かめられない質問"));
+t("null にする例を挙げる（過剰ルーティングの抑制）",
+  prompt().includes("に答えが載っている"));
+t("迷ったら null と指示する", prompt().includes("迷ったら null にすること"));
+t("検索語だけを返させない", prompt().includes("検索語だけを返してはならない"));
+
+llmJson = withQuery("去年の秋の防除");
+r = await call({ crop: CROP, records: "2026-08-20 防除", workTypes: WORK_TYPES });
+t("検索語が返る", r.body.advice.recordSearchQuery === "去年の秋の防除");
+llmJson = withQuery("あ".repeat(80));
+r = await call({ crop: CROP, records: "2026-08-20 防除", workTypes: WORK_TYPES });
+t("長すぎる検索語は切る", r.body.advice.recordSearchQuery?.length === 60);
+llmJson = withQuery("   ");
+r = await call({ crop: CROP, records: "2026-08-20 防除", workTypes: WORK_TYPES });
+t("空文字は null", r.body.advice.recordSearchQuery === null);
+llmJson = withQuery("null");
+r = await call({ crop: CROP, records: "2026-08-20 防除", workTypes: WORK_TYPES });
+t("文字列の \"null\" も null", r.body.advice.recordSearchQuery === null);
+
+// サーバー側で握りつぶす2つ。落としているのは事実ではなく提案なので limits には出さない
+llmJson = withQuery("去年の秋の防除");
+r = await call({ crop: CROP, workTypes: WORK_TYPES });
+t("記録を渡していなければ検索語を返さない（行き止まりへ送らない）",
+  r.body.advice.recordSearchQuery === null);
+llmJson = { ...withQuery("去年の秋の防除"), follow_up_question: "どの圃場ですか？" };
+r = await call({ crop: CROP, records: "2026-08-20 防除", workTypes: WORK_TYPES });
+t("聞き返しがあるときは検索語を落とす（次の一手は1つ）",
+  r.body.advice.recordSearchQuery === null && r.body.advice.followUpQuestion === "どの圃場ですか？");
+t("握りつぶしたことは限界に出さない（落としたのは事実ではなく提案）",
+  !r.body.limits.some(l => l.includes("検索")));
+
+llmJson = withQuery("去年の秋の防除");
+r = await call({ crop: CROP, records: "2026-08-20 防除", workTypes: WORK_TYPES });
+t("検索語を返しても本文は残る", r.body.advice.reply !== "");
+t("検索語を返してもやることは残る", r.body.advice.actions.length === 1);
+r = await call({ records: "2026-08-20 たまねぎ 防除", workTypes: WORK_TYPES });
+t("畑全体の相談でも検索語は出せる", r.body.advice.recordSearchQuery === "去年の秋の防除");
+llmJson = null;
+r = await call({ crop: CROP, records: "2026-08-20 防除", workTypes: WORK_TYPES });
+t("LLM が返さなければ null（既存の呼び出しを壊さない）",
+  r.body.advice.recordSearchQuery === null);
+
 // 普段使いのAI（ChatGPT等）と同じ会話の質感にするための契約。
 // 「結論を先に出す」（docs/decisions/20260829-ai-output-structure.md）は保ったまま、
 // 文数の固定縛りだけを外す。長さは質問側に合わせさせる
