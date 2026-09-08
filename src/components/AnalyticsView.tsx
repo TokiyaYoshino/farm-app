@@ -40,7 +40,9 @@ interface DiagnosisJson {
 
 interface AiOutputRow {
   id: string;
-  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure";
+  // App.tsx の saveAiOutput が書く kind と揃える。ここに無い kind の行は
+  // KIND_LABEL 参照が undefined になり、AI履歴の種別が空欄で表示される
+  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice" | "record_search";
   created_at: string;
   target_date: string | null;
   field: string | null;
@@ -76,6 +78,8 @@ const KIND_LABEL: Record<AiOutputRow["kind"], string> = {
   pest_advice:     "防除助言",
   daily_report:    "日報",
   voice_structure: "音声整理",
+  advice:          "作物の相談",
+  record_search:   "記録に聞く",
 };
 
 /**

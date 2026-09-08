@@ -72,6 +72,29 @@ const apiHeaders = (): Record<string, string> => ({
 // （api/generate-report.ts・diagnose-image.ts 等の model 指定が正）。
 const AI_MODEL = "gpt-4o-mini";
 
+// ai_outputs.entry_point に残す導線の識別子。「画面_機能」で命名する。
+//
+// kind（機能の種類）とは別軸。同じ機能でも置き場所が複数あり、たとえば diagnosis は
+// 記録一覧の写真直下・記録詳細シート内・ホームの単体診断の3か所から呼ばれるため、
+// kind だけでは「どの置き場所が効いたか」を分離できない。
+//
+// 2026-08-23 の情報設計は置き場所を変える判断だったが、効果を測る手段が無く
+// 「未検証」で終わっている（docs/decisions/20260823-ai-information-architecture.md）。
+// この型はそれを測れるようにするためのもの。
+//
+// **導線を動かしたときは新しい値を足すこと。既存の値の意味を変えない**
+// ―― 変更前後の比較というこの列の唯一の用途が壊れるため。
+type AiEntryPoint =
+  | "home_pest_advice"            // ホーム「今日の一手」→ 次の散布はいつ？
+  | "home_photo_diagnosis"        // ホーム「今日の一手」→ 写真で病害虫を調べる（記録を伴わない）
+  | "home_crop_advice"            // ホーム「作付け中 — 相談できます」→ 作付けの行
+  | "calendar_daily_report"       // 記録タブ・カレンダーの日別シート → その日をまとめる
+  | "report_list_daily_report"    // 記録一覧のボタン行 → 日報にまとめる
+  | "report_list_search_chat"     // 記録一覧の検索の文脈 → 記録に聞いてみる（2026-08-23 第1段階の要）
+  | "report_list_photo_diagnosis" // 記録一覧の写真直下 → この写真で病害虫を調べる
+  | "report_detail_photo_diagnosis" // 記録詳細シート内 → 写真で病害虫を絞り込む
+  | "report_form_voice";          // 記録フォームのメモ欄 → 音声メモの整理
+
 // 農薬散布系の作業区分か判定（カスタムカテゴリ名「農薬散布」とレガシーテンプレート「防除」の両方に対応）
 const isPesticideWorkType = (workType: string) => workType === "農薬散布" || workType === "防除";
 
@@ -462,6 +485,9 @@ export default function App() {
   // AI日報生成（PoC）
   const [showReportGenSheet, setShowReportGenSheet] = useState(false);
   const [genDate, setGenDate]               = useState(() => new Date().toISOString().slice(0,10));
+  // 日報は「カレンダーの日別シート」と「記録一覧のボタン行」の2か所から開く。
+  // 生成は同じ関数なので、どちらから開いたかをシートを開くときに持ち越す
+  const [genEntry, setGenEntry]             = useState<AiEntryPoint>("report_list_daily_report");
   const [genLoading, setGenLoading]         = useState(false);
   const [genResult, setGenResult]           = useState("");
   // 日報の総括・作業・申し送り。API がスキーマで分けて返す
@@ -1100,6 +1126,7 @@ export default function App() {
       // structure-voice は構造化JSONをそのまま返す仕様で usage / costUsd を含まないため、
       // ここだけコストは残らない（api/structure-voice.ts）。
       void saveAiOutput("voice_structure", {
+        entryPoint: "report_form_voice",
         targetDate: rForm.date, field: s.field ?? rForm.field ?? null,
         inputSummary: rForm.note, outputJson: s,
       });
@@ -1684,8 +1711,11 @@ export default function App() {
   // AI機能の出力を ai_outputs に残す。分析タブの診断集計とAI履歴の元データになる。
   // 保存の失敗はAI機能自体を止めない（画面に出すことが本体で、保存は付随価値のため）。
   const saveAiOutput = async (
-    kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice",
+    kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice" | "record_search",
     payload: {
+      // どのボタンから呼ばれたか。必須にしてあるのは、導線を足したときに
+      // 記録し忘れると「その導線は使われていない」と読めてしまい、集計が嘘になるため
+      entryPoint: AiEntryPoint;
       reportId?: number | null;
       targetDate?: string | null;
       field?: string | null;
@@ -1701,6 +1731,7 @@ export default function App() {
     const { error } = await supabase.from("ai_outputs").insert([{
       organization_id: currentOrganizationId,
       kind,
+      entry_point:   payload.entryPoint,
       report_id:     payload.reportId ?? null,
       target_date:   payload.targetDate ?? new Date().toISOString().slice(0, 10),
       field:         payload.field ?? null,
@@ -1761,6 +1792,7 @@ export default function App() {
         setGenItems(Array.isArray(d.items) ? d.items : []);
         setGenHandover(d.handover ?? "");
         void saveAiOutput("daily_report", {
+          entryPoint: genEntry,
           targetDate: genDate, inputSummary: records,
           outputText: d.report, usage: d.usage, costUsd: d.costUsd,
         });
@@ -1805,6 +1837,7 @@ export default function App() {
         setPestAdviceAvoid(Array.isArray(d.avoidDays) ? d.avoidDays : []);
         setPestAdviceDate(new Date().toISOString().slice(0, 10));
         void saveAiOutput("pest_advice", {
+          entryPoint: "home_pest_advice",
           inputSummary: forecast,
           outputText: d.advice, usage: d.usage, costUsd: d.costUsd,
         });
@@ -1985,6 +2018,13 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.answer) {
         setSearchChatMessages(m => [...m, { role: "assistant", content: d.answer }]);
+        // この機能はこれまで ai_outputs に一切残っていなかった。2026-08-23 第1段階の
+        // 「検索窓との統合が要」がこの導線なので、記録しないと肝心の一手が測れない
+        void saveAiOutput("record_search", {
+          entryPoint: "report_list_search_chat",
+          inputSummary: question, outputText: d.answer,
+          usage: d.usage, costUsd: d.costUsd,
+        });
       } else {
         setSearchChatError(d.error || "検索に失敗しました。");
       }
@@ -2130,6 +2170,7 @@ export default function App() {
         setAdviseError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
       }
       void saveAiOutput("advice", {
+        entryPoint: "home_crop_advice",
         cropId: crop.id,
         inputSummary: [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`,
           `記録:${cropReports.length}件`, `質問:${question}`].join(" / "),
@@ -2194,7 +2235,7 @@ export default function App() {
   // ─── 病害虫画像診断 ───────────────────────────────────────
   // 記録に添付済みの写真（Supabase公開URL）をそのままOpenAIのvisionに渡す。
   // 診断結果を ai_outputs に紐付けて残すため、URLだけでなく記録そのものを受け取る。
-  const diagnoseImage = async (report: Report) => {
+  const diagnoseImage = async (report: Report, entryPoint: AiEntryPoint) => {
     if (!report.image_url) return;
     setDiagLoading(true); setDiagError(""); setDiagResult(null);
     try {
@@ -2208,6 +2249,7 @@ export default function App() {
       if (res.ok && d.diagnosis) {
         setDiagResult(d.diagnosis as DiagnosisResult);
         void saveAiOutput("diagnosis", {
+          entryPoint,
           reportId: report.id, targetDate: report.date,
           field: report.field, cropId: report.crop_id,
           inputSummary: `写真:${report.image_url}${crop ? ` / 作物:${crop}` : ""}`,
@@ -2240,6 +2282,7 @@ export default function App() {
         setDiagPhotoResult(d.diagnosis as DiagnosisResult);
         // 記録を介さない単体診断のため report_id / field / crop_id は持たない
         void saveAiOutput("diagnosis", {
+          entryPoint: "home_photo_diagnosis",
           inputSummary: `写真:${imageUrl}`,
           outputJson: d.diagnosis, usage: d.usage, costUsd: d.costUsd,
         });
@@ -2940,7 +2983,7 @@ export default function App() {
             onEditComment={editComment}
             // 日報は「その日の記録が目の前にある場所」に置く。日付をタップして
             // その日の記録が並んだ直後が、まとめたくなる瞬間
-            onSummarizeDay={(date) => { setGenDate(date); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
+            onSummarizeDay={(date) => { setGenDate(date); setGenEntry("calendar_daily_report"); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
           />
 
           {/* ── 今日の予定 ── */}
@@ -3064,7 +3107,7 @@ export default function App() {
                   {reportFilterActive && (
                     <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={{ ...btn("tertiary", "sm"), flexShrink:0 }}>条件をクリア</button>
                   )}
-                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
+                  <button onClick={() => { setGenEntry("report_list_daily_report"); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Sparkles size={13} strokeWidth={2} />日報にまとめる
                   </button>
                   <button onClick={() => setShowExportSheet(true)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
@@ -3147,7 +3190,7 @@ export default function App() {
                           詳細シートにも同じ導線があるが、一覧で写真を見て気づく経路のほうが多い */}
                       {canUseAiFeature("pestDiagnosis") && (
                         <button
-                          onClick={() => { setSelectedReport(r); diagnoseImage(r); }}
+                          onClick={() => { setSelectedReport(r); diagnoseImage(r, "report_list_photo_diagnosis"); }}
                           style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
                         >
                           <FlaskConical size={12} strokeWidth={2} />この写真で病害虫を調べる
@@ -3804,7 +3847,7 @@ export default function App() {
                       </div>
                     )}
                     <button
-                      onClick={() => diagnoseImage(r)}
+                      onClick={() => diagnoseImage(r, "report_detail_photo_diagnosis")}
                       disabled={diagLoading}
                       style={{ ...btn("tertiary", "sm"), width:"100%", opacity:diagLoading ? 0.6 : 1 }}
                     >
