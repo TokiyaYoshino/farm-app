@@ -693,9 +693,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       : aiBase;
     let { data: aiRow, error: aiErr } = await supabase.from("crop_advice_messages")
       .insert([withQuery]).select().single();
+    let queryDropped = false;
     if ((aiErr || !aiRow) && withQuery !== aiBase) {
       ({ data: aiRow, error: aiErr } = await supabase.from("crop_advice_messages")
         .insert([aiBase]).select().single());
+      queryDropped = !aiErr && !!aiRow;
     }
     if (aiErr || !aiRow) {
       await supabase.from("crop_advice_messages").delete().eq("id", (userRow as CropAdviceMessage).id);
@@ -715,7 +717,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // やることの保存に失敗しても会話は残す（照合できないだけで、助言自体は読める）
       actions = (actRows ?? []) as AdviceAction[];
     }
-    return { messages: [userRow as CropAdviceMessage, aiRow as CropAdviceMessage], actions };
+    // 列を落として保存できた場合、DB の行に検索語は残らない。それでもこのセッションでは
+    // ボタンを出す（出さないと、列が無いというだけで機能が黙って消える）。Web版と同じ扱い
+    const aiMsg = queryDropped
+      ? { ...(aiRow as CropAdviceMessage), record_search_query: result.advice.recordSearchQuery ?? null }
+      : (aiRow as CropAdviceMessage);
+    return { messages: [userRow as CropAdviceMessage, aiMsg], actions };
   }, [currentOrganizationId, currentUser]);
 
   const dismissAdviceAction = useCallback(async (actionId: string, dismissed: boolean): Promise<boolean> => {
