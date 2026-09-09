@@ -29,7 +29,7 @@ import {
   DEMO, DEMO_SUPABASE_URL, DEMO_SUPABASE_KEY,
   demoUsers, demoCurrentUser, demoCrops, demoFields, demoWorkCategories,
   demoPesticides, demoReports, demoSchedules, demoComments, demoWeatherCoords,
-  demoThreads, demoThreadMessages,
+  demoThreads, demoThreadMessages, demoAdviceActions,
 } from "./lib/demoData";
 import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
@@ -592,6 +592,16 @@ export default function App() {
   const [toolThreadId, setToolThreadId]    = useState<string | null>(null);
   // 作付けごとの「やること」件数。ホームのバッジに使う（作物を開かなくても分かるように先読み）
   const [adviceCounts, setAdviceCounts] = useState<Record<number, AdviceAction[]>>({});
+  // スレッド単位の「やること」。crop_id ベースの adviceCounts では、作付けに紐づかない
+  // 主題スレッドの助言が数えられない（crop_id が null になるため）
+  const [adviceCountsByThread, setAdviceCountsByThread] = useState<Record<string, AdviceAction[]>>(
+    DEMO
+      ? demoAdviceActions.reduce<Record<string, AdviceAction[]>>((acc, a) => {
+          (acc[a.thread_id] ??= []).push(a as unknown as AdviceAction);
+          return acc;
+        }, {})
+      : {},
+  );
   const [diagPhotoFile, setDiagPhotoFile]         = useState<File | null>(null);
   const [diagPhotoPreview, setDiagPhotoPreview]   = useState("");
   const [diagPhotoLoading, setDiagPhotoLoading]   = useState(false);
@@ -673,8 +683,13 @@ export default function App() {
         const { data: acts } = await supabase.from("crop_advice_actions").select("*")
           .eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300);
         const byCrop: Record<number, AdviceAction[]> = {};
-        ((acts ?? []) as AdviceAction[]).forEach(a => { (byCrop[a.crop_id] ??= []).push(a); });
+        const byThread: Record<string, AdviceAction[]> = {};
+        ((acts ?? []) as (AdviceAction & { thread_id?: string | null })[]).forEach(a => {
+          if (a.crop_id != null) (byCrop[a.crop_id] ??= []).push(a);
+          if (a.thread_id) (byThread[a.thread_id] ??= []).push(a);
+        });
         setAdviceCounts(byCrop);
+        setAdviceCountsByThread(byThread);
 
         // 相談スレッド一覧（相談タブの中身）
         const { data: ths } = await supabase.from("advice_threads").select("*")
@@ -2624,6 +2639,24 @@ export default function App() {
   };
 
 
+  /** スレッドの「やること」のうち未実施（pending + overdue）の件数。
+   *  ホームの作付け中カードと同じ matchActions を通すので、画面ごとに数が食い違わない */
+  const threadTodo = (t: AdviceThread): number => {
+    const acts = adviceCountsByThread[t.id] ?? [];
+    if (acts.length === 0) return 0;
+    // 作付けが紐づいていればその作物の記録、紐づいていなければ農場全体の記録と照合する
+    const target = t.crop_id != null ? reports.filter(r => r.crop_id === t.crop_id) : reports;
+    const m = countMatches(matchActions(acts, target));
+    return m.pending + m.overdue;
+  };
+
+  /** ナビの「相談」に出す合計。0 のときはバッジを出さない */
+  const adviceTodoTotal = useMemo(
+    () => threads.reduce((sum, t) => sum + threadTodo(t), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [threads, adviceCountsByThread, reports],
+  );
+
   const navBtn = (active: boolean): CSSProperties => ({
     flex:1, padding:"13px 0", border:"none", background:"none", cursor:"pointer",
     display:"flex", flexDirection:"column", alignItems:"center", gap:5,
@@ -2673,7 +2706,7 @@ export default function App() {
   const navItems = [
     { key:"home",      Icon:Home,      label:"ホーム" },
     { key:"report",    Icon:CalendarDays, label:"カレンダー" },
-    { key:"advice",    Icon:MessageSquare, label:"相談" },
+    { key:"advice",    Icon:MessageSquare, label:"相談", badge: adviceTodoTotal },
     { key:"analytics", Icon:BarChart2, label:"分析" },
     { key:"manage",    Icon:Settings,  label:"管理" },
   ];
@@ -3144,9 +3177,7 @@ export default function App() {
           ) : (
             <div style={S.card}>
               {threads.map((t, i) => {
-                const acts = t.crop_id != null ? (adviceCounts[t.crop_id] ?? []) : [];
-                const m = countMatches(matchActions(acts, reports.filter(r => t.crop_id == null || r.crop_id === t.crop_id)));
-                const todo = m.pending + m.overdue;
+                const todo = threadTodo(t);
                 return (
                   <button
                     key={t.id}
@@ -4563,7 +4594,20 @@ export default function App() {
       <nav style={S.nav}>
         {navItems.map(n => (
           <button key={n.key} style={navBtn(tab === n.key)} onClick={() => setTab(n.key)}>
-            <n.Icon size={24} strokeWidth={tab === n.key ? 2.2 : 1.8} />
+            {/* 相談タブは「行かないと何も起きない場所」になりやすい。放置できない
+                やることが残っていることを、開く前に見せて行く理由にする */}
+            <span style={{ position:"relative", display:"flex" }}>
+              <n.Icon size={24} strokeWidth={tab === n.key ? 2.2 : 1.8} />
+              {"badge" in n && (n.badge ?? 0) > 0 && (
+                <span style={{
+                  position:"absolute", top:-4, right:-8, minWidth:16, height:16, borderRadius:999,
+                  background:C.danger, color:"#fff", fontSize:10, fontWeight:700,
+                  display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", lineHeight:1,
+                }}>
+                  {(n.badge ?? 0) > 9 ? "9+" : n.badge}
+                </span>
+              )}
+            </span>
             {n.label}
           </button>
         ))}

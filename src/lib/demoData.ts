@@ -169,3 +169,30 @@ export const demoThreadMessages: Record<string, DemoAdviceMessage[]> = {
       created_at: iso(0) },
   ],
 };
+
+// ─── 相談から出た「やること」（crop_advice_actions 相当）
+// 作業記録と照合して実施済み/未実施を出すため、work_type は reports の語彙に合わせる
+export interface DemoAdviceAction {
+  id: string; thread_id: string; crop_id: number | null; message_id: string;
+  title: string; work_type: string | null;
+  due_from: string | null; due_to: string | null;
+  when_text: string | null; why: string | null; sort_order: number;
+  dismissed_at: string | null; created_at: string;
+}
+export const demoAdviceActions: DemoAdviceAction[] = [
+  // 未実施（期限内）。トマトの防除は12日前が最後なので pending のまま残る
+  { id: "a1", thread_id: "t1", crop_id: 1, message_id: "m2", title: "下葉を取り除いて風通しを作る",
+    work_type: null, due_from: iso(1), due_to: iso(-3), when_text: "数日以内", why: "斑点の広がりを抑えるため",
+    sort_order: 1, dismissed_at: null, created_at: iso(1) },
+  { id: "a2", thread_id: "t1", crop_id: 1, message_id: "m2", title: "広がるようなら薬剤を検討する",
+    work_type: "防除", due_from: iso(1), due_to: iso(-5), when_text: "様子を見て", why: "予防的な散布を避けるため",
+    sort_order: 2, dismissed_at: null, created_at: iso(1) },
+  // 作付けに紐づかない主題スレッドの助言（crop_id が null でも数えられることの確認用）
+  { id: "a3", thread_id: "t2", crop_id: null, message_id: "m4", title: "去年の散布記録を回数別に見返す",
+    work_type: null, due_from: iso(7), due_to: null, when_text: "計画を立てる前に", why: "予防散布と対症散布を分けるため",
+    sort_order: 1, dismissed_at: null, created_at: iso(7) },
+  // 作付けなしのスレッドでも件数が出ることの確認用（work_type が記録の語彙にあるので照合できる）
+  { id: "a4", thread_id: "t2", crop_id: null, message_id: "m4", title: "畝間の草刈りを済ませる",
+    work_type: "草刈り", due_from: iso(-1), due_to: iso(-6), when_text: "今週中", why: "病害の発生源を減らすため",
+    sort_order: 2, dismissed_at: null, created_at: iso(7) },
+];
