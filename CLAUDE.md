@@ -7,6 +7,7 @@ React + TypeScript + Supabase の農場作業記録アプリ。本番: https://k
 - `src/components/` CalendarView.tsx, DatePicker.tsx
 - スタイリングはインラインスタイル（Tailwind未使用）、カラー定数 `C`
 - デプロイ: git push で Vercel 自動デプロイ
+- 画面を確認したいとき: `npm run demo`（`VITE_DEMO_MODE=1`。認証・本番DBを介さず `src/lib/demoData.ts` の偽データで描画。既定 off・「デモデータ」バッジ付き。経緯は `docs/decisions/20260909-demo-mode.md`）
 
 ## 参照ドキュメント（必要な時に読む）
 - DBスキーマ全表: `docs/db-schema.md`

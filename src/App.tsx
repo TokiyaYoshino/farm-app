@@ -26,6 +26,11 @@ import L from "leaflet";
 import { harvestQty, excludedHarvestCount } from "./lib/metrics";
 import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt, lastSpray } from "./lib/pesticideUsage";
 import {
+  DEMO, DEMO_SUPABASE_URL, DEMO_SUPABASE_KEY,
+  demoUsers, demoCurrentUser, demoCrops, demoFields, demoWorkCategories,
+  demoPesticides, demoReports, demoSchedules, demoComments, demoWeatherCoords,
+} from "./lib/demoData";
+import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
   type AdviceAction,
 } from "./lib/adviceMatch";
@@ -50,8 +55,8 @@ const PIN_BLUE  = makePin(C.info);
 const PIN_GREEN = makePin(C.primary);
 
 const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  DEMO ? DEMO_SUPABASE_URL : (import.meta.env.VITE_SUPABASE_URL as string),
+  DEMO ? DEMO_SUPABASE_KEY : (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
 );
 
 // ─── 定数 ───────────────────────────────────────────────
@@ -344,8 +349,11 @@ const css = (o: CSSProperties): CSSProperties => o;
 
 export default function App() {
   // ─── Auth state ──────────────────────────────────────────
-  const [authSession, setAuthSession]     = useState<AuthSession | null>(null);
-  const [authLoading, setAuthLoading]     = useState(true);
+  // DEMO はダミーセッションで認証ゲート（authLoading / !authSession）を越える。
+  // 型は Session を満たさないので unknown 経由。DEMO 以外では従来どおり null から始まる
+  const [authSession, setAuthSession]     = useState<AuthSession | null>(
+    DEMO ? ({ user: { id: "demo-user" } } as unknown as AuthSession) : null);
+  const [authLoading, setAuthLoading]     = useState(!DEMO);
   const [loginId, setLoginId]             = useState("");
   const [loginPass, setLoginPass]         = useState("");
   const [showPass, setShowPass]           = useState(false);
@@ -356,15 +364,15 @@ export default function App() {
   const [tab, setTab]                     = useState("home");
   const [currentOrg, setCurrentOrg]       = useState("kishu");
   const [currentOrganizationId, setCurrentOrganizationId] = useState<string | null>(null);
-  const [users, setUsers]                 = useState<User[]>([]);
-  const [crops, setCrops]                 = useState<Crop[]>([]);
-  const [fields, setFields]               = useState<Field[]>([]);
-  const [reports, setReports]             = useState<Report[]>([]);
-  const [schedules, setSchedules]          = useState<Schedule[]>([]);
-  const [pesticides, setPesticides]       = useState<Pesticide[]>([]);
+  const [users, setUsers]                 = useState<User[]>(DEMO ? demoUsers : []);
+  const [crops, setCrops]                 = useState<Crop[]>(DEMO ? demoCrops : []);
+  const [fields, setFields]               = useState<Field[]>(DEMO ? demoFields : []);
+  const [reports, setReports]             = useState<Report[]>(DEMO ? demoReports : []);
+  const [schedules, setSchedules]          = useState<Schedule[]>(DEMO ? demoSchedules : []);
+  const [pesticides, setPesticides]       = useState<Pesticide[]>(DEMO ? demoPesticides : []);
   const [projects, setProjects]           = useState<Project[]>([]);
   const [tickets, setTickets]             = useState<Ticket[]>([]);
-  const [allComments, setAllComments]     = useState<Comment[]>([]);
+  const [allComments, setAllComments]     = useState<Comment[]>(DEMO ? demoComments : []);
   const [pForm, setPForm]                 = useState({ name:"", type:"殺虫剤", dilution_rate:"", notes:"", active_ingredient:"", pre_harvest_interval:"", usage_method:"" });
   const [pManualMode, setPManualMode]     = useState(false);
   const [masterSearch, setMasterSearch]   = useState("");
@@ -380,16 +388,16 @@ export default function App() {
   const [masterSearching, setMasterSearching] = useState(false);
   const [selectedMaster, setSelectedMaster]   = useState<PesticideMaster | null>(null);
   const masterTimerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [currentUser, setCurrentUser]     = useState<User | null>(null);
+  const [currentUser, setCurrentUser]     = useState<User | null>(DEMO ? demoCurrentUser : null);
   const [showUserPicker, setShowUserPicker] = useState(false);
   const [showNotifs, setShowNotifs]       = useState(false);
   const [notifSeenAt, setNotifSeenAt]     = useState<string>("");  // ISO文字列。ユーザー切替時にlocalStorageから読む
   const [toast, setToast]                 = useState<{ msg: string; type: "ok"|"err"|"warn" } | null>(null);
-  const [loading, setLoading]             = useState(true);
+  const [loading, setLoading]             = useState(!DEMO);
   const [wxLoading, setWxLoading]         = useState(true);
   const [wxAuto, setWxAuto]               = useState<WeatherInfo | null>(null);
   const [wxManual, setWxManual]           = useState<WeatherInfo>({ label:"晴れ", Icon:Sun, temp:"" });
-  const [workCategories, setWorkCategories] = useState<WorkCategory[]>([]);
+  const [workCategories, setWorkCategories] = useState<WorkCategory[]>(DEMO ? demoWorkCategories : []);
   const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", work_category_id:0, quantity:"", quantity_value:"", quantity_unit:"", work_time:"", work_start:"", work_end:"", note:"", pesticide_id:"", pesticide_amount:"" });
   const [periodWeather, setPeriodWeather] = useState<{ temp:string; humidity:string; rain:string; weather:string } | null>(null);
   const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"", famic_crop_name:"" });
@@ -398,7 +406,7 @@ export default function App() {
   const [imageFile, setImageFile]         = useState<File | null>(null);
   const [imagePreview, setImagePreview]   = useState("");
   const [imgUploading, setImgUploading]   = useState(false);
-  const [weatherCoords, setWeatherCoords] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  const [weatherCoords, setWeatherCoords] = useState<{ lat: number; lng: number; name: string } | null>(DEMO ? demoWeatherCoords : null);
   const [locInput, setLocInput]           = useState("");
   const [locSearching, setLocSearching]   = useState(false);
   const [locPreview, setLocPreview]       = useState<{ name: string; lat: number; lng: number } | null>(null);
@@ -546,6 +554,8 @@ export default function App() {
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
+    // DEMO はダミーセッションで始めているので、getSession() の null で上書きさせない
+    if (DEMO) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthSession(session);
       setApiToken(session?.access_token ?? null);
@@ -566,7 +576,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!authSession) return;
+    if (!authSession || DEMO) return;
     (async () => {
       try {
       setLoading(true);
@@ -2578,6 +2588,12 @@ export default function App() {
            tab === "analytics" ? "分析" :
            tab === "manage" ? "管理" : "農作業レポート"}
         </div>
+        {/* デモモードの目印。本番に紛れ込んだら一目で分かるように必ず出す */}
+        {DEMO && (
+          <span style={{ fontSize:10, fontWeight:700, color:C.warning, background:C.warningBg, borderRadius:999, padding:"3px 8px", marginLeft:8, flexShrink:0, whiteSpace:"nowrap" as const }}>
+            デモデータ
+          </span>
+        )}
         <div style={{ display:"flex", alignItems:"center", gap:8, flex:"0 0 auto", flexShrink:0 }}>
           {currentUser && (
             <button onClick={openNotifs} style={{ position:"relative", display:"flex", alignItems:"center", justifyContent:"center", width:36, height:36, background:C.well, borderRadius:999, border:"none", cursor:"pointer", color:C.textSub, flexShrink:0 }}>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { DEMO, DEMO_SUPABASE_URL, DEMO_SUPABASE_KEY } from "../lib/demoData";
 import {
   ChevronLeft, ChevronRight, Plus, X, Save, RefreshCw,
   Trash2, Leaf, MapPin, CalendarDays, ClipboardList,
@@ -8,8 +9,8 @@ import { C, SHADOW, RADIUS } from "../ui/tokens";
 import { btn } from "../ui/styles";
 
 const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  DEMO ? DEMO_SUPABASE_URL : (import.meta.env.VITE_SUPABASE_URL as string),
+  DEMO ? DEMO_SUPABASE_KEY : (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
 );
 
 const DEFAULT_BAR_COLOR = "#4CAF50";
