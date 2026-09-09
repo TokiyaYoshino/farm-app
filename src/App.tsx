@@ -603,6 +603,10 @@ export default function App() {
   // 道具（日報・記録に聞く・散布時期・診断）をどのスレッドから開いたか。
   // null＝相談タブ以外から開いた＝スレッドには残さない
   const [toolThreadId, setToolThreadId]    = useState<string | null>(null);
+  // 移行SQLがまだ流れていない本番でも壊れないようにする。advice_threads が無ければ
+  // 相談タブごと出さない（＝以前と同じ画面が出るだけ）。順序ミスを事故にしないための保険で、
+  // SQLを流せば次のリロードで自動的に現れる。切り戻し時も同じ理屈で効く
+  const [threadsReady, setThreadsReady]    = useState<boolean>(DEMO);
   // 各シートをどこから開いたか。ai_outputs.entry_point に残して導線ごとの利用を測る
   const [genEntry, setGenEntry]            = useState<AiEntryPoint>("record_list");
   const [pestEntry, setPestEntry]          = useState<AiEntryPoint>("home");
@@ -708,10 +712,15 @@ export default function App() {
         setAdviceCounts(byCrop);
         setAdviceCountsByThread(byThread);
 
-        // 相談スレッド一覧（相談タブの中身）
-        const { data: ths } = await supabase.from("advice_threads").select("*")
+        // 相談スレッド一覧（相談タブの中身）。テーブルが無い＝移行SQL未適用なら
+        // 相談タブを出さない。それ以外のエラー（通信・権限）では出す（一時的な失敗で
+        // 機能ごと消えるほうが困る）
+        const { data: ths, error: thErr } = await supabase.from("advice_threads").select("*")
           .eq("organization_id", organizationId).order("updated_at", { ascending: false });
-        setThreads((ths ?? []) as AdviceThread[]);
+        const missingTable = thErr?.code === "42P01" || thErr?.code === "PGRST205"
+          || /does not exist|schema cache/i.test(thErr?.message ?? "");
+        setThreadsReady(!missingTable);
+        if (!missingTable) setThreads((ths ?? []) as AdviceThread[]);
 
         // 作物名の自動一致に使う候補（＝ラベル上の作物名）。
         // 適用情報の本体は農薬パネルを開いたときの遅延ロードだが、それを待つと
@@ -2181,6 +2190,7 @@ export default function App() {
 
   /** 作付けカードなど、作物から入ったときの経路。既にあればそれを開き、無ければ立てる */
   const openThreadForCrop = async (cropId: number) => {
+    if (!threadsReady) return showToast("相談はまだ利用できません", "warn");
     setTab("advice");
     const existing = threads.find(t => t.crop_id === cropId);
     if (existing) { void openThread(existing.id); return; }
@@ -2735,11 +2745,12 @@ export default function App() {
 
   // workerが管理タブを直接開いていたらホームへ
   if (!isAdmin && tab === "users") setTab("home");
+  if (!threadsReady && tab === "advice") setTab("home");
 
   const navItems = [
     { key:"home",      Icon:Home,      label:"ホーム" },
     { key:"report",    Icon:CalendarDays, label:"カレンダー" },
-    { key:"advice",    Icon:MessageSquare, label:"相談", badge: adviceTodoTotal },
+    ...(threadsReady ? [{ key:"advice", Icon:MessageSquare, label:"相談", badge: adviceTodoTotal }] : []),
     { key:"analytics", Icon:BarChart2, label:"分析" },
     { key:"manage",    Icon:Settings,  label:"メニュー" },
   ];
@@ -2965,7 +2976,7 @@ export default function App() {
               一覧としてそもそも自然に開かれる。そこに「やること」の未実施件数を出すことで、
               エージェントが「探しに行く機能」ではなく「放置できない通知」になる。
               件数は保存せず matchActions で毎回計算する（記録は後から増減するため）。 */}
-          {canUseAiFeature("nextActionAdvice") && crops.length > 0 && (
+          {threadsReady && canUseAiFeature("nextActionAdvice") && crops.length > 0 && (
             <div style={{ background:C.card, borderRadius:RADIUS.card, boxShadow:SHADOW.card, padding:"14px 16px", marginBottom:12 }}>
               <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:4, display:"flex", alignItems:"center", gap:5 }}>
                 <Sprout size={12} strokeWidth={2} />作付け中 — 相談できます

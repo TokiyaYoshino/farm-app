@@ -7,7 +7,7 @@
 // （generate-report.ts / search-chat.ts / pest-control-advice.tsと同じ方針）。
 
 import type { ApiRequest, ApiResponse } from "./types";
-import { requireUser, denied } from "./_auth.js";
+import { requireUser, checkDailyLimit, denied } from "./_auth.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
@@ -15,6 +15,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
   const auth = await requireUser(req);
   if (!auth.ok) return denied(res, auth);
+  // 招いた作業者が回しても支出が止まらない状態だったので蓋をする（fail-open）
+  const over = await checkDailyLimit(auth.user.authId, "diagnosis");
+  if (over) return denied(res, over);
 
   const { imageUrl, cropName } = (req.body ?? {}) as { imageUrl?: string; cropName?: string };
   if (!imageUrl || typeof imageUrl !== "string" || !/^https?:\/\//.test(imageUrl)) {
