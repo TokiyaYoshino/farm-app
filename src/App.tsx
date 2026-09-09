@@ -226,6 +226,19 @@ function ToolTag({ kind }: { kind: string }) {
   );
 }
 
+/** AI をどの導線から呼んだか。撤退判断の材料になるので kind では代用しない
+ *  （例: diagnosis は4か所から出る） */
+type AiEntryPoint =
+  | "thread_tool"    // 相談スレッド内の道具
+  | "thread"         // 相談スレッド本体の発言
+  | "quick_picker"   // ＋記録の3択
+  | "note_field"     // 記録フォームのメモ欄
+  | "home"           // ホームのカード
+  | "record_list"    // 記録一覧
+  | "calendar"       // カレンダーの日付
+  | "report_photo"   // 記録一覧の写真直下
+  | "report_detail"; // 記録詳細シート
+
 // ─── 相談スレッド（主題ごとの箱）──────────────────────────
 // 6つあったAI機能のうち5つが「1回叩いて消える」状態だったため、主題ごとに
 // やりとりを溜める形へ寄せた。経緯は docs/decisions/20260909-single-ai-entry-threads.md
@@ -590,6 +603,10 @@ export default function App() {
   // 道具（日報・記録に聞く・散布時期・診断）をどのスレッドから開いたか。
   // null＝相談タブ以外から開いた＝スレッドには残さない
   const [toolThreadId, setToolThreadId]    = useState<string | null>(null);
+  // 各シートをどこから開いたか。ai_outputs.entry_point に残して導線ごとの利用を測る
+  const [genEntry, setGenEntry]            = useState<AiEntryPoint>("record_list");
+  const [pestEntry, setPestEntry]          = useState<AiEntryPoint>("home");
+  const [diagEntry, setDiagEntry]          = useState<AiEntryPoint>("home");
   // 作付けごとの「やること」件数。ホームのバッジに使う（作物を開かなくても分かるように先読み）
   const [adviceCounts, setAdviceCounts] = useState<Record<number, AdviceAction[]>>({});
   // スレッド単位の「やること」。crop_id ベースの adviceCounts では、作付けに紐づかない
@@ -1142,7 +1159,7 @@ export default function App() {
   };
 
   // 音声メモをAIで作業報告フォームに振り分け
-  const structureVoiceNote = async () => {
+  const structureVoiceNote = async (entryPoint: AiEntryPoint = "note_field") => {
     if (!rForm.note.trim()) return showToast("メモが空です", "err");
     setAiStructuring(true);
     try {
@@ -1184,6 +1201,7 @@ export default function App() {
       // structure-voice は構造化JSONをそのまま返す仕様で usage / costUsd を含まないため、
       // ここだけコストは残らない（api/structure-voice.ts）。
       void saveAiOutput("voice_structure", {
+        entryPoint,
         targetDate: rForm.date, field: s.field ?? rForm.field ?? null,
         inputSummary: rForm.note, outputJson: s,
       });
@@ -1767,9 +1785,12 @@ export default function App() {
   // ─── AI出力の保存 ─────────────────────────────────────────
   // AI機能の出力を ai_outputs に残す。分析タブの診断集計とAI履歴の元データになる。
   // 保存の失敗はAI機能自体を止めない（画面に出すことが本体で、保存は付随価値のため）。
+  /** AI呼び出しの監査ログ。entryPoint は必須にしてある。任意にすると導線を足したときに
+   *  書き忘れ、「使われていない」と読めて集計が嘘になる（3回続けて効果を測れていないため） */
   const saveAiOutput = async (
     kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice",
     payload: {
+      entryPoint: AiEntryPoint;
       reportId?: number | null;
       targetDate?: string | null;
       field?: string | null;
@@ -1785,6 +1806,7 @@ export default function App() {
     const { error } = await supabase.from("ai_outputs").insert([{
       organization_id: currentOrganizationId,
       kind,
+      entry_point:   payload.entryPoint,
       report_id:     payload.reportId ?? null,
       target_date:   payload.targetDate ?? new Date().toISOString().slice(0, 10),
       field:         payload.field ?? null,
@@ -1845,6 +1867,7 @@ export default function App() {
         setGenItems(Array.isArray(d.items) ? d.items : []);
         setGenHandover(d.handover ?? "");
         void saveAiOutput("daily_report", {
+          entryPoint: genEntry,
           targetDate: genDate, inputSummary: records,
           outputText: d.report, usage: d.usage, costUsd: d.costUsd,
         });
@@ -1896,6 +1919,7 @@ export default function App() {
         setPestAdviceAvoid(Array.isArray(d.avoidDays) ? d.avoidDays : []);
         setPestAdviceDate(new Date().toISOString().slice(0, 10));
         void saveAiOutput("pest_advice", {
+          entryPoint: pestEntry,
           inputSummary: forecast,
           outputText: d.advice, usage: d.usage, costUsd: d.costUsd,
         });
@@ -2267,6 +2291,7 @@ export default function App() {
         setAdviseError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
       }
       void saveAiOutput("advice", {
+        entryPoint: "thread",
         cropId: crop?.id,
         inputSummary: [`主題:${thread.title}`, `作物:${crop?.name ?? "指定なし"}`,
           `記録:${cropReports.length}件`, `質問:${question}`].join(" / "),
@@ -2381,7 +2406,7 @@ export default function App() {
   // ─── 病害虫画像診断 ───────────────────────────────────────
   // 記録に添付済みの写真（Supabase公開URL）をそのままOpenAIのvisionに渡す。
   // 診断結果を ai_outputs に紐付けて残すため、URLだけでなく記録そのものを受け取る。
-  const diagnoseImage = async (report: Report) => {
+  const diagnoseImage = async (report: Report, fromEntry: AiEntryPoint = "report_detail") => {
     if (!report.image_url) return;
     setDiagLoading(true); setDiagError(""); setDiagResult(null);
     try {
@@ -2395,6 +2420,7 @@ export default function App() {
       if (res.ok && d.diagnosis) {
         setDiagResult(d.diagnosis as DiagnosisResult);
         void saveAiOutput("diagnosis", {
+          entryPoint: fromEntry,
           reportId: report.id, targetDate: report.date,
           field: report.field, cropId: report.crop_id,
           inputSummary: `写真:${report.image_url}${crop ? ` / 作物:${crop}` : ""}`,
@@ -2434,6 +2460,7 @@ export default function App() {
         }
         // 記録を介さない単体診断のため report_id / field / crop_id は持たない
         void saveAiOutput("diagnosis", {
+          entryPoint: diagEntry,
           inputSummary: `写真:${imageUrl}`,
           outputJson: d.diagnosis, usage: d.usage, costUsd: d.costUsd,
         });
@@ -2920,7 +2947,7 @@ export default function App() {
                   </div>
                 )}
                 <button
-                  onClick={openPestAdviceSheet}
+                  onClick={() => { setPestEntry("home"); openPestAdviceSheet(); }}
                   style={{ ...btn("soft", "md"), width:"100%", marginTop:12 }}
                 >
                   <Wind size={14} strokeWidth={2} />次の散布時期
@@ -3093,7 +3120,7 @@ export default function App() {
               <ClipboardList size={12} strokeWidth={2} />ふりかえり
             </div>
             <button
-              onClick={() => { setGenDate(todayStr); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
+              onClick={() => { setGenEntry("home"); setGenDate(todayStr); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
               style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const, background:"none", border:"none", cursor:"pointer", padding:"10px 0" }}
             >
               <span style={{ flex:1, minWidth:0 }}>
@@ -3281,7 +3308,7 @@ export default function App() {
             onEditComment={editComment}
             // 日報は「その日の記録が目の前にある場所」に置く。日付をタップして
             // その日の記録が並んだ直後が、まとめたくなる瞬間
-            onSummarizeDay={(date) => { setGenDate(date); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
+            onSummarizeDay={(date) => { setGenEntry("calendar"); setGenDate(date); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
           />
 
           {/* ── 今日の予定 ── */}
@@ -3408,7 +3435,7 @@ export default function App() {
                   {reportFilterActive && (
                     <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={{ ...btn("tertiary", "sm"), flexShrink:0 }}>条件をクリア</button>
                   )}
-                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
+                  <button onClick={() => { setGenEntry("record_list"); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <FileText size={13} strokeWidth={2} />日報にまとめる
                   </button>
                   <button onClick={() => setShowExportSheet(true)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
@@ -3499,7 +3526,7 @@ export default function App() {
                           詳細シートにも同じ導線があるが、一覧で写真を見て気づく経路のほうが多い */}
                       {canUseAiFeature("pestDiagnosis") && (
                         <button
-                          onClick={() => { setSelectedReport(r); diagnoseImage(r); }}
+                          onClick={() => { setSelectedReport(r); void diagnoseImage(r, "report_photo"); }}
                           style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
                         >
                           <Bug size={12} strokeWidth={2} />この写真で病害虫を調べる
@@ -4156,7 +4183,7 @@ export default function App() {
                       </div>
                     )}
                     <button
-                      onClick={() => diagnoseImage(r)}
+                      onClick={() => { void diagnoseImage(r, "report_detail"); }}
                       disabled={diagLoading}
                       style={{ ...btn("tertiary", "sm"), width:"100%", opacity:diagLoading ? 0.6 : 1 }}
                     >
@@ -4686,7 +4713,7 @@ export default function App() {
                   )}
                   {canUseAiFeature("voiceStructuring") && rForm.note.trim() && (
                     <button
-                      onClick={() => { if (noteListening) toggleNoteVoice(); void structureVoiceNote(); }}
+                      onClick={() => { if (noteListening) toggleNoteVoice(); void structureVoiceNote("quick_picker"); }}
                       disabled={aiStructuring}
                       style={{ ...btn("primary", "lg"), width:"100%", opacity: aiStructuring ? 0.6 : 1 }}
                     >
@@ -4699,6 +4726,7 @@ export default function App() {
                       onClick={() => {
                         setShowQuickReport(false);
                         setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError("");
+                        setDiagEntry("quick_picker");
                         setShowDiagPhotoSheet(true);
                       }}
                       style={{ display:"flex", alignItems:"center", gap:12, width:"100%", textAlign:"left" as const, border:"none", cursor:"pointer", borderRadius:16, padding:"13px 14px", background:C.well }}
@@ -4993,7 +5021,7 @@ export default function App() {
                   )}
                   {canUseAiFeature("voiceStructuring") && rForm.note.trim() && (
                     <button
-                      onClick={structureVoiceNote}
+                      onClick={() => { void structureVoiceNote("note_field"); }}
                       disabled={aiStructuring}
                       style={{ ...btn("soft", "md"), width:"100%", marginBottom:12, opacity: aiStructuring ? 0.6 : 1, cursor: aiStructuring ? "default" : "pointer" }}
                     >
@@ -5506,6 +5534,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setToolThreadId(activeThreadId);
+                  setDiagEntry("thread_tool");
                   setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError("");
                   setShowDiagPhotoSheet(true);
                 }}
@@ -5524,14 +5553,14 @@ export default function App() {
             )}
             {canUseAiFeature("pestControlAdvice") && (
               <button
-                onClick={() => { setToolThreadId(activeThreadId); openPestAdviceSheet(); }}
+                onClick={() => { setToolThreadId(activeThreadId); setPestEntry("thread_tool"); openPestAdviceSheet(); }}
                 style={{ ...btn("secondary", "sm"), flexShrink:0 }}
               >
                 <Wind size={13} strokeWidth={2} />散布時期
               </button>
             )}
             <button
-              onClick={() => { setToolThreadId(activeThreadId); setGenDate(todayStr); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
+              onClick={() => { setToolThreadId(activeThreadId); setGenEntry("thread_tool"); setGenDate(todayStr); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
               style={{ ...btn("secondary", "sm"), flexShrink:0 }}
             >
               <FileText size={13} strokeWidth={2} />日報にまとめる
