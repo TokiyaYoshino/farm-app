@@ -159,6 +159,17 @@
   .nav div.on .ic{background:var(--inkSoft);}
   .fab{position:relative; margin:-46px 12px 0 auto; width:fit-content; background:var(--ink); color:#fff; border-radius:999px; padding:13px 20px; font-size:14px; font-weight:700; box-shadow:var(--shadow-pill); z-index:2;}
 
+  .seg{display:flex; gap:8px;}
+  .seg div{flex:1; text-align:center; padding:9px 0; border-radius:8px; font-size:12.5px; font-weight:700; border:1.5px solid var(--hairline); background:#fff; color:var(--textSub);}
+  .seg div.on{background:var(--ink); border-color:var(--ink); color:#fff;}
+  .cal{background:var(--card); border-radius:20px; box-shadow:var(--shadow-card); padding:12px 14px;}
+  .cal .mh{font-size:13px; font-weight:700; text-align:center; margin-bottom:8px;}
+  .cal .gd{display:grid; grid-template-columns:repeat(7,1fr); gap:3px;}
+  .cal .gd span{aspect-ratio:1; border-radius:7px; background:var(--well); display:flex; align-items:center; justify-content:center; font-size:10.5px; color:var(--textSub);}
+  .cal .gd span.mk{background:var(--inkSoft); color:var(--ink); font-weight:700;}
+  .sec{font-size:11px; color:var(--textMuted); margin:2px 0 6px;}
+  .hidden-note{background:var(--dangerBg); border-radius:12px; padding:10px 12px; font-size:11.5px; color:#8A2F28; line-height:1.6;}
+
   .callout{background:var(--warningBg); border-radius:14px; padding:14px 16px; font-size:13.5px; color:#6B4708; margin:22px 0 0; line-height:1.7;}
   .callout b{color:#503505;}
   .note-box{background:rgba(255,255,255,.55); border-radius:14px; padding:14px 16px; font-size:13.5px; color:var(--chrome-sub); margin:22px 0 0; line-height:1.7;}
@@ -429,14 +440,15 @@
     <!-- ── 提案4 ── -->
     <div class="board">
       <div class="cap">
-        <span class="intent">提案 ④</span>
-        <h3>ホーム：診断の格上げと、日報の常設</h3>
-        <p>「写真で病害虫を調べる」を文字だけのボタンから<b>塗りのボタン</b>へ。レイミーが単機能アプリにしている機能が、今は最も弱い見た目になっている。</p>
-        <p>日報は記録タブの奥にあるので、<b>ホームに「今日の記録◯件」の行として常設</b>する。記録した見返りがその日のうちに返る形（あすけんの分析画面と同じ役割）。</p>
+        <span class="intent">提案 ④（改訂）</span>
+        <h3>ホーム：ふりかえりを1枚にまとめる</h3>
+        <p>「写真で病害虫を調べる」を文字だけのボタンから<b>塗りのボタン</b>へ格上げ。</p>
+        <p>日報・記録に聞く・帳票は<b>「記録しない日に用がある機能」</b>なので、記録タブから出して<b>ホームに「ふりかえり」1枚</b>で置く。カードを3枚増やすのではなく1枚に3行——ホームを second 記録一覧にしないため。</p>
+        <p>あわせて<b>タブ名を「記録」→「カレンダー」</b>に。中身は最初からカレンダーで、作るのはFAB。名前だけが「書く場所」を指していた。</p>
       </div>
       <div class="phone">
         <div class="appbar"><span class="t">農作業レポート</span><span class="avatars"><span class="av"></span><span class="av"></span></span></div>
-        <div class="screen">
+        <div class="screen" style="padding-bottom:30px;">
           <div class="c">
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
               <span><span style="font-size:30px; font-weight:700;">28°</span> <span style="font-size:13px; color:var(--textSub);">晴れ · 現在地</span></span>
@@ -466,8 +478,17 @@
             </div>
           </div>
           <div class="c">
+            <div class="lbl">📋 ふりかえり</div>
             <div class="row" style="padding-top:0;">
               <span class="nm">今日の記録 3件<span class="sm">日報にまとめる</span></span>
+              <span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="nm">記録に聞く<span class="sm">「去年いつ撒いた？」と聞ける</span></span>
+              <span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="nm">帳票を出す<span class="sm">期間を選んでPDF・CSV</span></span>
               <span class="chev">›</span>
             </div>
           </div>
@@ -475,7 +496,7 @@
         <div class="fab">＋ 記録</div>
         <div class="nav">
           <div class="on"><span class="ic"></span>ホーム</div>
-          <div><span class="ic"></span>記録</div>
+          <div><span class="ic"></span>カレンダー</div>
           <div><span class="ic"></span>分析</div>
           <div><span class="ic"></span>管理</div>
         </div>
@@ -484,12 +505,92 @@
 
   </div>
 
-  <h2><span class="n">04</span>今回やらないこと</h2>
+  <h2><span class="n">04</span>記録タブは「見る場所」なのに、名前が「書く場所」を指している</h2>
+  <p class="sub">
+    出口（日報・記録に聞く・帳票）が記録タブの中にあるのは、置き場所の前に<b>名前の問題</b>がある。
+    タブの中身はカレンダーと記録一覧——どちらも<b>見るだけ</b>で、作るのは FAB「＋記録」。
+    それなのにタブ名は「記録」でアイコンはペン。<b>記録しない日に押す理由が、名前のどこにも無い。</b>
+  </p>
+
+  <div class="boards">
+    <div class="board">
+      <div class="cap">
+        <span class="intent">現状</span>
+        <h3>記録タブを開いたところ</h3>
+        <p>既定表示はカレンダー。日報も帳票も<b>「記録一覧」に切り替えた先</b>のボタン行にあり、「記録に聞く」は検索語を入れるまで出ない。</p>
+        <p>つまり出口3つとも、<b>記録しに来た人しか通らない道</b>の奥にある。</p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">作業記録</span><span class="avatars"><span class="av"></span><span class="av"></span></span></div>
+        <div class="screen">
+          <div class="seg"><div class="on">カレンダー</div><div>記録一覧</div></div>
+          <div class="cal">
+            <div class="mh">2026年9月</div>
+            <div class="gd">
+              <span>1</span><span>2</span><span class="mk">3</span><span>4</span><span>5</span><span>6</span><span>7</span>
+              <span class="mk">8</span><span class="mk">9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span>
+              <span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span>
+            </div>
+          </div>
+          <div>
+            <div class="sec">今日の予定</div>
+            <div class="c" style="padding:14px 16px; font-size:13px; color:var(--textMuted);">今日の予定はありません</div>
+          </div>
+          <div class="hidden-note">この画面に無いもの：日報／記録に聞く／帳票。<br>すべて「記録一覧」に切り替えた先にある。</div>
+        </div>
+        <div class="fab">＋ 記録</div>
+        <div class="nav">
+          <div><span class="ic"></span>ホーム</div>
+          <div class="on"><span class="ic"></span>記録</div>
+          <div><span class="ic"></span>分析</div>
+          <div><span class="ic"></span>管理</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="board">
+      <div class="cap">
+        <span class="intent">直し方</span>
+        <h3>名前を中身に合わせ、出口はホームへ</h3>
+        <p><b>タブ名「記録」→「カレンダー」。</b>開いたときに実際に出るものと一致し、押す理由が名前で分かる。FAB「＋記録」との名前のぶつかりも消える。</p>
+        <p><b>出口3つはホームの「ふりかえり」カードへ</b>（提案④）。タブ内の既存ボタンは消さない——移すのではなく、ホームに主たる入口を増やす。</p>
+        <p>タブ名の候補は「カレンダー」を推す。対案は「記録簿」（見るものとして自然だが、FABの「記録」と字が重なる）。</p>
+        <p class="status"><span class="tag t-new">要判断：タブ名を変えるか</span></p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">カレンダー</span><span class="avatars"><span class="av"></span><span class="av"></span></span></div>
+        <div class="screen">
+          <div class="seg"><div class="on">カレンダー</div><div>記録一覧</div></div>
+          <div class="cal">
+            <div class="mh">2026年9月</div>
+            <div class="gd">
+              <span>1</span><span>2</span><span class="mk">3</span><span>4</span><span>5</span><span>6</span><span>7</span>
+              <span class="mk">8</span><span class="mk">9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span>
+              <span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span>
+            </div>
+          </div>
+          <div>
+            <div class="sec">今日の予定</div>
+            <div class="c" style="padding:14px 16px; font-size:13px; color:var(--textMuted);">今日の予定はありません</div>
+          </div>
+        </div>
+        <div class="fab">＋ 記録</div>
+        <div class="nav">
+          <div><span class="ic"></span>ホーム</div>
+          <div class="on"><span class="ic"></span>カレンダー</div>
+          <div><span class="ic"></span>分析</div>
+          <div><span class="ic"></span>管理</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="n">05</span>今回やらないこと</h2>
   <p class="sub">増やす提案と同じくらい、増やさない判断も確認してほしい。</p>
   <div class="rules">
     <div class="rule">
-      <h3>「記録に聞く」は前に出さない</h3>
-      <p>常設がゼロなのは事実だが、<b>本番の実データは18件・4.5か月</b>。今ここを目立たせても「記録からは分かりません」が返る確率が高い。<b>記録が貯まってから</b>前に出すのが正しい順序。</p>
+      <h3>「記録に聞く」を主役にはしない</h3>
+      <p>置き場所はホームの「ふりかえり」に確定。ただし<b>本番の実データは18件・4.5か月</b>で、今は「記録からは分かりません」が返る確率が高い。<b>カードの1行としては出すが、目立つ塗りボタンにはしない</b>——期待だけ上げて外すのを避けるため。</p>
     </div>
     <div class="rule">
       <h3>AIタブは作らない（8/23の判断を維持）</h3>
@@ -505,12 +606,12 @@
     </div>
   </div>
 
-  <h2><span class="n">05</span>実装の順</h2>
+  <h2><span class="n">06</span>実装の順</h2>
   <ol class="ol">
     <li><b>＋記録シートの3択</b>（提案①〜③） — いちばん効く。既存のメモ欄の音声ボタンは残したまま入口を増やす形なので、既存機能の削除にあたらない。</li>
     <li><b>ホームの診断ボタン格上げ</b>（提案④上） — CSS相当の変更のみで済む。</li>
-    <li><b>ホームの日報行</b>（提案④下） — 既存の日報シートを開くだけ。</li>
-    <li><b>「記録に聞く」の常設化</b> — 記録が貯まってから。着手時は <code>ai_outputs</code> への保存実装（現在この機能だけ無い）を先に足す。</li>
+    <li><b>ホームの「ふりかえり」カード</b>（提案④下） — 日報・記録に聞く・帳票の3行。開く先は既存のシートなので、行を足すだけで済む。「記録に聞く」は着手時に <code>ai_outputs</code> への保存実装（現在この機能だけ無い）を先に足す。</li>
+    <li><b>タブ名「記録」→「カレンダー」</b> — 1行の変更だが、既存利用者の慣れを崩す唯一の項目。実装順は最後でいい。</li>
   </ol>
 
   <div class="note-box">
