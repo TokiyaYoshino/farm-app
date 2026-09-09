@@ -5561,7 +5561,8 @@ export default function App() {
           </div>
 
           <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
-            {reportFilterActive ? "現在の絞り込み条件に一致する記録" : "直近180日の記録"}について、自然な言葉で質問できます
+            {reportFilterActive ? "現在の絞り込み条件に一致する記録" : "直近180日の記録"}に<b style={{ color:C.textSub }}>書かれていることだけ</b>を答えます。
+            書かれていないことは「記録からは分かりません」と返します（作物の育て方や病気の見当は、相談のほうで聞けます）
           </div>
 
           {searchChatMessages.length > 0 && (
