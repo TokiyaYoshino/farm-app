@@ -1,0 +1,523 @@
+<title>AIを「いつもの＋」に置く</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+
+<style>
+  /* ── 注釈層。docs/design-ai-discoverability.html と同じスタジオ様式を継承 ── */
+  :root{
+    --studio:#E5E6E3;
+    --studio-2:#D8DAD5;
+    --chrome:#2A2D28;
+    --chrome-sub:#63675E;
+    --chrome-mute:#8D9187;
+    --rule:#CBCEC6;
+    /* ── アプリのトークン（src/ui/tokens.ts と同値）── */
+    --bg:#F5F5F6; --well:#EFEFF1; --card:#FFFFFF;
+    --ink:#2E7D32; --inkSoft:#E4F0E4;
+    --text:#1A1C1E; --textSub:#66696E; --textMuted:#9EA1A6; --hairline:#EBEBED;
+    --danger:#D4453C; --dangerBg:#FBEBEA;
+    --warning:#DD8A0A; --warningBg:#FBF1DF;
+    --info:#3773E1; --infoBg:#E7EEFC;
+    --pest:#7B1FA2; --pestBg:#F3E9F8; --rain:#0288D1;
+    --shadow-card:0 1px 2px rgba(16,17,20,.04), 0 8px 24px rgba(16,17,20,.06);
+    --shadow-pill:0 2px 8px rgba(16,17,20,.10);
+    --sys:-apple-system,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--studio); color:var(--chrome);
+    font-family:"Noto Sans JP",var(--sys); line-height:1.7;
+    padding:40px 20px 80px;
+  }
+  .wrap{max-width:1180px; margin:0 auto;}
+
+  .eyebrow{font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--chrome-mute); margin:0 0 10px;}
+  h1{font-size:clamp(26px,4vw,38px); font-weight:700; line-height:1.25; margin:0 0 14px; text-wrap:balance; letter-spacing:-.01em;}
+  .lede{font-size:15px; color:var(--chrome-sub); max-width:62ch; margin:0 0 8px;}
+  .lede b{color:var(--chrome); font-weight:700;}
+
+  h2{font-size:19px; font-weight:700; margin:56px 0 6px; padding-top:22px; border-top:1px solid var(--rule); letter-spacing:-.01em;}
+  h2 .n{display:inline-block; font-size:11px; letter-spacing:.12em; color:var(--chrome-mute); margin-right:10px; vertical-align:3px;}
+  .sub{font-size:14px; color:var(--chrome-sub); max-width:62ch; margin:0 0 24px;}
+  .sub code, .ol code, td code{font-size:12.5px; background:rgba(255,255,255,.6); border-radius:5px; padding:1px 5px;}
+
+  /* ── 到達の深さ ── */
+  .tblwrap{overflow-x:auto; margin:0 0 8px;}
+  table{border-collapse:collapse; width:100%; min-width:660px; font-size:13.5px;}
+  th,td{text-align:left; padding:11px 12px; border-bottom:1px solid var(--rule); vertical-align:top;}
+  th{font-size:11px; font-weight:700; letter-spacing:.08em; color:var(--chrome-mute); border-bottom:1.5px solid var(--rule);}
+  td b{font-weight:700;}
+  .path{font-size:12.5px; color:var(--chrome-sub);}
+  .taps{font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:700;}
+  .tag{display:inline-block; font-size:11px; font-weight:700; border-radius:999px; padding:2px 9px; white-space:nowrap;}
+  .t-bad{background:var(--dangerBg); color:var(--danger);}
+  .t-ok{background:var(--inkSoft); color:var(--ink);}
+  .t-new{background:var(--infoBg); color:var(--info);}
+
+  /* ── 国内事例 ── */
+  .rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin:0 0 8px;}
+  .rule{background:rgba(255,255,255,.55); border-radius:14px; padding:16px 18px;}
+  .rule h3{font-size:14px; font-weight:700; margin:0 0 6px;}
+  .rule .who{font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--chrome-mute); display:block; margin-bottom:4px;}
+  .rule p{font-size:13px; color:var(--chrome-sub); margin:0;}
+  .rule p + p{margin-top:7px;}
+  .rule b{color:var(--chrome);}
+
+  /* ── アートボード ── */
+  .boards{display:flex; flex-wrap:wrap; gap:34px; align-items:flex-start;}
+  .board{width:375px; flex:0 0 auto;}
+  .cap{margin:0 0 12px;}
+  .cap .intent{font-size:11px; font-weight:700; letter-spacing:.1em; color:var(--chrome-mute); display:block; margin-bottom:3px;}
+  .cap h3{font-size:16px; font-weight:700; margin:0 0 6px; letter-spacing:-.01em;}
+  .cap p{font-size:12.5px; color:var(--chrome-sub); margin:0;}
+  .cap p + p{margin-top:6px;}
+  .status{margin:10px 0 0;}
+
+  .phone{
+    background:var(--bg); border-radius:30px; overflow:hidden;
+    box-shadow:0 18px 44px rgba(20,24,18,.20); border:7px solid #fff;
+    font-family:var(--sys); color:var(--text); line-height:1.5;
+  }
+  .phone.dim{opacity:.92;}
+  .appbar{background:#fff; padding:13px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--hairline);}
+  .appbar .t{font-size:16px; font-weight:700;}
+  .avatars{display:flex; gap:8px;}
+  .av{width:26px; height:26px; border-radius:999px; background:var(--well);}
+  .screen{padding:12px; display:flex; flex-direction:column; gap:12px;}
+
+  /* シート（ボトムシート表現） */
+  .veil{background:rgba(20,22,18,.34); padding:34px 0 0;}
+  .sheet{background:#fff; border-radius:22px 22px 0 0; padding:14px 16px 18px; display:flex; flex-direction:column; gap:0;}
+  .sheet .sh{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+  .sheet .sh .ti{font-size:17px; font-weight:700;}
+  .sheet .x{width:28px; height:28px; border-radius:999px; background:var(--well); color:var(--textSub); font-size:13px; display:flex; align-items:center; justify-content:center;}
+
+  .well{background:var(--well); border-radius:18px; padding:6px; margin-bottom:10px;}
+  .wrow{background:#fff; border-radius:14px; padding:9px 12px; display:flex; align-items:center; gap:12px;}
+  .wrow + .wrow{margin-top:6px;}
+  .wcol{flex:1; min-width:0;}
+  .wcol + .wcol{border-left:1px solid var(--hairline); padding-left:14px;}
+  .lbl2{font-size:10.5px; color:var(--textMuted); margin-bottom:2px;}
+  .val{font-size:14px; font-weight:600;}
+  .val.ph{color:var(--textMuted); font-weight:400;}
+  .val.hit{color:var(--ink);}
+
+  .btn{display:flex; align-items:center; justify-content:center; gap:7px; border-radius:999px; font-size:13.5px; font-weight:700; padding:12px 14px; border:none; width:100%;}
+  .b-ink{background:var(--ink); color:#fff;}
+  .b-soft{background:var(--inkSoft); color:var(--ink);}
+  .b-sec{background:#fff; border:1px solid var(--hairline); color:var(--textSub);}
+  .b-ter{background:transparent; color:var(--textSub); font-weight:600;}
+  .b-lg{padding:14px; font-size:14.5px;}
+  .stack{display:flex; flex-direction:column; gap:8px;}
+
+  /* 入力の3択（提案の中心） */
+  .picker{display:flex; flex-direction:column; gap:8px; margin-bottom:12px;}
+  .pick{display:flex; align-items:center; gap:12px; border-radius:16px; padding:13px 14px; background:var(--well);}
+  .pick.lead{background:var(--inkSoft);}
+  .pick .ic{width:34px; height:34px; border-radius:999px; background:#fff; display:flex; align-items:center; justify-content:center; flex:0 0 auto; box-shadow:var(--shadow-pill);}
+  .pick .tx{flex:1; min-width:0;}
+  .pick .tt{font-size:14px; font-weight:700;}
+  .pick.lead .tt{color:var(--ink);}
+  .pick .ss{font-size:11.5px; color:var(--textSub); margin-top:1px;}
+  .chev{color:var(--textMuted); font-size:15px; flex:0 0 auto;}
+
+  .photobox{border:2px dashed var(--hairline); border-radius:12px; padding:18px 0; text-align:center; color:var(--textMuted); font-size:12.5px; background:var(--bg); margin-bottom:12px;}
+
+  /* 録音中 */
+  .mic{display:flex; flex-direction:column; align-items:center; gap:12px; padding:18px 0 10px;}
+  .micdot{width:76px; height:76px; border-radius:999px; background:var(--dangerBg); display:flex; align-items:center; justify-content:center;}
+  .micdot .inner{width:44px; height:44px; border-radius:999px; background:var(--danger); box-shadow:0 0 0 8px rgba(212,69,60,.12);}
+  .wave{display:flex; align-items:flex-end; gap:3px; height:22px;}
+  .wave i{width:3px; border-radius:2px; background:var(--danger); opacity:.5;}
+  .heard{background:var(--well); border-radius:14px; padding:11px 13px; font-size:13px; line-height:1.65; color:var(--text);}
+  .heard .cursor{display:inline-block; width:2px; height:1em; background:var(--danger); vertical-align:-2px; margin-left:2px;}
+
+  /* AI反映のハイライト */
+  .filled{position:relative;}
+  .filled::after{content:"AIが入力"; position:absolute; top:-7px; right:8px; font-size:9.5px; font-weight:700; letter-spacing:.04em; background:var(--inkSoft); color:var(--ink); border-radius:999px; padding:1px 7px;}
+  .note{background:#fff; border-radius:12px; border:1px solid var(--hairline); padding:10px 12px; font-size:13px; line-height:1.6; color:var(--text);}
+
+  /* ホーム側 */
+  .c{background:var(--card); border-radius:20px; box-shadow:var(--shadow-card); padding:14px 16px;}
+  .lbl{font-size:11px; color:var(--textMuted); display:flex; align-items:center; gap:5px; margin-bottom:8px;}
+  .big{font-size:15px; font-weight:700;}
+  .big em{font-style:normal; font-size:22px; margin:0 3px;}
+  .meta{font-size:12px; color:var(--textSub); margin-top:3px;}
+  .hr{height:1px; background:var(--hairline); margin:12px -16px;}
+  .row{display:flex; align-items:center; gap:10px; padding:10px 0;}
+  .row + .row{border-top:1px solid var(--hairline);}
+  .dot{width:9px; height:9px; border-radius:999px; flex:0 0 auto;}
+  .row .nm{font-size:13.5px; font-weight:700; flex:1; min-width:0;}
+  .row .sm{font-size:11.5px; color:var(--textMuted); font-weight:400; display:block; margin-top:1px;}
+  .badge{font-size:11px; font-weight:700; border-radius:999px; padding:3px 9px; background:var(--warningBg); color:var(--warning); white-space:nowrap;}
+
+  .nav{background:#fff; border-top:1px solid var(--hairline); display:flex; padding:9px 0 13px;}
+  .nav div{flex:1; text-align:center; font-size:10.5px; color:var(--textMuted);}
+  .nav div.on{color:var(--ink); font-weight:700;}
+  .nav .ic{display:block; width:19px; height:19px; margin:0 auto 4px; border-radius:5px; background:var(--well);}
+  .nav div.on .ic{background:var(--inkSoft);}
+  .fab{position:relative; margin:-46px 12px 0 auto; width:fit-content; background:var(--ink); color:#fff; border-radius:999px; padding:13px 20px; font-size:14px; font-weight:700; box-shadow:var(--shadow-pill); z-index:2;}
+
+  .callout{background:var(--warningBg); border-radius:14px; padding:14px 16px; font-size:13.5px; color:#6B4708; margin:22px 0 0; line-height:1.7;}
+  .callout b{color:#503505;}
+  .note-box{background:rgba(255,255,255,.55); border-radius:14px; padding:14px 16px; font-size:13.5px; color:var(--chrome-sub); margin:22px 0 0; line-height:1.7;}
+  .note-box b{color:var(--chrome);}
+
+  .ol{font-size:14px; color:var(--chrome-sub); padding-left:1.25em; margin:0;}
+  .ol li{margin-bottom:9px;}
+  .ol b{color:var(--chrome);}
+
+  @media (max-width:820px){
+    .boards{gap:26px;}
+    .board{width:100%; max-width:375px;}
+  }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">ノウレコ / 情報設計 · 2026-09-09</p>
+  <h1>AIを「いつもの＋」に置く</h1>
+  <p class="lede">
+    国内の大規模アプリ10例を調べた結果（<code>docs/research/ai-placement-jp-apps-2026-09.md</code>）を、
+    farm-app の画面に当てた案。<b>AIタブは作らないという 8/23 の判断は維持する。</b>
+    変えるのは1点だけ——<b>入力系のAIを、すでにある「＋記録」FAB の直下に、手入力と並べて置く。</b>
+  </p>
+  <p class="lede">
+    確認してほしいのは「この3択をシートの一番上に出していいか」。以下は実装前のモックで、実装はまだ入れていない。
+  </p>
+
+  <h2><span class="n">01</span>今どこにあるか（コード実測）</h2>
+  <p class="sub">
+    「常設」＝その画面を開いた時点で、条件なしに見えていること。
+    タップ数はホーム画面からシートの中の目的のボタンに触れるまで。
+  </p>
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>機能</th><th>到達手順</th><th>タップ</th><th>常設</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>音声メモ構造化</b><br><span class="path">＝話すだけで記録が埋まる</span></td>
+        <td class="path">＋記録 → <b>「詳細を入力」を開く</b> → メモ欄までスクロール → 音声ボタン → 発話 → <b>メモが空でない時だけ現れる</b>「AIでフォームに自動入力」</td>
+        <td class="taps">4＋</td>
+        <td><span class="tag t-bad">なし</span></td>
+      </tr>
+      <tr>
+        <td><b>記録に聞く</b></td>
+        <td class="path">記録タブ → 記録一覧に切替 → <b>検索語を入れた時だけ</b>カードが出る</td>
+        <td class="taps">2＋入力</td>
+        <td><span class="tag t-bad">なし</span></td>
+      </tr>
+      <tr>
+        <td><b>日報にまとめる</b></td>
+        <td class="path">記録タブ → 記録一覧に切替 → ボタン行</td>
+        <td class="taps">3</td>
+        <td><span class="tag t-new">切替が要る</span></td>
+      </tr>
+      <tr>
+        <td><b>写真で病害虫を調べる</b></td>
+        <td class="path">ホーム「今日の一手」カード内。ただし<b>文字だけのボタン</b>（tertiary）で最も弱い見た目</td>
+        <td class="taps">1</td>
+        <td><span class="tag t-new">弱い</span></td>
+      </tr>
+      <tr>
+        <td><b>次の散布はいつ？</b></td>
+        <td class="path">ホーム上部「今日の一手」カード</td>
+        <td class="taps">1</td>
+        <td><span class="tag t-ok">あり</span></td>
+      </tr>
+      <tr>
+        <td><b>作付けの相談</b></td>
+        <td class="path">ホーム「作付け中」カード</td>
+        <td class="taps">1</td>
+        <td><span class="tag t-ok">あり</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="callout">
+    <b>問題は「AIが目立たない」ことではない。</b>
+    仕様書が「入力摩擦を減らす最も直接的な打ち手」と位置づけている音声メモ構造化が、6機能でいちばん深い場所にある——
+    しかも最後のAIボタンは、メモを書く前には画面に存在しない。<b>押す前に、あることが分からない。</b>
+  </div>
+
+  <h2><span class="n">02</span>国内アプリはどこに置いているか</h2>
+  <p class="sub">
+    「分散させるか、1か所に集めるか」の二択で解いている会社は無かった。
+    中核ループの常設ボタンにAIを同居させ、そのうえで文脈にも置く——両方やっている。
+  </p>
+  <div class="rules">
+    <div class="rule">
+      <h3><span class="who">あすけん · 会員900万人超</span>AI記録が「＋」の直下にある</h3>
+      <p>「AIおまかせ記録」（話す・書くだけで記録が完成）は、<b>記録ホーム右下の「＋」</b>と<b>各食事記録画面の右下</b>の2か所に常設。手入力とAI入力が同じ入口に並ぶ。</p>
+      <p>アドバイスは押させず、3食記録すると分析画面に出る。</p>
+    </div>
+    <div class="rule">
+      <h3><span class="who">マネーフォワードME</span>「＋」がAIの入口を兼ねる</h3>
+      <p>レシートのAI-OCRは <b>ホーム右下「＋」→「レシート読み込み」→ カメラ</b>。AI専用の場所は作らず、いつもの追加動線に混ぜている。</p>
+    </div>
+    <div class="rule">
+      <h3><span class="who">Yahoo! JAPANアプリ</span>出力系は押させない</h3>
+      <p>「AIまとめ」（記事の3点要約）は<b>記事ページに最初から表示</b>。ボタンを探させる設計にしていない。</p>
+    </div>
+    <div class="rule">
+      <h3><span class="who">レイミー · 日本農薬</span>診断はカメラまで入口を前出し</h3>
+      <p>病害虫診断だけの単機能アプリとして独立させ、<b>撮影 →「AI診断」の2アクション</b>。畑で異変に気づいた瞬間に開けることが要件になっている。</p>
+    </div>
+  </div>
+
+  <h2><span class="n">03</span>画面案</h2>
+  <p class="sub">画面内はアプリのトークン（<code>src/ui/tokens.ts</code>）どおり。375px 実寸。1枚目が現状、2枚目以降が提案。</p>
+
+  <div class="boards">
+
+    <!-- ── 現状 ── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">現状</span>
+        <h3>＋記録を押した直後</h3>
+        <p>天気・日付・作物・圃場・作業の種類までは見える。<b>音声もAIも、この画面には無い。</b>「詳細を入力」を開いた先のメモ欄の下にある。</p>
+        <p class="status"><span class="tag t-bad">音声まで4タップ＋スクロール</span></p>
+      </div>
+      <div class="phone dim">
+        <div class="veil">
+          <div class="sheet">
+            <div class="sh"><span class="ti">作業を記録</span><span class="x">✕</span></div>
+            <div class="well">
+              <div class="wrow"><div class="wcol"><div class="lbl2">📍 紀州農園 · 天気（自動）</div><div class="val">晴れ 28° · 湿度62%</div></div></div>
+            </div>
+            <div class="well">
+              <div class="wrow"><div class="wcol"><div class="lbl2">日付</div><div class="val">2026-09-09</div></div></div>
+              <div class="wrow">
+                <div class="wcol"><div class="lbl2">作物</div><div class="val">南高梅</div></div>
+                <div class="wcol"><div class="lbl2">圃場</div><div class="val">東の畑</div></div>
+              </div>
+              <div class="wrow">
+                <div class="wcol"><div class="lbl2">作業の種類</div><div class="val ph">選択してください</div></div>
+                <span class="chev">›</span>
+              </div>
+            </div>
+            <button class="btn b-sec" style="margin-bottom:12px;">⌄ 詳細を入力</button>
+            <div class="lbl">写真</div>
+            <div class="photobox">📷 タップして写真を選択</div>
+            <button class="btn b-ink b-lg">保存する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 提案1 ── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">提案 ①</span>
+        <h3>入力手段を3択にする</h3>
+        <p>シートの最上部に<b>「話して記録」を第一候補として</b>置く。あすけんが「＋」の直下に AIおまかせ記録を置いているのと同じ形。</p>
+        <p>手で入力を選べば、下は今までどおりのフォーム。<b>既存の導線は何も消さない。</b></p>
+        <p class="status"><span class="tag t-ok">音声まで2タップ</span></p>
+      </div>
+      <div class="phone">
+        <div class="veil">
+          <div class="sheet">
+            <div class="sh"><span class="ti">作業を記録</span><span class="x">✕</span></div>
+            <div class="picker">
+              <div class="pick lead">
+                <span class="ic">🎤</span>
+                <span class="tx"><span class="tt">話して記録</span><span class="ss">畑で喋るだけ。AIが項目に振り分けます</span></span>
+                <span class="chev">›</span>
+              </div>
+              <div class="pick">
+                <span class="ic">📷</span>
+                <span class="tx"><span class="tt">写真で調べる</span><span class="ss">病害虫の見当をつけて、そのまま記録に残す</span></span>
+                <span class="chev">›</span>
+              </div>
+              <div class="pick">
+                <span class="ic">✎</span>
+                <span class="tx"><span class="tt">手で入力</span><span class="ss">いつものフォーム</span></span>
+                <span class="chev">›</span>
+              </div>
+            </div>
+            <div class="well">
+              <div class="wrow"><div class="wcol"><div class="lbl2">📍 紀州農園 · 天気（自動）</div><div class="val">晴れ 28° · 湿度62%</div></div></div>
+            </div>
+            <div class="well">
+              <div class="wrow"><div class="wcol"><div class="lbl2">日付</div><div class="val">2026-09-09</div></div></div>
+              <div class="wrow">
+                <div class="wcol"><div class="lbl2">作物</div><div class="val">南高梅</div></div>
+                <div class="wcol"><div class="lbl2">圃場</div><div class="val">東の畑</div></div>
+              </div>
+            </div>
+            <button class="btn b-ink b-lg">保存する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 提案2 ── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">提案 ②</span>
+        <h3>話している最中</h3>
+        <p>文字起こしは無料（ブラウザの音声認識）。<b>喋った言葉がそのまま出る</b>ので、AIに渡す前に自分の言葉として確認できる。</p>
+        <p>止めた時点で <code>api/structure-voice</code> に送る。<b>手袋のまま片手で終わる</b>のがこの案の目的。</p>
+      </div>
+      <div class="phone">
+        <div class="veil">
+          <div class="sheet">
+            <div class="sh"><span class="ti">話して記録</span><span class="x">✕</span></div>
+            <div class="mic">
+              <div class="micdot"><span class="inner"></span></div>
+              <div class="wave">
+                <i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:13px"></i>
+                <i style="height:19px"></i><i style="height:9px"></i><i style="height:15px"></i><i style="height:21px"></i>
+                <i style="height:11px"></i><i style="height:17px"></i><i style="height:7px"></i><i style="height:14px"></i>
+              </div>
+              <div style="font-size:12.5px; color:var(--textSub);">聞いています…　タップで止める</div>
+            </div>
+            <div class="heard">東の畑で南高梅にストロビーを1000倍で200リットル撒いた。下葉に黒い斑点が少し出ていた<span class="cursor"></span></div>
+            <div class="stack" style="margin-top:12px;">
+              <button class="btn b-ink b-lg">■ 止めて、記録にする</button>
+              <button class="btn b-ter">手で入力に切り替える</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 提案3 ── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">提案 ③</span>
+        <h3>AIが埋めた結果を確かめる</h3>
+        <p>振り分けた項目に印を付ける。<b>AIが勝手に保存はしない</b>——確認して保存を押すのは人。</p>
+        <p>候補に無い値は空のまま（<code>api/structure-voice</code> の方針）。農薬の使用回数のような法令に関わる数値は、ここでもAIに作らせない。</p>
+      </div>
+      <div class="phone">
+        <div class="veil">
+          <div class="sheet">
+            <div class="sh"><span class="ti">確認して保存</span><span class="x">✕</span></div>
+            <div class="well filled">
+              <div class="wrow">
+                <div class="wcol"><div class="lbl2">作物</div><div class="val hit">南高梅</div></div>
+                <div class="wcol"><div class="lbl2">圃場</div><div class="val hit">東の畑</div></div>
+              </div>
+              <div class="wrow">
+                <div class="wcol"><div class="lbl2">作業の種類</div><div class="val hit">防除</div></div>
+                <span class="dot" style="background:var(--pest)"></span>
+              </div>
+              <div class="wrow">
+                <div class="wcol"><div class="lbl2">農薬</div><div class="val hit">ストロビーフロアブル</div></div>
+              </div>
+              <div class="wrow">
+                <div class="wcol"><div class="lbl2">希釈</div><div class="val hit">1000倍</div></div>
+                <div class="wcol"><div class="lbl2">散布量</div><div class="val hit">200 L</div></div>
+              </div>
+            </div>
+            <div class="lbl">メモ</div>
+            <div class="note">下葉に黒い斑点が少し出ていた</div>
+            <div class="stack" style="margin-top:12px;">
+              <button class="btn b-soft">📷 この症状を写真で調べる</button>
+              <button class="btn b-ink b-lg">保存する</button>
+              <button class="btn b-ter">もう一度話す</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 提案4 ── -->
+    <div class="board">
+      <div class="cap">
+        <span class="intent">提案 ④</span>
+        <h3>ホーム：診断の格上げと、日報の常設</h3>
+        <p>「写真で病害虫を調べる」を文字だけのボタンから<b>塗りのボタン</b>へ。レイミーが単機能アプリにしている機能が、今は最も弱い見た目になっている。</p>
+        <p>日報は記録タブの奥にあるので、<b>ホームに「今日の記録◯件」の行として常設</b>する。記録した見返りがその日のうちに返る形（あすけんの分析画面と同じ役割）。</p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">農作業レポート</span><span class="avatars"><span class="av"></span><span class="av"></span></span></div>
+        <div class="screen">
+          <div class="c">
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <span><span style="font-size:30px; font-weight:700;">28°</span> <span style="font-size:13px; color:var(--textSub);">晴れ · 紀州農園</span></span>
+              <span style="font-size:12px; color:var(--textSub);">💧62% 🌧0mm</span>
+            </div>
+          </div>
+          <div class="c">
+            <div class="lbl">🍃 今日の一手</div>
+            <div class="big">前回の散布から<em>12</em>日</div>
+            <div class="meta">2026-08-28 · 東の畑 · ストロビーフロアブル</div>
+            <div class="stack">
+              <button class="btn b-soft">次の散布はいつ？</button>
+              <button class="btn b-soft">📷 写真で病害虫を調べる</button>
+            </div>
+          </div>
+          <div class="c">
+            <div class="lbl">🌱 作付け中 — 相談できます</div>
+            <div class="row">
+              <span class="dot" style="background:#43A047"></span>
+              <span class="nm">南高梅<span class="sm">作付けから142日</span></span>
+              <span class="badge">やること2</span><span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background:#C98A2E"></span>
+              <span class="nm">温州みかん<span class="sm">作付けから88日</span></span>
+              <span class="chev">›</span>
+            </div>
+          </div>
+          <div class="c">
+            <div class="row" style="padding-top:0;">
+              <span class="nm">今日の記録 3件<span class="sm">日報にまとめる</span></span>
+              <span class="chev">›</span>
+            </div>
+          </div>
+        </div>
+        <div class="fab">＋ 記録</div>
+        <div class="nav">
+          <div class="on"><span class="ic"></span>ホーム</div>
+          <div><span class="ic"></span>記録</div>
+          <div><span class="ic"></span>分析</div>
+          <div><span class="ic"></span>管理</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <h2><span class="n">04</span>今回やらないこと</h2>
+  <p class="sub">増やす提案と同じくらい、増やさない判断も確認してほしい。</p>
+  <div class="rules">
+    <div class="rule">
+      <h3>「記録に聞く」は前に出さない</h3>
+      <p>常設がゼロなのは事実だが、<b>本番の実データは18件・4.5か月</b>。今ここを目立たせても「記録からは分かりません」が返る確率が高い。<b>記録が貯まってから</b>前に出すのが正しい順序。</p>
+    </div>
+    <div class="rule">
+      <h3>AIタブは作らない（8/23の判断を維持）</h3>
+      <p>AIを独立させるほど「わざわざ行く場所」になる、という前回の結論は今回の調査でも覆らなかった。国内事例も専用タブではなく<b>いつもの入力ボタン</b>に混ぜている。</p>
+    </div>
+    <div class="rule">
+      <h3>自動でシートを開いたりしない</h3>
+      <p>Microsoft は Office のAIボタンを常時表示にして利用は増えたが反発も大きく、2026年5月に置き場所を選べるよう戻した。<b>常設にはするが、割り込ませない。</b></p>
+    </div>
+    <div class="rule">
+      <h3>アイコンだけのボタンにしない</h3>
+      <p>農業就業者の平均年齢は67.9歳（2022年）。国内のシニアUI調査では、アイコン単独は意味が伝わらず推測の手間が生じるとされる。<b>日本語ラベルを必ず添える。</b></p>
+    </div>
+  </div>
+
+  <h2><span class="n">05</span>実装の順</h2>
+  <ol class="ol">
+    <li><b>＋記録シートの3択</b>（提案①〜③） — いちばん効く。既存のメモ欄の音声ボタンは残したまま入口を増やす形なので、既存機能の削除にあたらない。</li>
+    <li><b>ホームの診断ボタン格上げ</b>（提案④上） — CSS相当の変更のみで済む。</li>
+    <li><b>ホームの日報行</b>（提案④下） — 既存の日報シートを開くだけ。</li>
+    <li><b>「記録に聞く」の常設化</b> — 記録が貯まってから。着手時は <code>ai_outputs</code> への保存実装（現在この機能だけ無い）を先に足す。</li>
+  </ol>
+
+  <div class="note-box">
+    <b>効果の測り方。</b>
+    施策前に機能別の直近30日呼び出し回数を <code>ai_outputs</code> から取ってベースラインにする。
+    見る指標は呼び出し回数そのものではなく<b>「記録1件あたりのAI利用率」</b>——記録が増えれば呼び出しも自然に増えるため。
+    ただし現状の <code>ai_outputs</code> は全11件がすべて開発時の動作確認で、本番の worker は0人。<b>今はまだ、良くなったことも悪くなったことも測れない。</b>
+  </div>
+
+</div>
