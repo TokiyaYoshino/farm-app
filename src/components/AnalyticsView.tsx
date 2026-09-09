@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { DEMO, DEMO_SUPABASE_URL, DEMO_SUPABASE_KEY } from "../lib/demoData";
 import {
   LineChart, Line, ScatterChart, Scatter, BarChart, Bar, ComposedChart,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend,
 } from "recharts";
-import { BarChart2, Leaf, Thermometer, CloudRain, Clock, FlaskConical, Bug, Sparkles, ChevronDown, Target } from "lucide-react";
+import { BarChart2, Leaf, Thermometer, CloudRain, Clock, FlaskConical, Bug, History, ChevronDown, Target } from "lucide-react";
 import { C, SHADOW, RADIUS } from "../ui/tokens";
 import type { MetricReport } from "../lib/metrics";
 import { harvestQty, isCountableHarvest, excludedHarvestCount, workMinutes, toHours, pctDiff } from "../lib/metrics";
 
 const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  DEMO ? DEMO_SUPABASE_URL : (import.meta.env.VITE_SUPABASE_URL as string),
+  DEMO ? DEMO_SUPABASE_KEY : (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
 );
 
 const CHART_COLORS = [C.ink,"#1976d2","#e07020","#9c27b0","#00838f","#c62828","#558b2f","#4527a0"];
@@ -655,7 +656,7 @@ export default function AnalyticsView({
 
       {/* ── AI出力の履歴 ── */}
       <div style={secStyle}>
-        <Sparkles size={14} strokeWidth={2} />AIの出力履歴
+        <History size={14} strokeWidth={2} />AIの出力履歴
       </div>
       <div style={{ ...cardStyle, marginBottom: 32, padding: "16px 0 4px" }}>
         <div style={{ display:"flex", flexWrap:"wrap" as const, padding:"0 16px" }}>
@@ -668,7 +669,7 @@ export default function AnalyticsView({
         </div>
         {s7Rows.length === 0 ? (
           <div style={{ ...emptyStyle, paddingBottom:24 }}>
-            <Sparkles size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />AIの出力がまだありません
+            <History size={28} strokeWidth={1.5} style={{ display:"block", margin:"0 auto 8px" }} />AIの出力がまだありません
           </div>
         ) : (
           s7Rows.map((o, i) => (

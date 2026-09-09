@@ -136,6 +136,92 @@ export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: A
   }
 }
 
+// ── 日次上限 ─────────────────────────────────────────────────
+//
+// 認証は掛かったが「ログインさえすれば無制限」のままだった（上の 1. の後半は
+// 未解決のまま残っていた）。作業者を招いて試してもらう段になり、
+// 招いた人数ぶんそのままコストに効くので蓋をする。
+//
+// docs/roadmap.md の Free枠（画像診断1日1枚など）とは目的が違う。あちらは
+// 課金プランの線引きで、こちらは**暴走を止めるだけ**。運用を邪魔しない広さにする。
+//
+// 数える先は ai_outputs。search-chat だけは保存実装が無いので数に入らない
+// （テキストのみで単価が最も低いため、今回はそれを承知で外す）。
+
+/** 種別ごとの1日の上限。画像診断は Vision で単価が最大なので他より厳しくする */
+const DAILY_LIMIT: Record<string, number> = {
+  diagnosis:     20,
+  advice:        50,
+  daily_report:  50,
+  pest_advice:   50,
+  voice_structure: 50,
+};
+
+/**
+ * ユーザーごと・その日ごとの呼び出し回数を数え、上限を超えていたら止める。
+ *
+ * **数えられなかったときは通す（fail-open）。** 数える側の不調でAI機能が
+ * 全滅するほうが、上限を1日すり抜けるより損害が大きい。
+ */
+export async function checkDailyLimit(
+  authId: string,
+  kind: keyof typeof DAILY_LIMIT | string,
+): Promise<Fail | null> {
+  const limit = DAILY_LIMIT[kind];
+  if (!limit) return null;
+
+  const PROJECT_URL = process.env.VITE_SUPABASE_URL;
+  const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!PROJECT_URL || !SERVICE_ROLE) return null; // 設定が無い環境では数えない
+
+  const headers = {
+    Authorization: `Bearer ${SERVICE_ROLE}`,
+    apikey: SERVICE_ROLE,
+    Prefer: "count=exact",
+  };
+
+  try {
+    // users.id を引く（ai_outputs.created_by は users の id）
+    const uRes = await fetch(
+      `${PROJECT_URL}/rest/v1/users?auth_id=eq.${encodeURIComponent(authId)}&select=id`,
+      { headers },
+    );
+    if (!uRes.ok) return null;
+    const uRows = await uRes.json();
+    const userId = Array.isArray(uRows) && uRows.length > 0 ? uRows[0].id : null;
+    if (userId == null) return null;
+
+    // その日の 00:00 以降。日付の境目は UTC ではなく日本時間で切る
+    const nowJst = new Date(Date.now() + 9 * 3600 * 1000);
+    const since = new Date(Date.UTC(
+      nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate(),
+    ) - 9 * 3600 * 1000).toISOString();
+
+    const cRes = await fetch(
+      `${PROJECT_URL}/rest/v1/ai_outputs`
+      + `?created_by=eq.${userId}&kind=eq.${encodeURIComponent(kind)}`
+      + `&created_at=gte.${encodeURIComponent(since)}&select=id`,
+      { headers: { ...headers, Range: "0-0" } },
+    );
+    if (!cRes.ok) return null;
+    // Content-Range: "0-0/12" の分母が総件数
+    const range = cRes.headers.get("content-range") ?? "";
+    const total = Number(range.split("/")[1]);
+    if (!Number.isFinite(total)) return null;
+
+    if (total >= limit) {
+      return {
+        ok: false,
+        status: 429,
+        error: `本日の利用回数の上限（${limit}回）に達しました。明日また使えます。`,
+      };
+    }
+    return null;
+  } catch {
+    return null; // fail-open
+  }
+}
+
 /** 失敗をそのままレスポンスに変換する。各ハンドラの定型文を減らすため */
 export function denied(res: ApiResponse, f: Fail): void {
   res.status(f.status).json({ error: f.error });

@@ -17,7 +17,7 @@
 //   判断の経緯は docs/decisions/20260823-pest-advice-history.md）。
 
 import type { ApiRequest, ApiResponse } from "./types";
-import { requireUser, denied } from "./_auth.js";
+import { requireUser, checkDailyLimit, denied } from "./_auth.js";
 
 interface RegistrationInfo {
   product_name?: string;
@@ -87,6 +87,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
   const auth = await requireUser(req);
   if (!auth.ok) return denied(res, auth);
+  // 招いた作業者が回しても支出が止まらない状態だったので蓋をする（fail-open）
+  const over = await checkDailyLimit(auth.user.authId, "pest_advice");
+  if (over) return denied(res, over);
 
   const { forecast, lat, lng, registrations, sprayHistory } = (req.body ?? {}) as {
     forecast?: string;

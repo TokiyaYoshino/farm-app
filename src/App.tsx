@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import type { SpeechRecognitionLike } from "./types/speechRecognition";
 import {
-  Home, PenLine, Users, Thermometer,
+  Home, Users, Thermometer,
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
   Snowflake, CloudLightning, MapPin, RefreshCw, AlertCircle,
   PackageCheck, CalendarDays,
@@ -13,7 +13,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
-  Download, FileText, FileSpreadsheet, Sparkles, BookOpen, Pencil, Sprout,
+  Download, FileText, FileSpreadsheet, Bug, BookOpen, Pencil, Sprout,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -25,6 +25,12 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { harvestQty, excludedHarvestCount } from "./lib/metrics";
 import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt, lastSpray } from "./lib/pesticideUsage";
+import {
+  DEMO, DEMO_SUPABASE_URL, DEMO_SUPABASE_KEY,
+  demoUsers, demoCurrentUser, demoCrops, demoFields, demoWorkCategories,
+  demoPesticides, demoReports, demoSchedules, demoComments, demoWeatherCoords,
+  demoThreads, demoThreadMessages, demoAdviceActions,
+} from "./lib/demoData";
 import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
   type AdviceAction,
@@ -50,8 +56,8 @@ const PIN_BLUE  = makePin(C.info);
 const PIN_GREEN = makePin(C.primary);
 
 const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  DEMO ? DEMO_SUPABASE_URL : (import.meta.env.VITE_SUPABASE_URL as string),
+  DEMO ? DEMO_SUPABASE_KEY : (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
 );
 
 // ─── 定数 ───────────────────────────────────────────────
@@ -203,12 +209,61 @@ interface User   { id: number; name: string; role: Role; login_id?: string; auth
 // 未設定なら農薬の使用回数は「判定不可」として扱う（自動マッチングはしない）
 interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; famic_crop_name?: string | null; }
 
-// ─── 作付けの相談（農業エージェント）── crop_advice_messages の1発言
+/** 道具の結果につける小さなラベル。あとから読み返したときに何の結果か分かるようにする */
+function ToolTag({ kind }: { kind: string }) {
+  const map: Record<string, { label: string; Icon: typeof FileText }> = {
+    daily_report:  { label: "日報",     Icon: FileText },
+    diagnosis:     { label: "写真の診断", Icon: Bug },
+    record_search: { label: "記録に聞く", Icon: MessageSquare },
+    pest_advice:   { label: "散布時期",   Icon: Wind },
+  };
+  const t = map[kind];
+  if (!t) return null;
+  return (
+    <span style={{ fontSize:11, color:C.textMuted, marginBottom:3, display:"flex", alignItems:"center", gap:4 }}>
+      <t.Icon size={11} strokeWidth={2} />{t.label}
+    </span>
+  );
+}
+
+/** AI をどの導線から呼んだか。撤退判断の材料になるので kind では代用しない
+ *  （例: diagnosis は4か所から出る） */
+type AiEntryPoint =
+  | "thread_tool"    // 相談スレッド内の道具
+  | "thread"         // 相談スレッド本体の発言
+  | "quick_picker"   // ＋記録の3択
+  | "note_field"     // 記録フォームのメモ欄
+  | "home"           // ホームのカード
+  | "record_list"    // 記録一覧
+  | "calendar"       // カレンダーの日付
+  | "report_photo"   // 記録一覧の写真直下
+  | "report_detail"; // 記録詳細シート
+
+// ─── 相談スレッド（主題ごとの箱）──────────────────────────
+// 6つあったAI機能のうち5つが「1回叩いて消える」状態だったため、主題ごとに
+// やりとりを溜める形へ寄せた。経緯は docs/decisions/20260909-single-ai-entry-threads.md
+interface AdviceThread {
+  id: string;
+  title: string;
+  /** アプリが用途を決めるスレッド。'daily_report' は日報だけが溜まる1本 */
+  system_key?: string | null;
+  /** 任意。入っていればその作付けの記録と農薬登録情報を材料に使う */
+  crop_id: number | null;
+  field: string | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── 相談の1発言（crop_advice_messages）
 interface CropAdviceMessage {
   id: string;
-  crop_id: number;
+  thread_id?: string | null;
+  crop_id: number | null;
   role: "user" | "assistant";
   content: string;
+  /** null=相談の発言。他は日報・診断などの結果をスレッドに残したもの */
+  kind?: string | null;
   sources?: string[] | null;
   limits?: string[] | null;
   registration_facts?: AdviseRegistrationFact[] | null;
@@ -344,8 +399,11 @@ const css = (o: CSSProperties): CSSProperties => o;
 
 export default function App() {
   // ─── Auth state ──────────────────────────────────────────
-  const [authSession, setAuthSession]     = useState<AuthSession | null>(null);
-  const [authLoading, setAuthLoading]     = useState(true);
+  // DEMO はダミーセッションで認証ゲート（authLoading / !authSession）を越える。
+  // 型は Session を満たさないので unknown 経由。DEMO 以外では従来どおり null から始まる
+  const [authSession, setAuthSession]     = useState<AuthSession | null>(
+    DEMO ? ({ user: { id: "demo-user" } } as unknown as AuthSession) : null);
+  const [authLoading, setAuthLoading]     = useState(!DEMO);
   const [loginId, setLoginId]             = useState("");
   const [loginPass, setLoginPass]         = useState("");
   const [showPass, setShowPass]           = useState(false);
@@ -356,15 +414,15 @@ export default function App() {
   const [tab, setTab]                     = useState("home");
   const [currentOrg, setCurrentOrg]       = useState("kishu");
   const [currentOrganizationId, setCurrentOrganizationId] = useState<string | null>(null);
-  const [users, setUsers]                 = useState<User[]>([]);
-  const [crops, setCrops]                 = useState<Crop[]>([]);
-  const [fields, setFields]               = useState<Field[]>([]);
-  const [reports, setReports]             = useState<Report[]>([]);
-  const [schedules, setSchedules]          = useState<Schedule[]>([]);
-  const [pesticides, setPesticides]       = useState<Pesticide[]>([]);
+  const [users, setUsers]                 = useState<User[]>(DEMO ? demoUsers : []);
+  const [crops, setCrops]                 = useState<Crop[]>(DEMO ? demoCrops : []);
+  const [fields, setFields]               = useState<Field[]>(DEMO ? demoFields : []);
+  const [reports, setReports]             = useState<Report[]>(DEMO ? demoReports : []);
+  const [schedules, setSchedules]          = useState<Schedule[]>(DEMO ? demoSchedules : []);
+  const [pesticides, setPesticides]       = useState<Pesticide[]>(DEMO ? demoPesticides : []);
   const [projects, setProjects]           = useState<Project[]>([]);
   const [tickets, setTickets]             = useState<Ticket[]>([]);
-  const [allComments, setAllComments]     = useState<Comment[]>([]);
+  const [allComments, setAllComments]     = useState<Comment[]>(DEMO ? demoComments : []);
   const [pForm, setPForm]                 = useState({ name:"", type:"殺虫剤", dilution_rate:"", notes:"", active_ingredient:"", pre_harvest_interval:"", usage_method:"" });
   const [pManualMode, setPManualMode]     = useState(false);
   const [masterSearch, setMasterSearch]   = useState("");
@@ -380,16 +438,16 @@ export default function App() {
   const [masterSearching, setMasterSearching] = useState(false);
   const [selectedMaster, setSelectedMaster]   = useState<PesticideMaster | null>(null);
   const masterTimerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [currentUser, setCurrentUser]     = useState<User | null>(null);
+  const [currentUser, setCurrentUser]     = useState<User | null>(DEMO ? demoCurrentUser : null);
   const [showUserPicker, setShowUserPicker] = useState(false);
   const [showNotifs, setShowNotifs]       = useState(false);
   const [notifSeenAt, setNotifSeenAt]     = useState<string>("");  // ISO文字列。ユーザー切替時にlocalStorageから読む
   const [toast, setToast]                 = useState<{ msg: string; type: "ok"|"err"|"warn" } | null>(null);
-  const [loading, setLoading]             = useState(true);
+  const [loading, setLoading]             = useState(!DEMO);
   const [wxLoading, setWxLoading]         = useState(true);
   const [wxAuto, setWxAuto]               = useState<WeatherInfo | null>(null);
   const [wxManual, setWxManual]           = useState<WeatherInfo>({ label:"晴れ", Icon:Sun, temp:"" });
-  const [workCategories, setWorkCategories] = useState<WorkCategory[]>([]);
+  const [workCategories, setWorkCategories] = useState<WorkCategory[]>(DEMO ? demoWorkCategories : []);
   const [rForm, setRForm]                 = useState({ user_id:0, crop_id:0, field:"", date:new Date().toISOString().slice(0,10), work_type:"収穫", work_category_id:0, quantity:"", quantity_value:"", quantity_unit:"", work_time:"", work_start:"", work_end:"", note:"", pesticide_id:"", pesticide_amount:"" });
   const [periodWeather, setPeriodWeather] = useState<{ temp:string; humidity:string; rain:string; weather:string } | null>(null);
   const [cForm, setCForm]                 = useState({ name:"", start_date:new Date().toISOString().slice(0,10), target_yield:"", famic_crop_name:"" });
@@ -398,7 +456,7 @@ export default function App() {
   const [imageFile, setImageFile]         = useState<File | null>(null);
   const [imagePreview, setImagePreview]   = useState("");
   const [imgUploading, setImgUploading]   = useState(false);
-  const [weatherCoords, setWeatherCoords] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  const [weatherCoords, setWeatherCoords] = useState<{ lat: number; lng: number; name: string } | null>(DEMO ? demoWeatherCoords : null);
   const [locInput, setLocInput]           = useState("");
   const [locSearching, setLocSearching]   = useState(false);
   const [locPreview, setLocPreview]       = useState<{ name: string; lat: number; lng: number } | null>(null);
@@ -420,6 +478,8 @@ export default function App() {
   const noteRecRef                        = useRef<SpeechRecognitionLike | null>(null);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
+  // ＋記録シート最上部の入力手段3択。「手で入力」を選ぶと畳んで従来のフォームだけになる
+  const [quickPicker, setQuickPicker]         = useState(true);
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
   const [showCropAddForm, setShowCropAddForm] = useState(false);
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"report"|"backlog">("report");
@@ -534,8 +594,35 @@ export default function App() {
   const [adviseLoading, setAdviseLoading] = useState(false);
   const [adviseThreadLoading, setAdviseThreadLoading] = useState(false);
   const [adviseError, setAdviseError] = useState("");
+  // ─── 相談スレッド ─────────────────────────────────────────
+  const [threads, setThreads]             = useState<AdviceThread[]>(DEMO ? demoThreads : []);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [newThreadTitle, setNewThreadTitle] = useState("");
+  const [newThreadCropId, setNewThreadCropId] = useState(0);
+  const [showNewThread, setShowNewThread]  = useState(false);
+  // 道具（日報・記録に聞く・散布時期・診断）をどのスレッドから開いたか。
+  // null＝相談タブ以外から開いた＝スレッドには残さない
+  const [toolThreadId, setToolThreadId]    = useState<string | null>(null);
+  // 移行SQLがまだ流れていない本番でも壊れないようにする。advice_threads が無ければ
+  // 相談タブごと出さない（＝以前と同じ画面が出るだけ）。順序ミスを事故にしないための保険で、
+  // SQLを流せば次のリロードで自動的に現れる。切り戻し時も同じ理屈で効く
+  const [threadsReady, setThreadsReady]    = useState<boolean>(DEMO);
+  // 各シートをどこから開いたか。ai_outputs.entry_point に残して導線ごとの利用を測る
+  const [genEntry, setGenEntry]            = useState<AiEntryPoint>("record_list");
+  const [pestEntry, setPestEntry]          = useState<AiEntryPoint>("home");
+  const [diagEntry, setDiagEntry]          = useState<AiEntryPoint>("home");
   // 作付けごとの「やること」件数。ホームのバッジに使う（作物を開かなくても分かるように先読み）
   const [adviceCounts, setAdviceCounts] = useState<Record<number, AdviceAction[]>>({});
+  // スレッド単位の「やること」。crop_id ベースの adviceCounts では、作付けに紐づかない
+  // 主題スレッドの助言が数えられない（crop_id が null になるため）
+  const [adviceCountsByThread, setAdviceCountsByThread] = useState<Record<string, AdviceAction[]>>(
+    DEMO
+      ? demoAdviceActions.reduce<Record<string, AdviceAction[]>>((acc, a) => {
+          (acc[a.thread_id] ??= []).push(a as unknown as AdviceAction);
+          return acc;
+        }, {})
+      : {},
+  );
   const [diagPhotoFile, setDiagPhotoFile]         = useState<File | null>(null);
   const [diagPhotoPreview, setDiagPhotoPreview]   = useState("");
   const [diagPhotoLoading, setDiagPhotoLoading]   = useState(false);
@@ -544,6 +631,8 @@ export default function App() {
 
   // ─── Auth セッション監視 ──────────────────────────────────
   useEffect(() => {
+    // DEMO はダミーセッションで始めているので、getSession() の null で上書きさせない
+    if (DEMO) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthSession(session);
       setApiToken(session?.access_token ?? null);
@@ -564,7 +653,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!authSession) return;
+    if (!authSession || DEMO) return;
     (async () => {
       try {
       setLoading(true);
@@ -615,8 +704,23 @@ export default function App() {
         const { data: acts } = await supabase.from("crop_advice_actions").select("*")
           .eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300);
         const byCrop: Record<number, AdviceAction[]> = {};
-        ((acts ?? []) as AdviceAction[]).forEach(a => { (byCrop[a.crop_id] ??= []).push(a); });
+        const byThread: Record<string, AdviceAction[]> = {};
+        ((acts ?? []) as (AdviceAction & { thread_id?: string | null })[]).forEach(a => {
+          if (a.crop_id != null) (byCrop[a.crop_id] ??= []).push(a);
+          if (a.thread_id) (byThread[a.thread_id] ??= []).push(a);
+        });
         setAdviceCounts(byCrop);
+        setAdviceCountsByThread(byThread);
+
+        // 相談スレッド一覧（相談タブの中身）。テーブルが無い＝移行SQL未適用なら
+        // 相談タブを出さない。それ以外のエラー（通信・権限）では出す（一時的な失敗で
+        // 機能ごと消えるほうが困る）
+        const { data: ths, error: thErr } = await supabase.from("advice_threads").select("*")
+          .eq("organization_id", organizationId).order("updated_at", { ascending: false });
+        const missingTable = thErr?.code === "42P01" || thErr?.code === "PGRST205"
+          || /does not exist|schema cache/i.test(thErr?.message ?? "");
+        setThreadsReady(!missingTable);
+        if (!missingTable) setThreads((ths ?? []) as AdviceThread[]);
 
         // 作物名の自動一致に使う候補（＝ラベル上の作物名）。
         // 適用情報の本体は農薬パネルを開いたときの遅延ロードだが、それを待つと
@@ -812,7 +916,7 @@ export default function App() {
     return supabase.storage.from("report-images").getPublicUrl(path).data.publicUrl;
   };
 
-  const addReport = async () => {
+  const addReport = async (keepOpen = false) => {
     if (!rForm.date || !rForm.work_type || !currentUser) return;
     setImgUploading(true);
     try {
@@ -862,7 +966,13 @@ export default function App() {
       } else {
         showToast("作業報告を登録しました");
       }
-      setTab("home");
+      if (keepOpen) {
+        // 畑を回りながら続けて入れる場面。作物・圃場・日付は据え置き、
+        // 1件ごとに変わるものだけ空にする
+        setRForm(f => ({ ...f, note:"", quantity:"", quantity_value:"", work_time:"", work_start:"", work_end:"" }));
+      } else {
+        setTab("home");
+      }
 
       // LINE グループに通知（失敗しても報告登録には影響させない）
       const r = data?.[0] as Report | undefined;
@@ -1058,7 +1168,7 @@ export default function App() {
   };
 
   // 音声メモをAIで作業報告フォームに振り分け
-  const structureVoiceNote = async () => {
+  const structureVoiceNote = async (entryPoint: AiEntryPoint = "note_field") => {
     if (!rForm.note.trim()) return showToast("メモが空です", "err");
     setAiStructuring(true);
     try {
@@ -1100,13 +1210,14 @@ export default function App() {
       // structure-voice は構造化JSONをそのまま返す仕様で usage / costUsd を含まないため、
       // ここだけコストは残らない（api/structure-voice.ts）。
       void saveAiOutput("voice_structure", {
+        entryPoint,
         targetDate: rForm.date, field: s.field ?? rForm.field ?? null,
         inputSummary: rForm.note, outputJson: s,
       });
-      showToast("AIでフォームに反映しました");
+      showToast("メモから項目を埋めました");
     } catch (e: unknown) {
       console.error("structure-voice error:", e);
-      showToast("AI整理に失敗しました", "err");
+      showToast("項目を埋められませんでした", "err");
     } finally {
       setAiStructuring(false);
     }
@@ -1683,9 +1794,12 @@ export default function App() {
   // ─── AI出力の保存 ─────────────────────────────────────────
   // AI機能の出力を ai_outputs に残す。分析タブの診断集計とAI履歴の元データになる。
   // 保存の失敗はAI機能自体を止めない（画面に出すことが本体で、保存は付随価値のため）。
+  /** AI呼び出しの監査ログ。entryPoint は必須にしてある。任意にすると導線を足したときに
+   *  書き忘れ、「使われていない」と読めて集計が嘘になる（3回続けて効果を測れていないため） */
   const saveAiOutput = async (
     kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice",
     payload: {
+      entryPoint: AiEntryPoint;
       reportId?: number | null;
       targetDate?: string | null;
       field?: string | null;
@@ -1701,6 +1815,7 @@ export default function App() {
     const { error } = await supabase.from("ai_outputs").insert([{
       organization_id: currentOrganizationId,
       kind,
+      entry_point:   payload.entryPoint,
       report_id:     payload.reportId ?? null,
       target_date:   payload.targetDate ?? new Date().toISOString().slice(0, 10),
       field:         payload.field ?? null,
@@ -1761,9 +1876,16 @@ export default function App() {
         setGenItems(Array.isArray(d.items) ? d.items : []);
         setGenHandover(d.handover ?? "");
         void saveAiOutput("daily_report", {
+          entryPoint: genEntry,
           targetDate: genDate, inputSummary: records,
           outputText: d.report, usage: d.usage, costUsd: d.costUsd,
         });
+        // 日報は日付のもの、スレッドは主題のもので粒度が違うので、専用の1本に溜める。
+        // カレンダー・記録一覧・相談タブのどこから作っても行き先は同じ
+        void (async () => {
+          const tid = await ensureDailyReportThread();
+          if (tid) void appendToolMessage(tid, "daily_report", `${genDate}\n${d.report}`);
+        })();
       } else {
         setGenError(d.error || "生成に失敗しました。");
       }
@@ -1800,11 +1922,13 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.advice) {
         setPestAdviceResult(d.advice);
+        if (toolThreadId) void appendToolMessage(toolThreadId, "pest_advice", d.advice as string);
         setPestAdviceHeadline(d.headline ?? "");
         setPestAdviceReason(d.reason ?? "");
         setPestAdviceAvoid(Array.isArray(d.avoidDays) ? d.avoidDays : []);
         setPestAdviceDate(new Date().toISOString().slice(0, 10));
         void saveAiOutput("pest_advice", {
+          entryPoint: pestEntry,
           inputSummary: forecast,
           outputText: d.advice, usage: d.usage, costUsd: d.costUsd,
         });
@@ -1985,6 +2109,7 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.answer) {
         setSearchChatMessages(m => [...m, { role: "assistant", content: d.answer }]);
+        if (toolThreadId) void appendToolMessage(toolThreadId, "record_search", `${question}\n\n${d.answer}`);
       } else {
         setSearchChatError(d.error || "検索に失敗しました。");
       }
@@ -2006,19 +2131,70 @@ export default function App() {
   // 記録検索チャットとは目的が違う。あちらは記録の検索（記録に無いことは答えない）で、
   // こちらは知識の補填（記録がゼロでも成立する）。設計は
   // docs/decisions/20260810-next-action-advice.md、照合は src/lib/adviceMatch.ts。
-  const loadCropAdvice = async (cropId: number) => {
+  const loadThreadContent = async (threadId: string) => {
     if (!currentOrganizationId) return null;
     const [msgRes, actRes] = await Promise.all([
       supabase.from("crop_advice_messages").select("*")
-        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+        .eq("organization_id", currentOrganizationId).eq("thread_id", threadId).order("created_at"),
       supabase.from("crop_advice_actions").select("*")
-        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+        .eq("organization_id", currentOrganizationId).eq("thread_id", threadId).order("created_at"),
     ]);
     if (msgRes.error || actRes.error) return null;
     return {
       messages: (msgRes.data ?? []) as CropAdviceMessage[],
       actions: (actRes.data ?? []) as AdviceAction[],
     };
+  };
+
+  const openThread = async (threadId: string) => {
+    setActiveThreadId(threadId);
+    setAdviseMsgs([]); setAdviseActions([]); setAdviseError(""); setAdviseInput("");
+    const th = threads.find(t => t.id === threadId);
+    setAdviseCropId(th?.crop_id ?? null);
+    setAdviseThreadLoading(true);
+    if (DEMO) {
+      setAdviseMsgs((demoThreadMessages[threadId] ?? []) as CropAdviceMessage[]);
+      setAdviseThreadLoading(false);
+      return;
+    }
+    const data = await loadThreadContent(threadId);
+    if (data) { setAdviseMsgs(data.messages); setAdviseActions(data.actions); }
+    else if (!DEMO) setAdviseError("これまでのやりとりを読み込めませんでした。");
+    setAdviseThreadLoading(false);
+  };
+
+  /** 主題を立てる。作付けは任意（紐づけると、その作付けの記録と農薬登録情報を材料に使う） */
+  const createThread = async (title: string, cropId: number | null) => {
+    const name = title.trim();
+    if (!name) return;
+    if (DEMO || !currentOrganizationId) {
+      const local: AdviceThread = {
+        id: `local-${Date.now()}`, title: name, crop_id: cropId, field: null,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      };
+      setThreads(prev => [local, ...prev]);
+      setShowNewThread(false); setNewThreadTitle(""); setNewThreadCropId(0);
+      void openThread(local.id);
+      return;
+    }
+    const { data, error } = await supabase.from("advice_threads").insert([{
+      organization_id: currentOrganizationId, title: name,
+      crop_id: cropId, created_by: currentUser?.id ?? null,
+    }]).select().single();
+    if (error || !data) return showToast("相談を作成できませんでした", "err");
+    const th = data as AdviceThread;
+    setThreads(prev => [th, ...prev]);
+    setShowNewThread(false); setNewThreadTitle(""); setNewThreadCropId(0);
+    void openThread(th.id);
+  };
+
+  /** 作付けカードなど、作物から入ったときの経路。既にあればそれを開き、無ければ立てる */
+  const openThreadForCrop = async (cropId: number) => {
+    if (!threadsReady) return showToast("相談はまだ利用できません", "warn");
+    setTab("advice");
+    const existing = threads.find(t => t.crop_id === cropId);
+    if (existing) { void openThread(existing.id); return; }
+    await createThread(`${cropName(cropId)}の相談`, cropId);
   };
 
   // ホームのバッジ用。作物を開かなくても「やること」が何件あるか分かるようにする。
@@ -2034,25 +2210,17 @@ export default function App() {
     setAdviceCounts(byCrop);
   };
 
-  const openAdviseSheet = async (cropId: number) => {
-    setAdviseCropId(cropId);
-    setAdviseMsgs([]); setAdviseActions([]); setAdviseError(""); setAdviseInput("");
-    setAdviseThreadLoading(true);
-    const data = await loadCropAdvice(cropId);
-    if (data) { setAdviseMsgs(data.messages); setAdviseActions(data.actions); }
-    else setAdviseError("これまでの相談を読み込めませんでした。");
-    setAdviseThreadLoading(false);
-  };
-
   const sendAdvise = async () => {
     const question = adviseInput.trim();
-    const crop = crops.find(c => c.id === adviseCropId);
-    if (!crop || !question || adviseLoading) return;
+    const thread = threads.find(t => t.id === activeThreadId);
+    // 作付けは任意。紐づいていなければ主題だけで相談する（api/advise.ts の topic）
+    const crop = thread?.crop_id != null ? crops.find(c => c.id === thread.crop_id) : undefined;
+    if (!thread || !question || adviseLoading) return;
     setAdviseLoading(true); setAdviseError("");
     // 送信した質問はすぐ画面に出す（保存の成否を待たせない）
     const pendingId = `pending-${adviseMsgs.length}`;
     setAdviseMsgs(prev => [...prev, {
-      id: pendingId, crop_id: crop.id, role: "user", content: question,
+      id: pendingId, thread_id: thread.id, crop_id: crop?.id ?? null, role: "user", content: question,
       created_at: new Date().toISOString(),
     }]);
     setAdviseInput("");
@@ -2061,8 +2229,8 @@ export default function App() {
       if (weatherCoords) {
         forecast = await fetchPestControlForecast(weatherCoords.lat, weatherCoords.lng).catch(() => undefined);
       }
-      // その作付けに紐づく記録だけを渡す。件数ゼロでも成立する
-      const cropReports = reports.filter(r => r.crop_id === crop.id);
+      // 作付けが紐づいていればその記録だけ、紐づいていなければ農場全体の記録を渡す
+      const cropReports = crop ? reports.filter(r => r.crop_id === crop.id) : reports;
       const records = cropReports.length > 0
         ? cropReports
             .slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60)
@@ -2076,7 +2244,7 @@ export default function App() {
         : undefined;
       // famic_crop_name が未設定なら適用行を1件も送らない。紐付けが無い状態で全行を渡すと、
       // 他作物の適用情報をこの作付けのものとして提示してしまう
-      const famic = crop.famic_crop_name?.trim() || null;
+      const famic = crop?.famic_crop_name?.trim() || null;
       const norm = (s: string) => s.normalize("NFKC").trim().toLowerCase();
       const registrations = famic
         ? Object.values(await prefetchAllRegistrations()).flat()
@@ -2096,7 +2264,10 @@ export default function App() {
         method: "POST",
         headers: apiHeaders(),
         body: JSON.stringify({
-          crop: { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null },
+          crop: crop
+            ? { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null }
+            : undefined,
+          topic: crop ? undefined : thread.title,
           today: new Date().toISOString().slice(0, 10),
           forecast, registrations, records, question, region: weatherCoords?.name,
           messages: adviseMsgs.map(m => ({ role: m.role, content: m.content })),
@@ -2115,7 +2286,7 @@ export default function App() {
         return;
       }
       const result = d as AdviseResult;
-      const saved = await saveAdviceTurn(crop.id, question, result);
+      const saved = await saveAdviceTurn(thread, question, result);
       if (saved) {
         setAdviseMsgs(prev => [...prev.filter(m => m.id !== pendingId), ...saved.messages]);
         setAdviseActions(prev => [...prev, ...saved.actions]);
@@ -2123,15 +2294,16 @@ export default function App() {
       } else {
         // 保存できなくても回答は見せる（相談自体を無駄にしない）。溜まらないことは明示する
         setAdviseMsgs(prev => [...prev, {
-          id: `local-${prev.length}`, crop_id: crop.id, role: "assistant",
+          id: `local-${prev.length}`, thread_id: thread.id, crop_id: crop?.id ?? null, role: "assistant",
           content: result.advice.reply, sources: result.sources, limits: result.limits,
           registration_facts: result.registrationFacts, created_at: new Date().toISOString(),
         }]);
         setAdviseError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
       }
       void saveAiOutput("advice", {
-        cropId: crop.id,
-        inputSummary: [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`,
+        entryPoint: "thread",
+        cropId: crop?.id,
+        inputSummary: [`主題:${thread.title}`, `作物:${crop?.name ?? "指定なし"}`,
           `記録:${cropReports.length}件`, `質問:${question}`].join(" / "),
         outputJson: { advice: result.advice, registrationFacts: result.registrationFacts,
           sources: result.sources, limits: result.limits },
@@ -2147,9 +2319,12 @@ export default function App() {
 
   // 質問と返答を1往復として入れる。返答だけ・質問だけが残るとスレッドが読めなくなるので、
   // 返答の insert が失敗したら質問も消す
-  const saveAdviceTurn = async (cropId: number, question: string, result: AdviseResult) => {
-    if (!currentOrganizationId) return null;
-    const base = { organization_id: currentOrganizationId, crop_id: cropId, created_by: currentUser?.id ?? null };
+  const saveAdviceTurn = async (thread: AdviceThread, question: string, result: AdviseResult) => {
+    if (!currentOrganizationId || DEMO) return null;
+    const base = {
+      organization_id: currentOrganizationId, thread_id: thread.id,
+      crop_id: thread.crop_id, created_by: currentUser?.id ?? null,
+    };
     const { data: userRow, error: userErr } = await supabase.from("crop_advice_messages")
       .insert([{ ...base, role: "user", content: question }]).select().single();
     if (userErr || !userRow) return null;
@@ -2177,7 +2352,54 @@ export default function App() {
       // やることの保存に失敗しても会話は残す（照合できないだけで、助言自体は読める）
       actions = (actRows ?? []) as AdviceAction[];
     }
+    // 一覧を「最近動いた順」に出すため、発言のたびに更新時刻を進める
+    void supabase.from("advice_threads")
+      .update({ updated_at: new Date().toISOString() }).eq("id", thread.id);
+    setThreads(prev => prev.map(t => t.id === thread.id
+      ? { ...t, updated_at: new Date().toISOString() } : t));
     return { messages: [userRow as CropAdviceMessage, aiRow as CropAdviceMessage], actions };
+  };
+
+  /** 道具の結果をスレッドに残す。失敗しても結果の表示は壊さない（保存できないことだけ伝える） */
+  const appendToolMessage = async (threadId: string, kind: string, content: string) => {
+    const now = new Date().toISOString();
+    const local: CropAdviceMessage = {
+      id: `tool-${Date.now()}`, thread_id: threadId, crop_id: null,
+      role: "assistant", content, kind, created_at: now,
+    };
+    // 開いているスレッドなら即座に反映する
+    if (activeThreadId === threadId) setAdviseMsgs(prev => [...prev, local]);
+    setThreads(prev => prev.map(t => t.id === threadId ? { ...t, updated_at: now } : t));
+    if (DEMO || !currentOrganizationId) return;
+    const { error } = await supabase.from("crop_advice_messages").insert([{
+      organization_id: currentOrganizationId, thread_id: threadId, crop_id: null,
+      role: "assistant", content, kind, created_by: currentUser?.id ?? null,
+    }]);
+    if (error) { showToast("相談に残せませんでした", "err"); return; }
+    void supabase.from("advice_threads").update({ updated_at: now }).eq("id", threadId);
+  };
+
+  /** 日報だけが溜まるスレッド。使い始めるまで作らない（一覧を汚さないため） */
+  const ensureDailyReportThread = async (): Promise<string | null> => {
+    const existing = threads.find(t => t.system_key === "daily_report");
+    if (existing) return existing.id;
+    if (DEMO || !currentOrganizationId) {
+      const local: AdviceThread = {
+        id: `local-daily-${Date.now()}`, title: "日報", system_key: "daily_report",
+        crop_id: null, field: null,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      };
+      setThreads(prev => [local, ...prev]);
+      return local.id;
+    }
+    const { data } = await supabase.from("advice_threads").insert([{
+      organization_id: currentOrganizationId, title: "日報",
+      system_key: "daily_report", created_by: currentUser?.id ?? null,
+    }]).select().single();
+    if (!data) return null;
+    const th = data as AdviceThread;
+    setThreads(prev => [th, ...prev]);
+    return th.id;
   };
 
   const toggleDismissAction = async (a: AdviceAction) => {
@@ -2194,7 +2416,7 @@ export default function App() {
   // ─── 病害虫画像診断 ───────────────────────────────────────
   // 記録に添付済みの写真（Supabase公開URL）をそのままOpenAIのvisionに渡す。
   // 診断結果を ai_outputs に紐付けて残すため、URLだけでなく記録そのものを受け取る。
-  const diagnoseImage = async (report: Report) => {
+  const diagnoseImage = async (report: Report, fromEntry: AiEntryPoint = "report_detail") => {
     if (!report.image_url) return;
     setDiagLoading(true); setDiagError(""); setDiagResult(null);
     try {
@@ -2208,6 +2430,7 @@ export default function App() {
       if (res.ok && d.diagnosis) {
         setDiagResult(d.diagnosis as DiagnosisResult);
         void saveAiOutput("diagnosis", {
+          entryPoint: fromEntry,
           reportId: report.id, targetDate: report.date,
           field: report.field, cropId: report.crop_id,
           inputSummary: `写真:${report.image_url}${crop ? ` / 作物:${crop}` : ""}`,
@@ -2238,8 +2461,16 @@ export default function App() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.diagnosis) {
         setDiagPhotoResult(d.diagnosis as DiagnosisResult);
+        if (toolThreadId) {
+          const diag = d.diagnosis as DiagnosisResult;
+          const body = diag.inconclusive
+            ? "写真だけでは判断が難しいとのことです。"
+            : (diag.possibilities ?? []).map(pp => `${pp.name}（確信度 ${pp.confidence}%）: ${pp.reason}`).join("\n");
+          void appendToolMessage(toolThreadId, "diagnosis", body || "診断結果を取得しました。");
+        }
         // 記録を介さない単体診断のため report_id / field / crop_id は持たない
         void saveAiOutput("diagnosis", {
+          entryPoint: diagEntry,
           inputSummary: `写真:${imageUrl}`,
           outputJson: d.diagnosis, usage: d.usage, costUsd: d.costUsd,
         });
@@ -2365,6 +2596,8 @@ export default function App() {
   const weekHarvest        = weekReports.reduce((s,r) => s + harvestQty(r), 0);
   const weekHarvestSkipped = excludedHarvestCount(weekReports);
   const todayStr           = new Date().toISOString().slice(0,10);
+  // ふりかえりカードの「今日の記録◯件」。日報はこの件数からまとめる
+  const todayReportCount   = reports.filter(r => r.date === todayStr).length;
 
   // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）。cropId "all" で全作物合算。
   const monthlyHarvest = (cropId: number | "all", year: number) => {
@@ -2449,6 +2682,24 @@ export default function App() {
   };
 
 
+  /** スレッドの「やること」のうち未実施（pending + overdue）の件数。
+   *  ホームの作付け中カードと同じ matchActions を通すので、画面ごとに数が食い違わない */
+  const threadTodo = (t: AdviceThread): number => {
+    const acts = adviceCountsByThread[t.id] ?? [];
+    if (acts.length === 0) return 0;
+    // 作付けが紐づいていればその作物の記録、紐づいていなければ農場全体の記録と照合する
+    const target = t.crop_id != null ? reports.filter(r => r.crop_id === t.crop_id) : reports;
+    const m = countMatches(matchActions(acts, target));
+    return m.pending + m.overdue;
+  };
+
+  /** ナビの「相談」に出す合計。0 のときはバッジを出さない */
+  const adviceTodoTotal = useMemo(
+    () => threads.reduce((sum, t) => sum + threadTodo(t), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [threads, adviceCountsByThread, reports],
+  );
+
   const navBtn = (active: boolean): CSSProperties => ({
     flex:1, padding:"13px 0", border:"none", background:"none", cursor:"pointer",
     display:"flex", flexDirection:"column", alignItems:"center", gap:5,
@@ -2494,12 +2745,14 @@ export default function App() {
 
   // workerが管理タブを直接開いていたらホームへ
   if (!isAdmin && tab === "users") setTab("home");
+  if (!threadsReady && tab === "advice") setTab("home");
 
   const navItems = [
     { key:"home",      Icon:Home,      label:"ホーム" },
-    { key:"report",    Icon:PenLine,   label:"記録" },
+    { key:"report",    Icon:CalendarDays, label:"カレンダー" },
+    ...(threadsReady ? [{ key:"advice", Icon:MessageSquare, label:"相談", badge: adviceTodoTotal }] : []),
     { key:"analytics", Icon:BarChart2, label:"分析" },
-    { key:"manage",    Icon:Settings,  label:"管理" },
+    { key:"manage",    Icon:Settings,  label:"メニュー" },
   ];
 
   // ─── Auth ゲート ─────────────────────────────────────────
@@ -2570,10 +2823,17 @@ export default function App() {
       <div style={S.header}>
         <div style={S.headerTitle}>
           {tab === "home" ? "農作業レポート" :
-           tab === "report" ? "作業記録" :
+           tab === "report" ? "カレンダー" :
+           tab === "advice" ? "相談" :
            tab === "analytics" ? "分析" :
-           tab === "manage" ? "管理" : "農作業レポート"}
+           tab === "manage" ? "メニュー" : "農作業レポート"}
         </div>
+        {/* デモモードの目印。本番に紛れ込んだら一目で分かるように必ず出す */}
+        {DEMO && (
+          <span style={{ fontSize:10, fontWeight:700, color:C.warning, background:C.warningBg, borderRadius:999, padding:"3px 8px", marginLeft:8, flexShrink:0, whiteSpace:"nowrap" as const }}>
+            デモデータ
+          </span>
+        )}
         <div style={{ display:"flex", alignItems:"center", gap:8, flex:"0 0 auto", flexShrink:0 }}>
           {currentUser && (
             <button onClick={openNotifs} style={{ position:"relative", display:"flex", alignItems:"center", justifyContent:"center", width:36, height:36, background:C.well, borderRadius:999, border:"none", cursor:"pointer", color:C.textSub, flexShrink:0 }}>
@@ -2698,21 +2958,15 @@ export default function App() {
                   </div>
                 )}
                 <button
-                  onClick={openPestAdviceSheet}
+                  onClick={() => { setPestEntry("home"); openPestAdviceSheet(); }}
                   style={{ ...btn("soft", "md"), width:"100%", marginTop:12 }}
                 >
-                  <Wind size={14} strokeWidth={2} />次の散布はいつ？
+                  <Wind size={14} strokeWidth={2} />次の散布時期
                 </button>
-                {/* 記録を作らずに写真だけ調べたい経路。畑で異変に気づくのはホームを開く前後で、
-                    記録一覧のフィルタ行ではない。記録に紐づく写真の診断は一覧・詳細側にある */}
-                {canUseAiFeature("pestDiagnosis") && (
-                  <button
-                    onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }}
-                    style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
-                  >
-                    <FlaskConical size={13} strokeWidth={2} />写真で病害虫を調べる
-                  </button>
-                )}
+                {/* 単体の写真診断はここから外し、相談タブに寄せた（2026-09-09）。
+                    「入口が多すぎる」という実利用の指摘に対する集約で、写真に紐づく
+                    診断（記録一覧の写真直下・記録詳細）は写真を見ている瞬間にしか
+                    意味がないので残してある */}
               </div>
             );
           })()}
@@ -2722,7 +2976,7 @@ export default function App() {
               一覧としてそもそも自然に開かれる。そこに「やること」の未実施件数を出すことで、
               エージェントが「探しに行く機能」ではなく「放置できない通知」になる。
               件数は保存せず matchActions で毎回計算する（記録は後から増減するため）。 */}
-          {canUseAiFeature("nextActionAdvice") && crops.length > 0 && (
+          {threadsReady && canUseAiFeature("nextActionAdvice") && crops.length > 0 && (
             <div style={{ background:C.card, borderRadius:RADIUS.card, boxShadow:SHADOW.card, padding:"14px 16px", marginBottom:12 }}>
               <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:4, display:"flex", alignItems:"center", gap:5 }}>
                 <Sprout size={12} strokeWidth={2} />作付け中 — 相談できます
@@ -2737,7 +2991,7 @@ export default function App() {
                 return (
                   <button
                     key={c.id}
-                    onClick={() => openAdviseSheet(c.id)}
+                    onClick={() => { void openThreadForCrop(c.id); }}
                     style={{
                       display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const,
                       background:"none", border:"none", cursor:"pointer",
@@ -2867,6 +3121,37 @@ export default function App() {
             );
           })()}
 
+          {/* ── ふりかえり ────────────────────────────────────────
+              日報・記録に聞く・帳票は「記録しない日に用がある機能」なのに、
+              記録タブ（カレンダー/記録一覧＝どちらも見るだけの場所）の奥にあった。
+              ホームに出すが、カードを3枚増やすとホームが second 記録一覧になるので
+              1枚に3行で置く。開く先は既存のシートで、行を足しているだけ。 */}
+          <div style={{ ...S.card, marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:4, display:"flex", alignItems:"center", gap:5 }}>
+              <ClipboardList size={12} strokeWidth={2} />ふりかえり
+            </div>
+            <button
+              onClick={() => { setGenEntry("home"); setGenDate(todayStr); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
+              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const, background:"none", border:"none", cursor:"pointer", padding:"10px 0" }}
+            >
+              <span style={{ flex:1, minWidth:0 }}>
+                <span style={{ fontSize:13.5, fontWeight:700, color:C.text }}>今日の記録 {todayReportCount}件</span>
+                <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:1 }}>日報にまとめる</span>
+              </span>
+              <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+            </button>
+            <button
+              onClick={() => setShowExportSheet(true)}
+              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const, background:"none", border:"none", borderTop:`1px solid ${C.hairline}`, cursor:"pointer", padding:"10px 0 0" }}
+            >
+              <span style={{ flex:1, minWidth:0 }}>
+                <span style={{ fontSize:13.5, fontWeight:700, color:C.text }}>帳票出力</span>
+                <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:1 }}>期間を選んで書き出す</span>
+              </span>
+              <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+            </button>
+          </div>
+
           {/* 記録一覧への導線 */}
           <button onClick={() => { setTab("report"); setReportView("list"); }} style={{ ...S.card, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const, width:"100%" }}>
             <ClipboardList size={16} color={C.textMuted} strokeWidth={1.8} style={{ flexShrink:0 }} />
@@ -2909,6 +3194,100 @@ export default function App() {
         </div>
       </BottomSheet>
 
+      {/* ───── ADVICE（相談スレッド）─────
+          AI機能が6つに分かれ、うち5つは使ったあと何も残らなかった（ai_outputs は
+          監査ログで画面から読み返せない）。行き先が6つバラバラで5つが行き止まり、
+          という状態が「入口が多すぎて使いにくい」の正体。
+          主題ごとの箱を1か所に集め、やりとりをそこに溜める。
+          経緯: docs/decisions/20260909-single-ai-entry-threads.md */}
+      {tab === "advice" && (
+        <div style={S.page}>
+          <button
+            onClick={() => setShowNewThread(true)}
+            style={{ ...btn("primary", "lg"), width:"100%", marginBottom:12 }}
+          >
+            <Plus size={17} strokeWidth={2.5} />新しい相談
+          </button>
+
+          {threads.length === 0 ? (
+            <div style={{ ...S.card, textAlign:"center" as const, padding:"28px 16px" }}>
+              <MessageSquare size={26} strokeWidth={1.5} color={C.textMuted} style={{ display:"block", margin:"0 auto 10px" }} />
+              <div style={{ fontSize:13.5, fontWeight:700, color:C.text, marginBottom:4 }}>相談はまだありません</div>
+              <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.7 }}>
+                聞きたいことごとに相談を立てると、やりとりがそこに溜まります。<br />
+                作付けを選べば、その記録と農薬の登録内容もふまえて答えます。
+              </div>
+            </div>
+          ) : (
+            <div style={S.card}>
+              {threads.map((t, i) => {
+                const todo = threadTodo(t);
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => { void openThread(t.id); }}
+                    style={{
+                      display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const,
+                      background:"none", border:"none", cursor:"pointer", padding:"12px 0",
+                      borderTop: i === 0 ? "none" : `1px solid ${C.hairline}`,
+                    }}
+                  >
+                    {t.crop_id != null && (
+                      <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(t.crop_id), flexShrink:0 }} />
+                    )}
+                    <span style={{ flex:1, minWidth:0 }}>
+                      <span style={{ display:"block", fontSize:14, fontWeight:700, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+                        {t.title}
+                      </span>
+                      <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:2 }}>
+                        {t.crop_id != null ? `${cropName(t.crop_id)} · ` : ""}{t.updated_at.slice(0, 10)}
+                      </span>
+                    </span>
+                    {todo > 0 && (
+                      <span style={{ fontSize:11, fontWeight:700, borderRadius:999, padding:"3px 9px", background:C.warningBg, color:C.warning, whiteSpace:"nowrap" as const }}>
+                        やること{todo}
+                      </span>
+                    )}
+                    <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 新しい相談 */}
+      <BottomSheet open={showNewThread} onClose={() => setShowNewThread(false)} height="auto">
+        <div style={{ padding:"6px 16px 20px" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <span style={{ fontWeight:700, fontSize:17, color:C.text }}>新しい相談</span>
+            <button onClick={() => setShowNewThread(false)} style={S.circleBtn}><X size={16} strokeWidth={2} /></button>
+          </div>
+          <div style={S.lbl}>何について聞きますか</div>
+          <input
+            style={S.input} placeholder="例: トマトの病害虫 / 今年の防除計画"
+            value={newThreadTitle} onChange={e => setNewThreadTitle(e.target.value)} maxLength={80}
+          />
+          <div style={S.lbl}>作付け（任意）</div>
+          <select style={S.select} value={newThreadCropId} onChange={e => setNewThreadCropId(Number(e.target.value))}>
+            <option value={0}>選ばない（農場全体の相談）</option>
+            {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <div style={{ fontSize:11.5, color:C.textMuted, lineHeight:1.7, marginBottom:14 }}>
+            作付けを選ぶと、その記録と農薬の登録内容もふまえて答えます。選ばない場合、
+            作物ごとに違う内容（生育段階・農薬の使用回数）は断定しません。
+          </div>
+          <button
+            onClick={() => { void createThread(newThreadTitle, newThreadCropId || null); }}
+            disabled={!newThreadTitle.trim()}
+            style={{ ...btn("primary", "lg"), width:"100%", opacity: newThreadTitle.trim() ? 1 : 0.5 }}
+          >
+            相談をはじめる
+          </button>
+        </div>
+      </BottomSheet>
+
       {/* ───── REPORT ───── */}
       {tab === "report" && (
         <div style={S.page}>
@@ -2940,7 +3319,7 @@ export default function App() {
             onEditComment={editComment}
             // 日報は「その日の記録が目の前にある場所」に置く。日付をタップして
             // その日の記録が並んだ直後が、まとめたくなる瞬間
-            onSummarizeDay={(date) => { setGenDate(date); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
+            onSummarizeDay={(date) => { setGenEntry("calendar"); setGenDate(date); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
           />
 
           {/* ── 今日の予定 ── */}
@@ -2950,8 +3329,11 @@ export default function App() {
               <div style={{ marginTop:16 }}>
                 <div style={S.sec}>今日の予定</div>
                 {todayScheds.length === 0 ? (
-                  <div style={{ padding:"14px 16px", background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, fontSize:13, color:C.textMuted }}>
-                    今日の予定はありません
+                  <div style={{ padding:"14px 16px", background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card }}>
+                    <div style={{ fontSize:13, color:C.textMuted, marginBottom:10 }}>今日の予定はありません</div>
+                    <button onClick={() => { setQuickPicker(true); setShowQuickReport(true); }} style={btn("secondary", "sm")}>
+                      <Plus size={13} strokeWidth={2.5} />今日の作業を記録
+                    </button>
                   </div>
                 ) : todayScheds.map(s => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
@@ -3064,8 +3446,8 @@ export default function App() {
                   {reportFilterActive && (
                     <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={{ ...btn("tertiary", "sm"), flexShrink:0 }}>条件をクリア</button>
                   )}
-                  <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
-                    <Sparkles size={13} strokeWidth={2} />日報にまとめる
+                  <button onClick={() => { setGenEntry("record_list"); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
+                    <FileText size={13} strokeWidth={2} />日報にまとめる
                   </button>
                   <button onClick={() => setShowExportSheet(true)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Download size={13} strokeWidth={2} />帳票出力
@@ -3089,16 +3471,24 @@ export default function App() {
                   <MessageSquare size={15} strokeWidth={2} color={C.ink} />
                   <span style={{ fontSize:13, color:C.text, lineHeight:1.5, minWidth:0 }}>
                     {filteredReports.length === 0
-                      ? <>見つからないときは<b>記録に聞いてみる</b>（言い回しが違っても探せます）</>
-                      : <>「{reportQuery.trim()}」について<b>記録に聞いてみる</b></>}
+                      ? <>見つからないときは<b>記録に聞く</b>（言い回しが違っても探せます）</>
+                      : <>「{reportQuery.trim()}」について<b>記録に聞く</b></>}
                   </span>
                 </button>
               )}
 
               {/* 結果 */}
               {filteredReports.length === 0 ? (
-                <div style={{ padding:"32px 16px", textAlign:"center" as const, color:C.textMuted, fontSize:13 }}>
-                  {reportFilterActive ? "条件に一致する記録がありません" : "まだ作業報告がありません"}
+                <div style={{ padding:"28px 16px", textAlign:"center" as const }}>
+                  <div style={{ color:C.textMuted, fontSize:13, marginBottom: reportFilterActive ? 0 : 12 }}>
+                    {reportFilterActive ? "条件に一致する記録がありません" : "まだ作業報告がありません"}
+                  </div>
+                  {/* 新規利用者が最初に見るのは空の画面。次に押すものを必ず置く */}
+                  {!reportFilterActive && (
+                    <button onClick={() => { setQuickPicker(true); setShowQuickReport(true); }} style={btn("soft", "md")}>
+                      <Plus size={15} strokeWidth={2.5} />最初の記録をつける
+                    </button>
+                  )}
                 </div>
               ) : filteredReports.map(r => {
                 const wc = r.work_type ? workTypeColor(r.work_type) : null;
@@ -3147,10 +3537,10 @@ export default function App() {
                           詳細シートにも同じ導線があるが、一覧で写真を見て気づく経路のほうが多い */}
                       {canUseAiFeature("pestDiagnosis") && (
                         <button
-                          onClick={() => { setSelectedReport(r); diagnoseImage(r); }}
+                          onClick={() => { setSelectedReport(r); void diagnoseImage(r, "report_photo"); }}
                           style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
                         >
-                          <FlaskConical size={12} strokeWidth={2} />この写真で病害虫を調べる
+                          <Bug size={12} strokeWidth={2} />この写真で病害虫を調べる
                         </button>
                       )}
                     </>
@@ -3804,11 +4194,11 @@ export default function App() {
                       </div>
                     )}
                     <button
-                      onClick={() => diagnoseImage(r)}
+                      onClick={() => { void diagnoseImage(r, "report_detail"); }}
                       disabled={diagLoading}
                       style={{ ...btn("tertiary", "sm"), width:"100%", opacity:diagLoading ? 0.6 : 1 }}
                     >
-                      <FlaskConical size={13} strokeWidth={2} />{diagLoading ? "診断中…" : diagResult ? "もう一度診断" : "写真で病害虫を絞り込む"}
+                      <Bug size={13} strokeWidth={2} />{diagLoading ? "診断中…" : diagResult ? "もう一度診断" : "写真で病害虫を絞り込む"}
                     </button>
                   </div>
                 )}
@@ -4169,7 +4559,10 @@ export default function App() {
               {cropReports.length === 0 ? (
                 <div style={{ padding:"18px 16px", background:C.card, borderRadius:16, boxShadow:SHADOW.card, marginBottom:8 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ報告がありません</div>
-                  <div style={{ fontSize:12, color:C.textMuted }}>報告タブから登録できます</div>
+                  <div style={{ fontSize:12, color:C.textMuted, marginBottom:10 }}>この作付けの作業を記録すると、ここに並びます</div>
+                  <button onClick={() => { setQuickPicker(true); setShowQuickReport(true); }} style={btn("soft", "sm")}>
+                    <Plus size={13} strokeWidth={2.5} />記録をつける
+                  </button>
                 </div>
               ) : cropReports.map(r => {
                 const wc = workTypeColor(r.work_type);
@@ -4248,7 +4641,7 @@ export default function App() {
       )}
       {/* 記録FAB（全タブ共通の主導線） */}
       <button
-        onClick={() => setShowQuickReport(true)}
+        onClick={() => { setQuickPicker(true); setShowQuickReport(true); }}
         aria-label="作業を記録"
         style={{ position:"fixed", right:16, bottom:"calc(86px + env(safe-area-inset-bottom))", zIndex:90, display:"flex", alignItems:"center", gap:7, background:C.ink, color:"#fff", border:"none", borderRadius:999, padding:"14px 22px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 6px 18px rgba(46,125,50,0.32)" }}
       >
@@ -4259,14 +4652,27 @@ export default function App() {
       <nav style={S.nav}>
         {navItems.map(n => (
           <button key={n.key} style={navBtn(tab === n.key)} onClick={() => setTab(n.key)}>
-            <n.Icon size={24} strokeWidth={tab === n.key ? 2.2 : 1.8} />
+            {/* 相談タブは「行かないと何も起きない場所」になりやすい。放置できない
+                やることが残っていることを、開く前に見せて行く理由にする */}
+            <span style={{ position:"relative", display:"flex" }}>
+              <n.Icon size={24} strokeWidth={tab === n.key ? 2.2 : 1.8} />
+              {"badge" in n && (n.badge ?? 0) > 0 && (
+                <span style={{
+                  position:"absolute", top:-4, right:-8, minWidth:16, height:16, borderRadius:999,
+                  background:C.danger, color:"#fff", fontSize:10, fontWeight:700,
+                  display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", lineHeight:1,
+                }}>
+                  {(n.badge ?? 0) > 9 ? "9+" : n.badge}
+                </span>
+              )}
+            </span>
             {n.label}
           </button>
         ))}
       </nav>
 
       {/* ───── クイック作業記録モーダル ───── */}
-      <BottomSheet open={showQuickReport} onClose={() => { setShowQuickReport(false); setQuickExpanded(false); }}>
+      <BottomSheet open={showQuickReport} onClose={() => { if (noteListening) toggleNoteVoice(); setShowQuickReport(false); setQuickExpanded(false); }}>
             {/* ヘッダー */}
             <div style={{ padding:"6px 16px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <span style={{ fontWeight:700, fontSize:17, color:C.text }}>作業を記録</span>
@@ -4276,6 +4682,93 @@ export default function App() {
             </div>
 
             <div style={{ padding:"0 16px" }}>
+              {/* ── 入力手段の3択 ────────────────────────────────────
+                  音声メモ構造化は「入力摩擦を減らす最も直接的な打ち手」（docs/spec-ai-features.md）
+                  なのに、以前は「詳細を入力」を開いた先のメモ欄の下にあり、しかもAI振り分けボタンは
+                  メモが空だと画面に存在しなかった＝押す前に、あることが分からなかった。
+                  あすけんが「＋」の直下に「話して記録」を置いているのと同じ形にする。
+                  既存のメモ欄の音声ボタンは残してある（入口を増やしただけ）。 */}
+              {quickPicker && (
+                <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
+                  {hasSpeech && canUseAiFeature("voiceStructuring") && (
+                    <button
+                      onClick={() => { if (!noteListening) toggleNoteVoice(); }}
+                      style={{
+                        display:"flex", alignItems:"center", gap:12, width:"100%", textAlign:"left" as const,
+                        border:"none", cursor:"pointer", borderRadius:16, padding:"13px 14px",
+                        background: noteListening ? C.dangerBg : C.inkSoft,
+                      }}
+                    >
+                      <span style={{ width:34, height:34, borderRadius:999, background:C.card, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:SHADOW.pill }}>
+                        {noteListening
+                          ? <MicOff size={16} strokeWidth={2} color={C.danger} />
+                          : <Mic size={16} strokeWidth={2} color={C.ink} />}
+                      </span>
+                      <span style={{ flex:1, minWidth:0 }}>
+                        <span style={{ display:"block", fontSize:14, fontWeight:700, color: noteListening ? C.danger : C.ink }}>
+                          {noteListening ? "聞いています… タップで止める" : "話して記録"}
+                        </span>
+                        <span style={{ display:"block", fontSize:11.5, color:C.textSub, marginTop:2, lineHeight:1.45 }}>
+                          畑で喋るだけ。あとで項目に振り分けます
+                        </span>
+                      </span>
+                      {!noteListening && <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />}
+                    </button>
+                  )}
+
+                  {/* 聞き取った言葉は、項目に振り分ける前に本人の言葉のまま見せる */}
+                  {rForm.note.trim() && (noteListening || quickPicker) && (
+                    <div style={{ background:C.well, borderRadius:14, padding:"11px 13px", fontSize:13, lineHeight:1.65, color:C.text }}>
+                      {rForm.note}
+                    </div>
+                  )}
+                  {canUseAiFeature("voiceStructuring") && rForm.note.trim() && (
+                    <button
+                      onClick={() => { if (noteListening) toggleNoteVoice(); void structureVoiceNote("quick_picker"); }}
+                      disabled={aiStructuring}
+                      style={{ ...btn("primary", "lg"), width:"100%", opacity: aiStructuring ? 0.6 : 1 }}
+                    >
+                      <Check size={16} strokeWidth={2} />{aiStructuring ? "整理中…" : "止めて、項目を埋める"}
+                    </button>
+                  )}
+
+                  {canUseAiFeature("pestDiagnosis") && (
+                    <button
+                      onClick={() => {
+                        setShowQuickReport(false);
+                        setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError("");
+                        setDiagEntry("quick_picker");
+                        setShowDiagPhotoSheet(true);
+                      }}
+                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", textAlign:"left" as const, border:"none", cursor:"pointer", borderRadius:16, padding:"13px 14px", background:C.well }}
+                    >
+                      <span style={{ width:34, height:34, borderRadius:999, background:C.card, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:SHADOW.pill }}>
+                        <Bug size={16} strokeWidth={2} color={C.textSub} />
+                      </span>
+                      <span style={{ flex:1, minWidth:0 }}>
+                        <span style={{ display:"block", fontSize:14, fontWeight:700, color:C.text }}>写真で調べる</span>
+                        <span style={{ display:"block", fontSize:11.5, color:C.textSub, marginTop:2, lineHeight:1.45 }}>病害虫の見当をつける</span>
+                      </span>
+                      <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => { if (noteListening) toggleNoteVoice(); setQuickPicker(false); }}
+                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", textAlign:"left" as const, border:"none", cursor:"pointer", borderRadius:16, padding:"13px 14px", background:C.well }}
+                  >
+                    <span style={{ width:34, height:34, borderRadius:999, background:C.card, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:SHADOW.pill }}>
+                      <Pencil size={16} strokeWidth={2} color={C.textSub} />
+                    </span>
+                    <span style={{ flex:1, minWidth:0 }}>
+                      <span style={{ display:"block", fontSize:14, fontWeight:700, color:C.text }}>手で入力</span>
+                      <span style={{ display:"block", fontSize:11.5, color:C.textSub, marginTop:2, lineHeight:1.45 }}>いつものフォーム</span>
+                    </span>
+                    <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+                  </button>
+                </div>
+              )}
+
               {/* 天気（白row） */}
               <div style={S.wellBox}>
                 <div style={S.wrow}>
@@ -4539,18 +5032,19 @@ export default function App() {
                   )}
                   {canUseAiFeature("voiceStructuring") && rForm.note.trim() && (
                     <button
-                      onClick={structureVoiceNote}
+                      onClick={() => { void structureVoiceNote("note_field"); }}
                       disabled={aiStructuring}
                       style={{ ...btn("soft", "md"), width:"100%", marginBottom:12, opacity: aiStructuring ? 0.6 : 1, cursor: aiStructuring ? "default" : "pointer" }}
                     >
-                      <Sparkles size={16} strokeWidth={2} />
-                      {aiStructuring ? "AIで整理中…" : "AIでフォームに自動入力"}
+                      <Mic size={16} strokeWidth={2} />
+                      {aiStructuring ? "整理中…" : "メモから項目を埋める"}
                     </button>
                   )}
                 </>
               )}
 
-              {/* 保存ボタン */}
+              {/* 記録ボタン。「保存する」は汎用すぎるので、このアプリの動詞に合わせる。
+                  連続入力（畑を回りながら複数件）を弥生の「保存して次へ」型で受ける */}
               <button
                 style={{ ...S.btn, opacity: imgUploading ? 0.7 : 1, marginTop: 4 }}
                 onClick={async () => { await addReport(); setShowQuickReport(false); setQuickExpanded(false); }}
@@ -4558,7 +5052,14 @@ export default function App() {
               >
                 {imgUploading
                   ? <><RefreshCw size={16} strokeWidth={2} />アップロード中...</>
-                  : <><Check size={17} strokeWidth={2.4} />保存する</>}
+                  : <><Check size={17} strokeWidth={2.4} />記録する</>}
+              </button>
+              <button
+                style={{ ...btn("tertiary", "md"), width:"100%", marginTop:6, opacity: imgUploading ? 0.5 : 1 }}
+                onClick={async () => { await addReport(true); }}
+                disabled={imgUploading}
+              >
+                <Plus size={15} strokeWidth={2.5} />記録して続けて入力
               </button>
             </div>
       </BottomSheet>
@@ -4745,10 +5246,10 @@ export default function App() {
       </BottomSheet>
 
       {/* AI日報生成（PoC）*/}
-      <BottomSheet open={showReportGenSheet} onClose={() => setShowReportGenSheet(false)}>
+      <BottomSheet open={showReportGenSheet} onClose={() => { setShowReportGenSheet(false); setToolThreadId(null); }}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <Sparkles size={17} strokeWidth={2} color={C.ink} />その日の作業を日報にまとめる
+            <FileText size={17} strokeWidth={2} color={C.ink} />その日の作業を日報にまとめる
           </div>
 
           <div style={S.wellBox}>
@@ -4802,16 +5303,16 @@ export default function App() {
           )}
 
           <button onClick={generateDailyReport} disabled={genLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:genLoading ? 0.6 : 1 }}>
-            <Sparkles size={15} strokeWidth={2} />{genLoading ? "生成中…" : genResult ? "もう一度生成" : "日報を生成"}
+            <FileText size={15} strokeWidth={2} />{genLoading ? "まとめ中…" : genResult ? "もう一度まとめる" : "日報にまとめる"}
           </button>
         </div>
       </BottomSheet>
 
       {/* 天気×防除タイミング助言 */}
-      <BottomSheet open={showPestAdviceSheet} onClose={() => setShowPestAdviceSheet(false)}>
+      <BottomSheet open={showPestAdviceSheet} onClose={() => { setShowPestAdviceSheet(false); setToolThreadId(null); }}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <Wind size={17} strokeWidth={2} color={C.ink} />次の散布はいつ？
+            <Wind size={17} strokeWidth={2} color={C.ink} />次の散布時期
           </div>
 
           {/* 答えより先に材料を出さない。
@@ -4919,7 +5420,7 @@ export default function App() {
               </div>
             ) : (
               <button onClick={generatePestControlAdvice} disabled={pestAdviceLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:pestAdviceLoading ? 0.6 : 1 }}>
-                <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : "助言を確認"}
+                <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : "散布時期を調べる"}
               </button>
             );
           })()}
@@ -4927,11 +5428,11 @@ export default function App() {
       </BottomSheet>
 
       {/* 作付けの相談（農業エージェント）*/}
-      <BottomSheet open={adviseCropId !== null} onClose={() => setAdviseCropId(null)}>
+      <BottomSheet open={activeThreadId !== null} onClose={() => { setActiveThreadId(null); setAdviseCropId(null); }}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4, display:"flex", alignItems:"center", gap:6 }}>
-            <Sprout size={17} strokeWidth={2} color={C.ink} />
-            {adviseCropId != null ? cropName(adviseCropId) : ""}の相談
+            <MessageSquare size={17} strokeWidth={2} color={C.ink} />
+            {threads.find(t => t.id === activeThreadId)?.title ?? "相談"}
           </div>
           {/* 前置きを置かない。何をもとに答えたか・どこまでが目安かは、
               回答ごとに limits として下に付く（同じことを先に言うと二重になる）。
@@ -4983,7 +5484,8 @@ export default function App() {
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
             {adviseMsgs.map(m => (
-              <div key={m.id} style={{ display:"flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+              <div key={m.id} style={{ display:"flex", flexDirection:"column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
+                {m.kind && <ToolTag kind={m.kind} />}
                 <div style={{
                   maxWidth:"88%", borderRadius:14, padding:"9px 12px", fontSize:13, lineHeight:1.7,
                   background: m.role === "user" ? C.ink : C.well,
@@ -5031,12 +5533,57 @@ export default function App() {
             </div>
           )}
 
+          {/* ── 道具 ────────────────────────────────────────────
+              「入口が多すぎる」の解として、機能を別々の場所に置くのをやめ、
+              話している場所の手元に道具として並べた。押すと既存のシートが開き、
+              結果はこのスレッドに1発言として残る（＝あとで読み返せる）。
+              シート本体とAPIは変えていない。 */}
+          {/* 横スクロールにすると画面外の道具が存在しないのと同じになる
+              （2026-08-23 のADRが「埋没」として名指しした形）。折り返す */}
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" as const, marginBottom:10 }}>
+            {canUseAiFeature("pestDiagnosis") && (
+              <button
+                onClick={() => {
+                  setToolThreadId(activeThreadId);
+                  setDiagEntry("thread_tool");
+                  setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError("");
+                  setShowDiagPhotoSheet(true);
+                }}
+                style={{ ...btn("secondary", "sm"), flexShrink:0 }}
+              >
+                <Bug size={13} strokeWidth={2} />写真で調べる
+              </button>
+            )}
+            {canUseAiFeature("recordSearchChat") && (
+              <button
+                onClick={() => { setToolThreadId(activeThreadId); setSearchChatError(""); setShowSearchChatSheet(true); }}
+                style={{ ...btn("secondary", "sm"), flexShrink:0 }}
+              >
+                <MessageSquare size={13} strokeWidth={2} />記録に聞く
+              </button>
+            )}
+            {canUseAiFeature("pestControlAdvice") && (
+              <button
+                onClick={() => { setToolThreadId(activeThreadId); setPestEntry("thread_tool"); openPestAdviceSheet(); }}
+                style={{ ...btn("secondary", "sm"), flexShrink:0 }}
+              >
+                <Wind size={13} strokeWidth={2} />散布時期
+              </button>
+            )}
+            <button
+              onClick={() => { setToolThreadId(activeThreadId); setGenEntry("thread_tool"); setGenDate(todayStr); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
+              style={{ ...btn("secondary", "sm"), flexShrink:0 }}
+            >
+              <FileText size={13} strokeWidth={2} />日報にまとめる
+            </button>
+          </div>
+
           <div style={{ display:"flex", gap:8 }}>
             <input
               value={adviseInput}
               onChange={e => setAdviseInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAdvise(); } }}
-              placeholder="この作付けについて聞く"
+              placeholder="聞きたいことを書く"
               style={{ flex:1, minWidth:0, fontSize:16, padding:"11px 14px", borderRadius:999, border:`1px solid ${C.hairline}`, outline:"none", background:C.card, color:C.text }}
             />
             <button onClick={sendAdvise} disabled={adviseLoading || !adviseInput.trim()} style={{ ...btn("primary", "md"), opacity: adviseLoading || !adviseInput.trim() ? 0.5 : 1 }}>
@@ -5047,14 +5594,15 @@ export default function App() {
       </BottomSheet>
 
       {/* 記録検索チャット */}
-      <BottomSheet open={showSearchChatSheet} onClose={() => setShowSearchChatSheet(false)}>
+      <BottomSheet open={showSearchChatSheet} onClose={() => { setShowSearchChatSheet(false); setToolThreadId(null); }}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
             <MessageSquare size={17} strokeWidth={2} color={C.ink} />記録に聞く
           </div>
 
           <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
-            {reportFilterActive ? "現在の絞り込み条件に一致する記録" : "直近180日の記録"}について、自然な言葉で質問できます
+            {reportFilterActive ? "現在の絞り込み条件に一致する記録" : "直近180日の記録"}に<b style={{ color:C.textSub }}>書かれていることだけ</b>を答えます。
+            書かれていないことは「記録からは分かりません」と返します（作物の育て方や病気の見当は、相談のほうで聞けます）
           </div>
 
           {searchChatMessages.length > 0 && (
@@ -5102,14 +5650,14 @@ export default function App() {
       </BottomSheet>
 
       {/* AI画像診断（単体） */}
-      <BottomSheet open={showDiagPhotoSheet} onClose={() => setShowDiagPhotoSheet(false)}>
+      <BottomSheet open={showDiagPhotoSheet} onClose={() => { setShowDiagPhotoSheet(false); setToolThreadId(null); }}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <FlaskConical size={17} strokeWidth={2} color={C.ink} />写真で病害虫を絞り込む
+            <Bug size={17} strokeWidth={2} color={C.ink} />写真で病害虫を絞り込む
           </div>
 
           <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
-            写真を撮影・選択すると、病害虫の可能性をAIが診断します
+            写真から病害虫の可能性を絞り込みます。確定診断ではありません。
           </div>
 
           <input type="file" id="img-input-diag" accept="image/*" style={{ display:"none" }}
@@ -5153,7 +5701,7 @@ export default function App() {
             disabled={!diagPhotoFile || diagPhotoLoading}
             style={{ ...btn("primary", "md"), width:"100%", opacity:(!diagPhotoFile || diagPhotoLoading) ? 0.6 : 1 }}
           >
-            {diagPhotoLoading ? <RefreshCw size={15} strokeWidth={2} /> : <FlaskConical size={15} strokeWidth={2} />}
+            {diagPhotoLoading ? <RefreshCw size={15} strokeWidth={2} /> : <Bug size={15} strokeWidth={2} />}
             {diagPhotoLoading ? "診断中…" : diagPhotoResult ? "もう一度診断" : "診断する"}
           </button>
         </div>
@@ -5179,7 +5727,7 @@ export default function App() {
           display:"flex", alignItems:"center", gap:8,
         }}>
           {toast.type === "ok"
-            ? <Wind size={15} strokeWidth={2} style={{ flexShrink:0 }} />
+            ? <Check size={15} strokeWidth={2} style={{ flexShrink:0 }} />
             : <AlertCircle size={15} strokeWidth={2} style={{ flexShrink:0 }} />}
           <span style={{ flex:1 }}>{toast.msg}</span>
           <button onClick={() => setToast(null)} style={{ background:"rgba(255,255,255,0.22)", border:"none", borderRadius:8, padding:"3px 7px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", flexShrink:0, marginLeft:4 }}>
