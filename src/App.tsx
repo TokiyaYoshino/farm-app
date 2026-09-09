@@ -890,7 +890,7 @@ export default function App() {
     return supabase.storage.from("report-images").getPublicUrl(path).data.publicUrl;
   };
 
-  const addReport = async () => {
+  const addReport = async (keepOpen = false) => {
     if (!rForm.date || !rForm.work_type || !currentUser) return;
     setImgUploading(true);
     try {
@@ -940,7 +940,13 @@ export default function App() {
       } else {
         showToast("作業報告を登録しました");
       }
-      setTab("home");
+      if (keepOpen) {
+        // 畑を回りながら続けて入れる場面。作物・圃場・日付は据え置き、
+        // 1件ごとに変わるものだけ空にする
+        setRForm(f => ({ ...f, note:"", quantity:"", quantity_value:"", work_time:"", work_start:"", work_end:"" }));
+      } else {
+        setTab("home");
+      }
 
       // LINE グループに通知（失敗しても報告登録には影響させない）
       const r = data?.[0] as Report | undefined;
@@ -2708,7 +2714,7 @@ export default function App() {
     { key:"report",    Icon:CalendarDays, label:"カレンダー" },
     { key:"advice",    Icon:MessageSquare, label:"相談", badge: adviceTodoTotal },
     { key:"analytics", Icon:BarChart2, label:"分析" },
-    { key:"manage",    Icon:Settings,  label:"管理" },
+    { key:"manage",    Icon:Settings,  label:"メニュー" },
   ];
 
   // ─── Auth ゲート ─────────────────────────────────────────
@@ -2782,7 +2788,7 @@ export default function App() {
            tab === "report" ? "カレンダー" :
            tab === "advice" ? "相談" :
            tab === "analytics" ? "分析" :
-           tab === "manage" ? "管理" : "農作業レポート"}
+           tab === "manage" ? "メニュー" : "農作業レポート"}
         </div>
         {/* デモモードの目印。本番に紛れ込んだら一目で分かるように必ず出す */}
         {DEMO && (
@@ -3285,8 +3291,11 @@ export default function App() {
               <div style={{ marginTop:16 }}>
                 <div style={S.sec}>今日の予定</div>
                 {todayScheds.length === 0 ? (
-                  <div style={{ padding:"14px 16px", background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card, fontSize:13, color:C.textMuted }}>
-                    今日の予定はありません
+                  <div style={{ padding:"14px 16px", background:C.card, boxShadow:SHADOW.card, borderRadius:RADIUS.card }}>
+                    <div style={{ fontSize:13, color:C.textMuted, marginBottom:10 }}>今日の予定はありません</div>
+                    <button onClick={() => { setQuickPicker(true); setShowQuickReport(true); }} style={btn("secondary", "sm")}>
+                      <Plus size={13} strokeWidth={2.5} />今日の作業を記録
+                    </button>
                   </div>
                 ) : todayScheds.map(s => {
                   const assignedUser = users.find(u => u.id === (s.assigned_user_id ?? s.user_id));
@@ -3432,8 +3441,16 @@ export default function App() {
 
               {/* 結果 */}
               {filteredReports.length === 0 ? (
-                <div style={{ padding:"32px 16px", textAlign:"center" as const, color:C.textMuted, fontSize:13 }}>
-                  {reportFilterActive ? "条件に一致する記録がありません" : "まだ作業報告がありません"}
+                <div style={{ padding:"28px 16px", textAlign:"center" as const }}>
+                  <div style={{ color:C.textMuted, fontSize:13, marginBottom: reportFilterActive ? 0 : 12 }}>
+                    {reportFilterActive ? "条件に一致する記録がありません" : "まだ作業報告がありません"}
+                  </div>
+                  {/* 新規利用者が最初に見るのは空の画面。次に押すものを必ず置く */}
+                  {!reportFilterActive && (
+                    <button onClick={() => { setQuickPicker(true); setShowQuickReport(true); }} style={btn("soft", "md")}>
+                      <Plus size={15} strokeWidth={2.5} />最初の記録をつける
+                    </button>
+                  )}
                 </div>
               ) : filteredReports.map(r => {
                 const wc = r.work_type ? workTypeColor(r.work_type) : null;
@@ -4504,7 +4521,10 @@ export default function App() {
               {cropReports.length === 0 ? (
                 <div style={{ padding:"18px 16px", background:C.card, borderRadius:16, boxShadow:SHADOW.card, marginBottom:8 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>まだ報告がありません</div>
-                  <div style={{ fontSize:12, color:C.textMuted }}>報告タブから登録できます</div>
+                  <div style={{ fontSize:12, color:C.textMuted, marginBottom:10 }}>この作付けの作業を記録すると、ここに並びます</div>
+                  <button onClick={() => { setQuickPicker(true); setShowQuickReport(true); }} style={btn("soft", "sm")}>
+                    <Plus size={13} strokeWidth={2.5} />記録をつける
+                  </button>
                 </div>
               ) : cropReports.map(r => {
                 const wc = workTypeColor(r.work_type);
@@ -4984,7 +5004,8 @@ export default function App() {
                 </>
               )}
 
-              {/* 保存ボタン */}
+              {/* 記録ボタン。「保存する」は汎用すぎるので、このアプリの動詞に合わせる。
+                  連続入力（畑を回りながら複数件）を弥生の「保存して次へ」型で受ける */}
               <button
                 style={{ ...S.btn, opacity: imgUploading ? 0.7 : 1, marginTop: 4 }}
                 onClick={async () => { await addReport(); setShowQuickReport(false); setQuickExpanded(false); }}
@@ -4992,7 +5013,14 @@ export default function App() {
               >
                 {imgUploading
                   ? <><RefreshCw size={16} strokeWidth={2} />アップロード中...</>
-                  : <><Check size={17} strokeWidth={2.4} />保存する</>}
+                  : <><Check size={17} strokeWidth={2.4} />記録する</>}
+              </button>
+              <button
+                style={{ ...btn("tertiary", "md"), width:"100%", marginTop:6, opacity: imgUploading ? 0.5 : 1 }}
+                onClick={async () => { await addReport(true); }}
+                disabled={imgUploading}
+              >
+                <Plus size={15} strokeWidth={2.5} />記録して続けて入力
               </button>
             </div>
       </BottomSheet>
