@@ -133,11 +133,13 @@ export const demoWeatherCoords = { lat: 35.0167, lng: 135.5833, name: "現在地
 // ─── 相談スレッド（主題ごとの箱）
 export interface DemoThread {
   id: string; title: string; crop_id: number | null; field: string | null;
+  system_key?: string | null;
   created_at: string; updated_at: string;
 }
 export const demoThreads: DemoThread[] = [
   { id: "t1", title: "トマトの病害虫", crop_id: 1, field: null, created_at: iso(20), updated_at: iso(1) },
   { id: "t2", title: "今年の防除計画",  crop_id: null, field: null, created_at: iso(35), updated_at: iso(7) },
+  { id: "t3", title: "日報", crop_id: null, field: null, system_key: "daily_report", created_at: iso(30), updated_at: iso(0) },
 ];
 
 export interface DemoAdviceMessage {
@@ -158,5 +160,12 @@ export const demoThreadMessages: Record<string, DemoAdviceMessage[]> = {
     { id: "m4", thread_id: "t2", crop_id: null, role: "assistant",
       content: "回数を減らすなら、まず記録から「effective だった散布」と「予防的に打っていた散布」を分けるのが先です。この相談は特定の作付けに紐づいていないので、作物ごとの使用回数の上限には触れていません。",
       limits: ["作付けを選んでいないため、農薬の使用回数は判定していません"], created_at: iso(7) },
+  ],
+  t3: [
+    { id: "m5", thread_id: "t3", crop_id: null, role: "assistant", kind: "daily_report",
+      content: `${iso(2)}\n第1ハウスで収穫18kg。ほかの作業はなし。`, created_at: iso(2) },
+    { id: "m6", thread_id: "t3", crop_id: null, role: "assistant", kind: "daily_report",
+      content: `${iso(0)}\n本日は収穫2件と草刈り1件。\n・東の畑 収穫 24kg（07:00〜09:00）\n・第1ハウス 灌水 200L\n・東の畑 草刈り（通路のみ）\n翌日への申し送り: 畝間の草刈りが残っています。`,
+      created_at: iso(0) },
   ],
 };

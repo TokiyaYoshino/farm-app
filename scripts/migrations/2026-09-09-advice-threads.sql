@@ -26,8 +26,15 @@ create table if not exists advice_threads (
   created_by      bigint references users(id),
   created_at      timestamptz not null default now(),
   -- 一覧は「最近動いたもの順」で出す。発言のたびに更新する
-  updated_at      timestamptz not null default now()
+  updated_at      timestamptz not null default now(),
+  -- アプリが用途を決めて使うスレッド。'daily_report' は日報だけが溜まる1本。
+  -- 日報は日付単位、ふつうのスレッドは主題単位で粒度が違うので混ぜない
+  system_key      text
 );
+
+-- 用途つきスレッドは組織にひとつだけ（日報スレッドが増殖しないように）
+create unique index if not exists advice_threads_org_system_key_idx
+  on advice_threads (organization_id, system_key) where system_key is not null;
 
 create index if not exists advice_threads_org_updated_idx
   on advice_threads (organization_id, updated_at desc);
@@ -38,6 +45,8 @@ create policy allow_all on advice_threads for all using (true) with check (true)
 
 comment on table advice_threads is
   '相談スレッド。主題ごとにやりとりを溜める箱。crop_id は任意（自由な主題も立てられる）';
+comment on column advice_threads.system_key is
+  'アプリが用途を決めるスレッド。daily_report=日報だけが溜まる1本。null は利用者が立てた主題';
 
 -- 2) 既存メッセージをスレッドに所属させる
 alter table crop_advice_messages
