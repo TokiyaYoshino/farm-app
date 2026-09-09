@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import type { SpeechRecognitionLike } from "./types/speechRecognition";
 import {
-  Home, PenLine, Users, Thermometer,
+  Home, Users, Thermometer,
   Droplets, CloudRain, Sun, Cloud, CloudSun, CloudDrizzle,
   Snowflake, CloudLightning, MapPin, RefreshCw, AlertCircle,
   PackageCheck, CalendarDays,
@@ -13,7 +13,7 @@ import {
   Mic, MicOff,
   LogOut, KeyRound, Eye, EyeOff,
   ChevronLeft, ChevronRight, ChevronDown, BarChart2, Plus, FlaskConical, Settings, Copy,
-  Download, FileText, FileSpreadsheet, Sparkles, BookOpen, Pencil, Sprout,
+  Download, FileText, FileSpreadsheet, Bug, BookOpen, Pencil, Sprout,
 } from "lucide-react";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line } from "recharts";
 import CalendarView from "./components/CalendarView";
@@ -420,6 +420,8 @@ export default function App() {
   const noteRecRef                        = useRef<SpeechRecognitionLike | null>(null);
   const [showQuickReport, setShowQuickReport] = useState(false);
   const [quickExpanded, setQuickExpanded]     = useState(false);
+  // ＋記録シート最上部の入力手段3択。「手で入力」を選ぶと畳んで従来のフォームだけになる
+  const [quickPicker, setQuickPicker]         = useState(true);
   const [manageSubTab, setManageSubTab]       = useState<"crops"|"fields"|"pesticides">("crops");
   const [showCropAddForm, setShowCropAddForm] = useState(false);
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"report"|"backlog">("report");
@@ -1103,10 +1105,10 @@ export default function App() {
         targetDate: rForm.date, field: s.field ?? rForm.field ?? null,
         inputSummary: rForm.note, outputJson: s,
       });
-      showToast("AIでフォームに反映しました");
+      showToast("メモから項目を埋めました");
     } catch (e: unknown) {
       console.error("structure-voice error:", e);
-      showToast("AI整理に失敗しました", "err");
+      showToast("項目を埋められませんでした", "err");
     } finally {
       setAiStructuring(false);
     }
@@ -2365,6 +2367,8 @@ export default function App() {
   const weekHarvest        = weekReports.reduce((s,r) => s + harvestQty(r), 0);
   const weekHarvestSkipped = excludedHarvestCount(weekReports);
   const todayStr           = new Date().toISOString().slice(0,10);
+  // ふりかえりカードの「今日の記録◯件」。日報はこの件数からまとめる
+  const todayReportCount   = reports.filter(r => r.date === todayStr).length;
 
   // 作物別月次収穫チャートデータ（年指定・12ヶ月固定）。cropId "all" で全作物合算。
   const monthlyHarvest = (cropId: number | "all", year: number) => {
@@ -2497,7 +2501,7 @@ export default function App() {
 
   const navItems = [
     { key:"home",      Icon:Home,      label:"ホーム" },
-    { key:"report",    Icon:PenLine,   label:"記録" },
+    { key:"report",    Icon:CalendarDays, label:"カレンダー" },
     { key:"analytics", Icon:BarChart2, label:"分析" },
     { key:"manage",    Icon:Settings,  label:"管理" },
   ];
@@ -2570,7 +2574,7 @@ export default function App() {
       <div style={S.header}>
         <div style={S.headerTitle}>
           {tab === "home" ? "農作業レポート" :
-           tab === "report" ? "作業記録" :
+           tab === "report" ? "カレンダー" :
            tab === "analytics" ? "分析" :
            tab === "manage" ? "管理" : "農作業レポート"}
         </div>
@@ -2701,16 +2705,16 @@ export default function App() {
                   onClick={openPestAdviceSheet}
                   style={{ ...btn("soft", "md"), width:"100%", marginTop:12 }}
                 >
-                  <Wind size={14} strokeWidth={2} />次の散布はいつ？
+                  <Wind size={14} strokeWidth={2} />次の散布時期
                 </button>
                 {/* 記録を作らずに写真だけ調べたい経路。畑で異変に気づくのはホームを開く前後で、
                     記録一覧のフィルタ行ではない。記録に紐づく写真の診断は一覧・詳細側にある */}
                 {canUseAiFeature("pestDiagnosis") && (
                   <button
                     onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }}
-                    style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
+                    style={{ ...btn("soft", "md"), width:"100%", marginTop:6 }}
                   >
-                    <FlaskConical size={13} strokeWidth={2} />写真で病害虫を調べる
+                    <Bug size={14} strokeWidth={2} />写真で病害虫を調べる
                   </button>
                 )}
               </div>
@@ -2866,6 +2870,49 @@ export default function App() {
               </div>
             );
           })()}
+
+          {/* ── ふりかえり ────────────────────────────────────────
+              日報・記録に聞く・帳票は「記録しない日に用がある機能」なのに、
+              記録タブ（カレンダー/記録一覧＝どちらも見るだけの場所）の奥にあった。
+              ホームに出すが、カードを3枚増やすとホームが second 記録一覧になるので
+              1枚に3行で置く。開く先は既存のシートで、行を足しているだけ。 */}
+          <div style={{ ...S.card, marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:500, color:C.textMuted, marginBottom:4, display:"flex", alignItems:"center", gap:5 }}>
+              <ClipboardList size={12} strokeWidth={2} />ふりかえり
+            </div>
+            <button
+              onClick={() => { setGenDate(todayStr); setGenResult(""); setGenError(""); setShowReportGenSheet(true); }}
+              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const, background:"none", border:"none", cursor:"pointer", padding:"10px 0" }}
+            >
+              <span style={{ flex:1, minWidth:0 }}>
+                <span style={{ fontSize:13.5, fontWeight:700, color:C.text }}>今日の記録 {todayReportCount}件</span>
+                <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:1 }}>日報にまとめる</span>
+              </span>
+              <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+            </button>
+            {canUseAiFeature("recordSearchChat") && (
+              <button
+                onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }}
+                style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const, background:"none", border:"none", borderTop:`1px solid ${C.hairline}`, cursor:"pointer", padding:"10px 0" }}
+              >
+                <span style={{ flex:1, minWidth:0 }}>
+                  <span style={{ fontSize:13.5, fontWeight:700, color:C.text }}>記録に聞く</span>
+                  <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:1 }}>言い回しが違っても探せます</span>
+                </span>
+                <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+              </button>
+            )}
+            <button
+              onClick={() => setShowExportSheet(true)}
+              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const, background:"none", border:"none", borderTop:`1px solid ${C.hairline}`, cursor:"pointer", padding:"10px 0 0" }}
+            >
+              <span style={{ flex:1, minWidth:0 }}>
+                <span style={{ fontSize:13.5, fontWeight:700, color:C.text }}>帳票出力</span>
+                <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:1 }}>期間を選んで書き出す</span>
+              </span>
+              <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+            </button>
+          </div>
 
           {/* 記録一覧への導線 */}
           <button onClick={() => { setTab("report"); setReportView("list"); }} style={{ ...S.card, display:"flex", alignItems:"center", gap:10, cursor:"pointer", textAlign:"left" as const, width:"100%" }}>
@@ -3065,7 +3112,7 @@ export default function App() {
                     <button onClick={() => { setReportQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }} style={{ ...btn("tertiary", "sm"), flexShrink:0 }}>条件をクリア</button>
                   )}
                   <button onClick={() => { setGenResult(""); setGenError(""); setShowReportGenSheet(true); }} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
-                    <Sparkles size={13} strokeWidth={2} />日報にまとめる
+                    <FileText size={13} strokeWidth={2} />日報にまとめる
                   </button>
                   <button onClick={() => setShowExportSheet(true)} style={{ ...btn("secondary", "sm"), flexShrink:0 }}>
                     <Download size={13} strokeWidth={2} />帳票出力
@@ -3089,8 +3136,8 @@ export default function App() {
                   <MessageSquare size={15} strokeWidth={2} color={C.ink} />
                   <span style={{ fontSize:13, color:C.text, lineHeight:1.5, minWidth:0 }}>
                     {filteredReports.length === 0
-                      ? <>見つからないときは<b>記録に聞いてみる</b>（言い回しが違っても探せます）</>
-                      : <>「{reportQuery.trim()}」について<b>記録に聞いてみる</b></>}
+                      ? <>見つからないときは<b>記録に聞く</b>（言い回しが違っても探せます）</>
+                      : <>「{reportQuery.trim()}」について<b>記録に聞く</b></>}
                   </span>
                 </button>
               )}
@@ -3150,7 +3197,7 @@ export default function App() {
                           onClick={() => { setSelectedReport(r); diagnoseImage(r); }}
                           style={{ ...btn("tertiary", "sm"), width:"100%", marginTop:6 }}
                         >
-                          <FlaskConical size={12} strokeWidth={2} />この写真で病害虫を調べる
+                          <Bug size={12} strokeWidth={2} />この写真で病害虫を調べる
                         </button>
                       )}
                     </>
@@ -3808,7 +3855,7 @@ export default function App() {
                       disabled={diagLoading}
                       style={{ ...btn("tertiary", "sm"), width:"100%", opacity:diagLoading ? 0.6 : 1 }}
                     >
-                      <FlaskConical size={13} strokeWidth={2} />{diagLoading ? "診断中…" : diagResult ? "もう一度診断" : "写真で病害虫を絞り込む"}
+                      <Bug size={13} strokeWidth={2} />{diagLoading ? "診断中…" : diagResult ? "もう一度診断" : "写真で病害虫を絞り込む"}
                     </button>
                   </div>
                 )}
@@ -4248,7 +4295,7 @@ export default function App() {
       )}
       {/* 記録FAB（全タブ共通の主導線） */}
       <button
-        onClick={() => setShowQuickReport(true)}
+        onClick={() => { setQuickPicker(true); setShowQuickReport(true); }}
         aria-label="作業を記録"
         style={{ position:"fixed", right:16, bottom:"calc(86px + env(safe-area-inset-bottom))", zIndex:90, display:"flex", alignItems:"center", gap:7, background:C.ink, color:"#fff", border:"none", borderRadius:999, padding:"14px 22px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 6px 18px rgba(46,125,50,0.32)" }}
       >
@@ -4266,7 +4313,7 @@ export default function App() {
       </nav>
 
       {/* ───── クイック作業記録モーダル ───── */}
-      <BottomSheet open={showQuickReport} onClose={() => { setShowQuickReport(false); setQuickExpanded(false); }}>
+      <BottomSheet open={showQuickReport} onClose={() => { if (noteListening) toggleNoteVoice(); setShowQuickReport(false); setQuickExpanded(false); }}>
             {/* ヘッダー */}
             <div style={{ padding:"6px 16px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <span style={{ fontWeight:700, fontSize:17, color:C.text }}>作業を記録</span>
@@ -4276,6 +4323,92 @@ export default function App() {
             </div>
 
             <div style={{ padding:"0 16px" }}>
+              {/* ── 入力手段の3択 ────────────────────────────────────
+                  音声メモ構造化は「入力摩擦を減らす最も直接的な打ち手」（docs/spec-ai-features.md）
+                  なのに、以前は「詳細を入力」を開いた先のメモ欄の下にあり、しかもAI振り分けボタンは
+                  メモが空だと画面に存在しなかった＝押す前に、あることが分からなかった。
+                  あすけんが「＋」の直下に「話して記録」を置いているのと同じ形にする。
+                  既存のメモ欄の音声ボタンは残してある（入口を増やしただけ）。 */}
+              {quickPicker && (
+                <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
+                  {hasSpeech && canUseAiFeature("voiceStructuring") && (
+                    <button
+                      onClick={() => { if (!noteListening) toggleNoteVoice(); }}
+                      style={{
+                        display:"flex", alignItems:"center", gap:12, width:"100%", textAlign:"left" as const,
+                        border:"none", cursor:"pointer", borderRadius:16, padding:"13px 14px",
+                        background: noteListening ? C.dangerBg : C.inkSoft,
+                      }}
+                    >
+                      <span style={{ width:34, height:34, borderRadius:999, background:C.card, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:SHADOW.pill }}>
+                        {noteListening
+                          ? <MicOff size={16} strokeWidth={2} color={C.danger} />
+                          : <Mic size={16} strokeWidth={2} color={C.ink} />}
+                      </span>
+                      <span style={{ flex:1, minWidth:0 }}>
+                        <span style={{ display:"block", fontSize:14, fontWeight:700, color: noteListening ? C.danger : C.ink }}>
+                          {noteListening ? "聞いています… タップで止める" : "話して記録"}
+                        </span>
+                        <span style={{ display:"block", fontSize:11.5, color:C.textSub, marginTop:2, lineHeight:1.45 }}>
+                          畑で喋るだけ。あとで項目に振り分けます
+                        </span>
+                      </span>
+                      {!noteListening && <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />}
+                    </button>
+                  )}
+
+                  {/* 聞き取った言葉は、項目に振り分ける前に本人の言葉のまま見せる */}
+                  {rForm.note.trim() && (noteListening || quickPicker) && (
+                    <div style={{ background:C.well, borderRadius:14, padding:"11px 13px", fontSize:13, lineHeight:1.65, color:C.text }}>
+                      {rForm.note}
+                    </div>
+                  )}
+                  {canUseAiFeature("voiceStructuring") && rForm.note.trim() && (
+                    <button
+                      onClick={() => { if (noteListening) toggleNoteVoice(); void structureVoiceNote(); }}
+                      disabled={aiStructuring}
+                      style={{ ...btn("primary", "lg"), width:"100%", opacity: aiStructuring ? 0.6 : 1 }}
+                    >
+                      <Check size={16} strokeWidth={2} />{aiStructuring ? "整理中…" : "止めて、項目を埋める"}
+                    </button>
+                  )}
+
+                  {canUseAiFeature("pestDiagnosis") && (
+                    <button
+                      onClick={() => {
+                        setShowQuickReport(false);
+                        setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError("");
+                        setShowDiagPhotoSheet(true);
+                      }}
+                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", textAlign:"left" as const, border:"none", cursor:"pointer", borderRadius:16, padding:"13px 14px", background:C.well }}
+                    >
+                      <span style={{ width:34, height:34, borderRadius:999, background:C.card, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:SHADOW.pill }}>
+                        <Bug size={16} strokeWidth={2} color={C.textSub} />
+                      </span>
+                      <span style={{ flex:1, minWidth:0 }}>
+                        <span style={{ display:"block", fontSize:14, fontWeight:700, color:C.text }}>写真で調べる</span>
+                        <span style={{ display:"block", fontSize:11.5, color:C.textSub, marginTop:2, lineHeight:1.45 }}>病害虫の見当をつける</span>
+                      </span>
+                      <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => { if (noteListening) toggleNoteVoice(); setQuickPicker(false); }}
+                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", textAlign:"left" as const, border:"none", cursor:"pointer", borderRadius:16, padding:"13px 14px", background:C.well }}
+                  >
+                    <span style={{ width:34, height:34, borderRadius:999, background:C.card, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:SHADOW.pill }}>
+                      <Pencil size={16} strokeWidth={2} color={C.textSub} />
+                    </span>
+                    <span style={{ flex:1, minWidth:0 }}>
+                      <span style={{ display:"block", fontSize:14, fontWeight:700, color:C.text }}>手で入力</span>
+                      <span style={{ display:"block", fontSize:11.5, color:C.textSub, marginTop:2, lineHeight:1.45 }}>いつものフォーム</span>
+                    </span>
+                    <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+                  </button>
+                </div>
+              )}
+
               {/* 天気（白row） */}
               <div style={S.wellBox}>
                 <div style={S.wrow}>
@@ -4543,8 +4676,8 @@ export default function App() {
                       disabled={aiStructuring}
                       style={{ ...btn("soft", "md"), width:"100%", marginBottom:12, opacity: aiStructuring ? 0.6 : 1, cursor: aiStructuring ? "default" : "pointer" }}
                     >
-                      <Sparkles size={16} strokeWidth={2} />
-                      {aiStructuring ? "AIで整理中…" : "AIでフォームに自動入力"}
+                      <Mic size={16} strokeWidth={2} />
+                      {aiStructuring ? "整理中…" : "メモから項目を埋める"}
                     </button>
                   )}
                 </>
@@ -4748,7 +4881,7 @@ export default function App() {
       <BottomSheet open={showReportGenSheet} onClose={() => setShowReportGenSheet(false)}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <Sparkles size={17} strokeWidth={2} color={C.ink} />その日の作業を日報にまとめる
+            <FileText size={17} strokeWidth={2} color={C.ink} />その日の作業を日報にまとめる
           </div>
 
           <div style={S.wellBox}>
@@ -4802,7 +4935,7 @@ export default function App() {
           )}
 
           <button onClick={generateDailyReport} disabled={genLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:genLoading ? 0.6 : 1 }}>
-            <Sparkles size={15} strokeWidth={2} />{genLoading ? "生成中…" : genResult ? "もう一度生成" : "日報を生成"}
+            <FileText size={15} strokeWidth={2} />{genLoading ? "まとめ中…" : genResult ? "もう一度まとめる" : "日報にまとめる"}
           </button>
         </div>
       </BottomSheet>
@@ -4811,7 +4944,7 @@ export default function App() {
       <BottomSheet open={showPestAdviceSheet} onClose={() => setShowPestAdviceSheet(false)}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <Wind size={17} strokeWidth={2} color={C.ink} />次の散布はいつ？
+            <Wind size={17} strokeWidth={2} color={C.ink} />次の散布時期
           </div>
 
           {/* 答えより先に材料を出さない。
@@ -4919,7 +5052,7 @@ export default function App() {
               </div>
             ) : (
               <button onClick={generatePestControlAdvice} disabled={pestAdviceLoading} style={{ ...btn("primary", "lg"), width:"100%", opacity:pestAdviceLoading ? 0.6 : 1 }}>
-                <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : "助言を確認"}
+                <Wind size={15} strokeWidth={2} />{pestAdviceLoading ? "確認中…" : "散布時期を調べる"}
               </button>
             );
           })()}
@@ -5105,11 +5238,11 @@ export default function App() {
       <BottomSheet open={showDiagPhotoSheet} onClose={() => setShowDiagPhotoSheet(false)}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
-            <FlaskConical size={17} strokeWidth={2} color={C.ink} />写真で病害虫を絞り込む
+            <Bug size={17} strokeWidth={2} color={C.ink} />写真で病害虫を絞り込む
           </div>
 
           <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
-            写真を撮影・選択すると、病害虫の可能性をAIが診断します
+            写真から病害虫の可能性を絞り込みます。確定診断ではありません。
           </div>
 
           <input type="file" id="img-input-diag" accept="image/*" style={{ display:"none" }}
@@ -5153,7 +5286,7 @@ export default function App() {
             disabled={!diagPhotoFile || diagPhotoLoading}
             style={{ ...btn("primary", "md"), width:"100%", opacity:(!diagPhotoFile || diagPhotoLoading) ? 0.6 : 1 }}
           >
-            {diagPhotoLoading ? <RefreshCw size={15} strokeWidth={2} /> : <FlaskConical size={15} strokeWidth={2} />}
+            {diagPhotoLoading ? <RefreshCw size={15} strokeWidth={2} /> : <Bug size={15} strokeWidth={2} />}
             {diagPhotoLoading ? "診断中…" : diagPhotoResult ? "もう一度診断" : "診断する"}
           </button>
         </div>
@@ -5179,7 +5312,7 @@ export default function App() {
           display:"flex", alignItems:"center", gap:8,
         }}>
           {toast.type === "ok"
-            ? <Wind size={15} strokeWidth={2} style={{ flexShrink:0 }} />
+            ? <Check size={15} strokeWidth={2} style={{ flexShrink:0 }} />
             : <AlertCircle size={15} strokeWidth={2} style={{ flexShrink:0 }} />}
           <span style={{ flex:1 }}>{toast.msg}</span>
           <button onClick={() => setToast(null)} style={{ background:"rgba(255,255,255,0.22)", border:"none", borderRadius:8, padding:"3px 7px", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", flexShrink:0, marginLeft:4 }}>
