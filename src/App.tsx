@@ -29,6 +29,7 @@ import {
   DEMO, DEMO_SUPABASE_URL, DEMO_SUPABASE_KEY,
   demoUsers, demoCurrentUser, demoCrops, demoFields, demoWorkCategories,
   demoPesticides, demoReports, demoSchedules, demoComments, demoWeatherCoords,
+  demoThreads, demoThreadMessages,
 } from "./lib/demoData";
 import {
   matchActions, countMatches, statusLabel, matchDetail, formatAdviceHistoryForPrompt,
@@ -208,12 +209,29 @@ interface User   { id: number; name: string; role: Role; login_id?: string; auth
 // 未設定なら農薬の使用回数は「判定不可」として扱う（自動マッチングはしない）
 interface Crop   { id: number; name: string; start_date: string; last_work_date?: string; target_yield?: number; famic_crop_name?: string | null; }
 
-// ─── 作付けの相談（農業エージェント）── crop_advice_messages の1発言
+// ─── 相談スレッド（主題ごとの箱）──────────────────────────
+// 6つあったAI機能のうち5つが「1回叩いて消える」状態だったため、主題ごとに
+// やりとりを溜める形へ寄せた。経緯は docs/decisions/20260909-single-ai-entry-threads.md
+interface AdviceThread {
+  id: string;
+  title: string;
+  /** 任意。入っていればその作付けの記録と農薬登録情報を材料に使う */
+  crop_id: number | null;
+  field: string | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── 相談の1発言（crop_advice_messages）
 interface CropAdviceMessage {
   id: string;
-  crop_id: number;
+  thread_id?: string | null;
+  crop_id: number | null;
   role: "user" | "assistant";
   content: string;
+  /** null=相談の発言。他は日報・診断などの結果をスレッドに残したもの */
+  kind?: string | null;
   sources?: string[] | null;
   limits?: string[] | null;
   registration_facts?: AdviseRegistrationFact[] | null;
@@ -544,6 +562,12 @@ export default function App() {
   const [adviseLoading, setAdviseLoading] = useState(false);
   const [adviseThreadLoading, setAdviseThreadLoading] = useState(false);
   const [adviseError, setAdviseError] = useState("");
+  // ─── 相談スレッド ─────────────────────────────────────────
+  const [threads, setThreads]             = useState<AdviceThread[]>(DEMO ? demoThreads : []);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [newThreadTitle, setNewThreadTitle] = useState("");
+  const [newThreadCropId, setNewThreadCropId] = useState(0);
+  const [showNewThread, setShowNewThread]  = useState(false);
   // 作付けごとの「やること」件数。ホームのバッジに使う（作物を開かなくても分かるように先読み）
   const [adviceCounts, setAdviceCounts] = useState<Record<number, AdviceAction[]>>({});
   const [diagPhotoFile, setDiagPhotoFile]         = useState<File | null>(null);
@@ -629,6 +653,11 @@ export default function App() {
         const byCrop: Record<number, AdviceAction[]> = {};
         ((acts ?? []) as AdviceAction[]).forEach(a => { (byCrop[a.crop_id] ??= []).push(a); });
         setAdviceCounts(byCrop);
+
+        // 相談スレッド一覧（相談タブの中身）
+        const { data: ths } = await supabase.from("advice_threads").select("*")
+          .eq("organization_id", organizationId).order("updated_at", { ascending: false });
+        setThreads((ths ?? []) as AdviceThread[]);
 
         // 作物名の自動一致に使う候補（＝ラベル上の作物名）。
         // 適用情報の本体は農薬パネルを開いたときの遅延ロードだが、それを待つと
@@ -2018,19 +2047,69 @@ export default function App() {
   // 記録検索チャットとは目的が違う。あちらは記録の検索（記録に無いことは答えない）で、
   // こちらは知識の補填（記録がゼロでも成立する）。設計は
   // docs/decisions/20260810-next-action-advice.md、照合は src/lib/adviceMatch.ts。
-  const loadCropAdvice = async (cropId: number) => {
+  const loadThreadContent = async (threadId: string) => {
     if (!currentOrganizationId) return null;
     const [msgRes, actRes] = await Promise.all([
       supabase.from("crop_advice_messages").select("*")
-        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+        .eq("organization_id", currentOrganizationId).eq("thread_id", threadId).order("created_at"),
       supabase.from("crop_advice_actions").select("*")
-        .eq("organization_id", currentOrganizationId).eq("crop_id", cropId).order("created_at"),
+        .eq("organization_id", currentOrganizationId).eq("thread_id", threadId).order("created_at"),
     ]);
     if (msgRes.error || actRes.error) return null;
     return {
       messages: (msgRes.data ?? []) as CropAdviceMessage[],
       actions: (actRes.data ?? []) as AdviceAction[],
     };
+  };
+
+  const openThread = async (threadId: string) => {
+    setActiveThreadId(threadId);
+    setAdviseMsgs([]); setAdviseActions([]); setAdviseError(""); setAdviseInput("");
+    const th = threads.find(t => t.id === threadId);
+    setAdviseCropId(th?.crop_id ?? null);
+    setAdviseThreadLoading(true);
+    if (DEMO) {
+      setAdviseMsgs((demoThreadMessages[threadId] ?? []) as CropAdviceMessage[]);
+      setAdviseThreadLoading(false);
+      return;
+    }
+    const data = await loadThreadContent(threadId);
+    if (data) { setAdviseMsgs(data.messages); setAdviseActions(data.actions); }
+    else if (!DEMO) setAdviseError("これまでのやりとりを読み込めませんでした。");
+    setAdviseThreadLoading(false);
+  };
+
+  /** 主題を立てる。作付けは任意（紐づけると、その作付けの記録と農薬登録情報を材料に使う） */
+  const createThread = async (title: string, cropId: number | null) => {
+    const name = title.trim();
+    if (!name) return;
+    if (DEMO || !currentOrganizationId) {
+      const local: AdviceThread = {
+        id: `local-${Date.now()}`, title: name, crop_id: cropId, field: null,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      };
+      setThreads(prev => [local, ...prev]);
+      setShowNewThread(false); setNewThreadTitle(""); setNewThreadCropId(0);
+      void openThread(local.id);
+      return;
+    }
+    const { data, error } = await supabase.from("advice_threads").insert([{
+      organization_id: currentOrganizationId, title: name,
+      crop_id: cropId, created_by: currentUser?.id ?? null,
+    }]).select().single();
+    if (error || !data) return showToast("相談を作成できませんでした", "err");
+    const th = data as AdviceThread;
+    setThreads(prev => [th, ...prev]);
+    setShowNewThread(false); setNewThreadTitle(""); setNewThreadCropId(0);
+    void openThread(th.id);
+  };
+
+  /** 作付けカードなど、作物から入ったときの経路。既にあればそれを開き、無ければ立てる */
+  const openThreadForCrop = async (cropId: number) => {
+    setTab("advice");
+    const existing = threads.find(t => t.crop_id === cropId);
+    if (existing) { void openThread(existing.id); return; }
+    await createThread(`${cropName(cropId)}の相談`, cropId);
   };
 
   // ホームのバッジ用。作物を開かなくても「やること」が何件あるか分かるようにする。
@@ -2046,25 +2125,17 @@ export default function App() {
     setAdviceCounts(byCrop);
   };
 
-  const openAdviseSheet = async (cropId: number) => {
-    setAdviseCropId(cropId);
-    setAdviseMsgs([]); setAdviseActions([]); setAdviseError(""); setAdviseInput("");
-    setAdviseThreadLoading(true);
-    const data = await loadCropAdvice(cropId);
-    if (data) { setAdviseMsgs(data.messages); setAdviseActions(data.actions); }
-    else setAdviseError("これまでの相談を読み込めませんでした。");
-    setAdviseThreadLoading(false);
-  };
-
   const sendAdvise = async () => {
     const question = adviseInput.trim();
-    const crop = crops.find(c => c.id === adviseCropId);
-    if (!crop || !question || adviseLoading) return;
+    const thread = threads.find(t => t.id === activeThreadId);
+    // 作付けは任意。紐づいていなければ主題だけで相談する（api/advise.ts の topic）
+    const crop = thread?.crop_id != null ? crops.find(c => c.id === thread.crop_id) : undefined;
+    if (!thread || !question || adviseLoading) return;
     setAdviseLoading(true); setAdviseError("");
     // 送信した質問はすぐ画面に出す（保存の成否を待たせない）
     const pendingId = `pending-${adviseMsgs.length}`;
     setAdviseMsgs(prev => [...prev, {
-      id: pendingId, crop_id: crop.id, role: "user", content: question,
+      id: pendingId, thread_id: thread.id, crop_id: crop?.id ?? null, role: "user", content: question,
       created_at: new Date().toISOString(),
     }]);
     setAdviseInput("");
@@ -2073,8 +2144,8 @@ export default function App() {
       if (weatherCoords) {
         forecast = await fetchPestControlForecast(weatherCoords.lat, weatherCoords.lng).catch(() => undefined);
       }
-      // その作付けに紐づく記録だけを渡す。件数ゼロでも成立する
-      const cropReports = reports.filter(r => r.crop_id === crop.id);
+      // 作付けが紐づいていればその記録だけ、紐づいていなければ農場全体の記録を渡す
+      const cropReports = crop ? reports.filter(r => r.crop_id === crop.id) : reports;
       const records = cropReports.length > 0
         ? cropReports
             .slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60)
@@ -2088,7 +2159,7 @@ export default function App() {
         : undefined;
       // famic_crop_name が未設定なら適用行を1件も送らない。紐付けが無い状態で全行を渡すと、
       // 他作物の適用情報をこの作付けのものとして提示してしまう
-      const famic = crop.famic_crop_name?.trim() || null;
+      const famic = crop?.famic_crop_name?.trim() || null;
       const norm = (s: string) => s.normalize("NFKC").trim().toLowerCase();
       const registrations = famic
         ? Object.values(await prefetchAllRegistrations()).flat()
@@ -2108,7 +2179,10 @@ export default function App() {
         method: "POST",
         headers: apiHeaders(),
         body: JSON.stringify({
-          crop: { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null },
+          crop: crop
+            ? { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null }
+            : undefined,
+          topic: crop ? undefined : thread.title,
           today: new Date().toISOString().slice(0, 10),
           forecast, registrations, records, question, region: weatherCoords?.name,
           messages: adviseMsgs.map(m => ({ role: m.role, content: m.content })),
@@ -2127,7 +2201,7 @@ export default function App() {
         return;
       }
       const result = d as AdviseResult;
-      const saved = await saveAdviceTurn(crop.id, question, result);
+      const saved = await saveAdviceTurn(thread, question, result);
       if (saved) {
         setAdviseMsgs(prev => [...prev.filter(m => m.id !== pendingId), ...saved.messages]);
         setAdviseActions(prev => [...prev, ...saved.actions]);
@@ -2135,15 +2209,15 @@ export default function App() {
       } else {
         // 保存できなくても回答は見せる（相談自体を無駄にしない）。溜まらないことは明示する
         setAdviseMsgs(prev => [...prev, {
-          id: `local-${prev.length}`, crop_id: crop.id, role: "assistant",
+          id: `local-${prev.length}`, thread_id: thread.id, crop_id: crop?.id ?? null, role: "assistant",
           content: result.advice.reply, sources: result.sources, limits: result.limits,
           registration_facts: result.registrationFacts, created_at: new Date().toISOString(),
         }]);
         setAdviseError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
       }
       void saveAiOutput("advice", {
-        cropId: crop.id,
-        inputSummary: [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`,
+        cropId: crop?.id,
+        inputSummary: [`主題:${thread.title}`, `作物:${crop?.name ?? "指定なし"}`,
           `記録:${cropReports.length}件`, `質問:${question}`].join(" / "),
         outputJson: { advice: result.advice, registrationFacts: result.registrationFacts,
           sources: result.sources, limits: result.limits },
@@ -2159,9 +2233,12 @@ export default function App() {
 
   // 質問と返答を1往復として入れる。返答だけ・質問だけが残るとスレッドが読めなくなるので、
   // 返答の insert が失敗したら質問も消す
-  const saveAdviceTurn = async (cropId: number, question: string, result: AdviseResult) => {
-    if (!currentOrganizationId) return null;
-    const base = { organization_id: currentOrganizationId, crop_id: cropId, created_by: currentUser?.id ?? null };
+  const saveAdviceTurn = async (thread: AdviceThread, question: string, result: AdviseResult) => {
+    if (!currentOrganizationId || DEMO) return null;
+    const base = {
+      organization_id: currentOrganizationId, thread_id: thread.id,
+      crop_id: thread.crop_id, created_by: currentUser?.id ?? null,
+    };
     const { data: userRow, error: userErr } = await supabase.from("crop_advice_messages")
       .insert([{ ...base, role: "user", content: question }]).select().single();
     if (userErr || !userRow) return null;
@@ -2189,6 +2266,11 @@ export default function App() {
       // やることの保存に失敗しても会話は残す（照合できないだけで、助言自体は読める）
       actions = (actRows ?? []) as AdviceAction[];
     }
+    // 一覧を「最近動いた順」に出すため、発言のたびに更新時刻を進める
+    void supabase.from("advice_threads")
+      .update({ updated_at: new Date().toISOString() }).eq("id", thread.id);
+    setThreads(prev => prev.map(t => t.id === thread.id
+      ? { ...t, updated_at: new Date().toISOString() } : t));
     return { messages: [userRow as CropAdviceMessage, aiRow as CropAdviceMessage], actions };
   };
 
@@ -2512,6 +2594,7 @@ export default function App() {
   const navItems = [
     { key:"home",      Icon:Home,      label:"ホーム" },
     { key:"report",    Icon:CalendarDays, label:"カレンダー" },
+    { key:"advice",    Icon:MessageSquare, label:"相談" },
     { key:"analytics", Icon:BarChart2, label:"分析" },
     { key:"manage",    Icon:Settings,  label:"管理" },
   ];
@@ -2585,6 +2668,7 @@ export default function App() {
         <div style={S.headerTitle}>
           {tab === "home" ? "農作業レポート" :
            tab === "report" ? "カレンダー" :
+           tab === "advice" ? "相談" :
            tab === "analytics" ? "分析" :
            tab === "manage" ? "管理" : "農作業レポート"}
         </div>
@@ -2723,16 +2807,10 @@ export default function App() {
                 >
                   <Wind size={14} strokeWidth={2} />次の散布時期
                 </button>
-                {/* 記録を作らずに写真だけ調べたい経路。畑で異変に気づくのはホームを開く前後で、
-                    記録一覧のフィルタ行ではない。記録に紐づく写真の診断は一覧・詳細側にある */}
-                {canUseAiFeature("pestDiagnosis") && (
-                  <button
-                    onClick={() => { setDiagPhotoFile(null); setDiagPhotoPreview(""); setDiagPhotoResult(null); setDiagPhotoError(""); setShowDiagPhotoSheet(true); }}
-                    style={{ ...btn("soft", "md"), width:"100%", marginTop:6 }}
-                  >
-                    <Bug size={14} strokeWidth={2} />写真で病害虫を調べる
-                  </button>
-                )}
+                {/* 単体の写真診断はここから外し、相談タブに寄せた（2026-09-09）。
+                    「入口が多すぎる」という実利用の指摘に対する集約で、写真に紐づく
+                    診断（記録一覧の写真直下・記録詳細）は写真を見ている瞬間にしか
+                    意味がないので残してある */}
               </div>
             );
           })()}
@@ -2757,7 +2835,7 @@ export default function App() {
                 return (
                   <button
                     key={c.id}
-                    onClick={() => openAdviseSheet(c.id)}
+                    onClick={() => { void openThreadForCrop(c.id); }}
                     style={{
                       display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const,
                       background:"none", border:"none", cursor:"pointer",
@@ -2906,18 +2984,6 @@ export default function App() {
               </span>
               <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
             </button>
-            {canUseAiFeature("recordSearchChat") && (
-              <button
-                onClick={() => { setSearchChatError(""); setShowSearchChatSheet(true); }}
-                style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const, background:"none", border:"none", borderTop:`1px solid ${C.hairline}`, cursor:"pointer", padding:"10px 0" }}
-              >
-                <span style={{ flex:1, minWidth:0 }}>
-                  <span style={{ fontSize:13.5, fontWeight:700, color:C.text }}>記録に聞く</span>
-                  <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:1 }}>言い回しが違っても探せます</span>
-                </span>
-                <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
-              </button>
-            )}
             <button
               onClick={() => setShowExportSheet(true)}
               style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const, background:"none", border:"none", borderTop:`1px solid ${C.hairline}`, cursor:"pointer", padding:"10px 0 0" }}
@@ -2969,6 +3035,102 @@ export default function App() {
               <Marker key={f.id} position={[f.lat!, f.lng!]} icon={PIN_GREEN}><Popup><b>{f.name}</b></Popup></Marker>
             ))}
           </MapContainer>
+        </div>
+      </BottomSheet>
+
+      {/* ───── ADVICE（相談スレッド）─────
+          AI機能が6つに分かれ、うち5つは使ったあと何も残らなかった（ai_outputs は
+          監査ログで画面から読み返せない）。行き先が6つバラバラで5つが行き止まり、
+          という状態が「入口が多すぎて使いにくい」の正体。
+          主題ごとの箱を1か所に集め、やりとりをそこに溜める。
+          経緯: docs/decisions/20260909-single-ai-entry-threads.md */}
+      {tab === "advice" && (
+        <div style={S.page}>
+          <button
+            onClick={() => setShowNewThread(true)}
+            style={{ ...btn("primary", "lg"), width:"100%", marginBottom:12 }}
+          >
+            <Plus size={17} strokeWidth={2.5} />新しい相談
+          </button>
+
+          {threads.length === 0 ? (
+            <div style={{ ...S.card, textAlign:"center" as const, padding:"28px 16px" }}>
+              <MessageSquare size={26} strokeWidth={1.5} color={C.textMuted} style={{ display:"block", margin:"0 auto 10px" }} />
+              <div style={{ fontSize:13.5, fontWeight:700, color:C.text, marginBottom:4 }}>相談はまだありません</div>
+              <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.7 }}>
+                聞きたいことごとに相談を立てると、やりとりがそこに溜まります。<br />
+                作付けを選べば、その記録と農薬の登録内容もふまえて答えます。
+              </div>
+            </div>
+          ) : (
+            <div style={S.card}>
+              {threads.map((t, i) => {
+                const acts = t.crop_id != null ? (adviceCounts[t.crop_id] ?? []) : [];
+                const m = countMatches(matchActions(acts, reports.filter(r => t.crop_id == null || r.crop_id === t.crop_id)));
+                const todo = m.pending + m.overdue;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => { void openThread(t.id); }}
+                    style={{
+                      display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left" as const,
+                      background:"none", border:"none", cursor:"pointer", padding:"12px 0",
+                      borderTop: i === 0 ? "none" : `1px solid ${C.hairline}`,
+                    }}
+                  >
+                    {t.crop_id != null && (
+                      <span style={{ width:9, height:9, borderRadius:"50%", background:cropColor(t.crop_id), flexShrink:0 }} />
+                    )}
+                    <span style={{ flex:1, minWidth:0 }}>
+                      <span style={{ display:"block", fontSize:14, fontWeight:700, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+                        {t.title}
+                      </span>
+                      <span style={{ display:"block", fontSize:11.5, color:C.textMuted, marginTop:2 }}>
+                        {t.crop_id != null ? `${cropName(t.crop_id)} · ` : ""}{t.updated_at.slice(0, 10)}
+                      </span>
+                    </span>
+                    {todo > 0 && (
+                      <span style={{ fontSize:11, fontWeight:700, borderRadius:999, padding:"3px 9px", background:C.warningBg, color:C.warning, whiteSpace:"nowrap" as const }}>
+                        やること{todo}
+                      </span>
+                    )}
+                    <ChevronRight size={15} strokeWidth={2} color={C.textMuted} />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 新しい相談 */}
+      <BottomSheet open={showNewThread} onClose={() => setShowNewThread(false)} height="auto">
+        <div style={{ padding:"6px 16px 20px" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <span style={{ fontWeight:700, fontSize:17, color:C.text }}>新しい相談</span>
+            <button onClick={() => setShowNewThread(false)} style={S.circleBtn}><X size={16} strokeWidth={2} /></button>
+          </div>
+          <div style={S.lbl}>何について聞きますか</div>
+          <input
+            style={S.input} placeholder="例: トマトの病害虫 / 今年の防除計画"
+            value={newThreadTitle} onChange={e => setNewThreadTitle(e.target.value)} maxLength={80}
+          />
+          <div style={S.lbl}>作付け（任意）</div>
+          <select style={S.select} value={newThreadCropId} onChange={e => setNewThreadCropId(Number(e.target.value))}>
+            <option value={0}>選ばない（農場全体の相談）</option>
+            {crops.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <div style={{ fontSize:11.5, color:C.textMuted, lineHeight:1.7, marginBottom:14 }}>
+            作付けを選ぶと、その記録と農薬の登録内容もふまえて答えます。選ばない場合、
+            作物ごとに違う内容（生育段階・農薬の使用回数）は断定しません。
+          </div>
+          <button
+            onClick={() => { void createThread(newThreadTitle, newThreadCropId || null); }}
+            disabled={!newThreadTitle.trim()}
+            style={{ ...btn("primary", "lg"), width:"100%", opacity: newThreadTitle.trim() ? 1 : 0.5 }}
+          >
+            相談をはじめる
+          </button>
         </div>
       </BottomSheet>
 
@@ -5076,11 +5238,11 @@ export default function App() {
       </BottomSheet>
 
       {/* 作付けの相談（農業エージェント）*/}
-      <BottomSheet open={adviseCropId !== null} onClose={() => setAdviseCropId(null)}>
+      <BottomSheet open={activeThreadId !== null} onClose={() => { setActiveThreadId(null); setAdviseCropId(null); }}>
         <div style={S.page}>
           <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4, display:"flex", alignItems:"center", gap:6 }}>
-            <Sprout size={17} strokeWidth={2} color={C.ink} />
-            {adviseCropId != null ? cropName(adviseCropId) : ""}の相談
+            <MessageSquare size={17} strokeWidth={2} color={C.ink} />
+            {threads.find(t => t.id === activeThreadId)?.title ?? "相談"}
           </div>
           {/* 前置きを置かない。何をもとに答えたか・どこまでが目安かは、
               回答ごとに limits として下に付く（同じことを先に言うと二重になる）。
@@ -5185,7 +5347,7 @@ export default function App() {
               value={adviseInput}
               onChange={e => setAdviseInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAdvise(); } }}
-              placeholder="この作付けについて聞く"
+              placeholder="聞きたいことを書く"
               style={{ flex:1, minWidth:0, fontSize:16, padding:"11px 14px", borderRadius:999, border:`1px solid ${C.hairline}`, outline:"none", background:C.card, color:C.text }}
             />
             <button onClick={sendAdvise} disabled={adviseLoading || !adviseInput.trim()} style={{ ...btn("primary", "md"), opacity: adviseLoading || !adviseInput.trim() ? 0.5 : 1 }}>

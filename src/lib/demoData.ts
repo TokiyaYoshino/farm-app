@@ -129,3 +129,34 @@ export const demoComments: Comment[] = [
 ];
 
 export const demoWeatherCoords = { lat: 35.0167, lng: 135.5833, name: "現在地" };
+
+// ─── 相談スレッド（主題ごとの箱）
+export interface DemoThread {
+  id: string; title: string; crop_id: number | null; field: string | null;
+  created_at: string; updated_at: string;
+}
+export const demoThreads: DemoThread[] = [
+  { id: "t1", title: "トマトの病害虫", crop_id: 1, field: null, created_at: iso(20), updated_at: iso(1) },
+  { id: "t2", title: "今年の防除計画",  crop_id: null, field: null, created_at: iso(35), updated_at: iso(7) },
+];
+
+export interface DemoAdviceMessage {
+  id: string; thread_id: string; crop_id: number | null;
+  role: "user" | "assistant"; content: string; kind?: string | null;
+  sources?: string[] | null; limits?: string[] | null; created_at: string;
+}
+export const demoThreadMessages: Record<string, DemoAdviceMessage[]> = {
+  t1: [
+    { id: "m1", thread_id: "t1", crop_id: 1, role: "user", content: "下葉に黒い斑点が出てきた。どうしたらいい？", created_at: iso(1) },
+    { id: "m2", thread_id: "t1", crop_id: 1, role: "assistant",
+      content: "斑点の出方から、まず疫病と輪紋病を分けて考えてください。前回の散布から12日経っていて、その間に降雨が2日あります。まず下葉を取り除いて風通しを作り、広がるようなら薬剤を検討する順番が安全です。",
+      sources: ["この農場の防除記録（直近90日）", "Open-Meteo の実績7日"],
+      limits: ["写真を見ていないため病名は特定していません"], created_at: iso(1) },
+  ],
+  t2: [
+    { id: "m3", thread_id: "t2", crop_id: null, role: "user", content: "今年の防除、去年より回数を減らしたい", created_at: iso(7) },
+    { id: "m4", thread_id: "t2", crop_id: null, role: "assistant",
+      content: "回数を減らすなら、まず記録から「effective だった散布」と「予防的に打っていた散布」を分けるのが先です。この相談は特定の作付けに紐づいていないので、作物ごとの使用回数の上限には触れていません。",
+      limits: ["作付けを選んでいないため、農薬の使用回数は判定していません"], created_at: iso(7) },
+  ],
+};

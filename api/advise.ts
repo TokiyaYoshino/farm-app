@@ -124,9 +124,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = await requireUser(req);
   if (!auth.ok) return denied(res, auth);
 
-  const { crop, today, forecast, registrations, records, question, region, messages, adviceHistory, workTypes } =
+  const { crop, topic, today, forecast, registrations, records, question, region, messages, adviceHistory, workTypes } =
     (req.body ?? {}) as {
       crop?: CropInfo;
+      /** 作付けに紐づかない相談スレッドの主題（例:「今年の防除計画」）。
+       *  crop が無いときはこちらを対象として扱う */
+      topic?: string;
       today?: string;
       forecast?: string;
       registrations?: RegistrationInfo[];
@@ -142,8 +145,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     };
 
   const cropName = typeof crop?.name === "string" ? crop.name.trim() : "";
-  if (!cropName) return res.status(400).json({ error: "crop.name required" });
+  const topicName = typeof topic === "string" ? topic.trim() : "";
+  // 作付けを選ばない相談（農場全体・作物をまたぐ相談）も受ける。
+  // その場合、作物固有の判断（生育段階・農薬の適用）はできないのでプロンプト側で明示する
+  if (!cropName && !topicName) return res.status(400).json({ error: "crop.name or topic required" });
   if (cropName.length > 60) return res.status(400).json({ error: "crop.name too long" });
+  if (topicName.length > 80) return res.status(400).json({ error: "topic too long" });
 
   const day = typeof today === "string" && ISO_DATE.test(today)
     ? today
@@ -236,7 +243,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const userParts: string[] = [
     "## 対象",
-    `作物: ${cropName}`,
+    ...(cropName
+      ? [`作物: ${cropName}`]
+      : [
+          `相談の主題: ${topicName}`,
+          "作物: 指定なし（特定の作付けに紐づかない相談）。"
+          + "作物ごとに違う内容（生育段階・農薬の適用・使用回数）は断定せず、"
+          + "作物を特定する必要がある場合はその旨を伝えること",
+        ]),
     ...(famicCropName ? [`農薬登録上の作物名: ${famicCropName}`] : []),
     `今日の日付: ${day}`,
     ...(crop?.start_date && elapsed != null
