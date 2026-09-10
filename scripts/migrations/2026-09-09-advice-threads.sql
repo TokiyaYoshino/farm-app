@@ -82,13 +82,32 @@ where m.thread_id is null
   and t.organization_id = m.organization_id
   and t.crop_id = m.crop_id;
 
+-- 作付けに紐づかない相談（crop_id is null）は上の移行から漏れる。元スキーマは
+-- crop_id not null だったが、実テーブルは制約が付く前に作られており、作付けを
+-- 指定しない相談が残っていた（2026-09-10 実測）。組織ごとに受け皿を1本作って寄せる
+with newthread as (
+  insert into advice_threads (organization_id, title, crop_id, created_by, created_at, updated_at)
+  select m.organization_id, '畑全体の相談', null,
+         min(m.created_by), min(m.created_at), max(m.created_at)
+  from crop_advice_messages m
+  where m.thread_id is null and m.crop_id is null
+  group by m.organization_id
+  returning id, organization_id
+)
+update crop_advice_messages m
+set thread_id = n.id
+from newthread n
+where m.thread_id is null
+  and m.crop_id is null
+  and m.organization_id = n.organization_id;
+
+-- やることは crop_id ではなく親の発言（message_id）を辿る。crop_id 経由だと同じ取りこぼしが起きる
 update crop_advice_actions a
-set thread_id = t.id
-from advice_threads t
+set thread_id = m.thread_id
+from crop_advice_messages m
 where a.thread_id is null
-  and a.crop_id is not null
-  and t.organization_id = a.organization_id
-  and t.crop_id = a.crop_id;
+  and a.message_id = m.id
+  and m.thread_id is not null;
 
 -- 4) 作付けに紐づかないスレッドを許すため crop_id の not null を外す
 --    （既存行は上の移行で thread_id が入っているので、値はそのまま残る）
@@ -108,3 +127,4 @@ comment on column crop_advice_messages.kind is
 -- 5) 確認
 --   select count(*) from advice_threads;
 --   select count(*) from crop_advice_messages where thread_id is null;  -- 0 になること
+--   select count(*) from crop_advice_actions  where thread_id is null;  -- 0 になること
