@@ -18,10 +18,10 @@ Supabaseダッシュボード → Table Editor → users → Insert row → name
 
 ### 順番
 
-1. **Supabase SQL Editor で、この順に実行する**
-   1. `scripts/migrations/2026-09-09-advice-threads.sql`
-   2. `scripts/migrations/2026-09-09-ai-outputs-entry-point.sql`
-   - 確認: `select count(*) from advice_threads;` が通る／`select count(*) from crop_advice_messages where thread_id is null;` が **0**
+1. **Supabase SQL Editor で `scripts/migrations/2026-09-09-release.sql` を貼って Run する**
+   - 上の2本（`2026-09-09-advice-threads.sql` → `2026-09-09-ai-outputs-entry-point.sql`）を実行順に連結したもの。**貼り付け1回で済む**
+   - 何度流しても壊れない（`if not exists` と、移行対象を「まだ thread_id が入っていない行」に限っているため）
+   - 確認: 末尾の select が `orphan_messages = 0` / `entry_point_col = 1` を返すこと
 2. **Vercel の Production 環境変数に `OPENAI_API_KEY` があるか確認する。** Development にしか無いとAI機能が全滅する
 3. main にマージ → Vercel が自動デプロイ
 4. 本番で確認
@@ -32,7 +32,7 @@ Supabaseダッシュボード → Table Editor → users → Insert row → name
    - **メールは飛ばない**（`{login_id}@kishu-farm.system` という実在しないドメインを使うため）。IDとパスワードは口頭かチャットで直接渡す
    - 招待した人は**必ず同じ組織**に入る（`api/set-user-auth.ts` が呼び出した管理者の組織に固定する）
 
-**手順1を飛ばしてデプロイしても事故にはならない**（相談タブが出ないだけで、以前と同じ画面になる）。ただし正しい順序でやれば1回で済む。
+**手順1を飛ばしてデプロイしても壊れはしない**（相談タブが出ないだけで、以前と同じ画面になる）。ただし**無傷ではない**：`ai_outputs.entry_point` の列が無い間、`saveAiOutput` の insert が失敗し続け、**AIの利用ログが1件も残らない**。`src/App.tsx` の `saveAiOutput` は `console.error` するだけなので画面には何も出ない。相談タブの撤退判断（`docs/decisions/20260909-advice-tab-keep-with-exit-criteria.md`）に使う計測がその期間まるごと欠ける。**順序どおりにやること。**
 
 ### 切り戻し
 

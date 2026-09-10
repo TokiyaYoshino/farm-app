@@ -712,16 +712,6 @@ export default function App() {
         setAdviceCounts(byCrop);
         setAdviceCountsByThread(byThread);
 
-        // 相談スレッド一覧（相談タブの中身）。テーブルが無い＝移行SQL未適用なら
-        // 相談タブを出さない。それ以外のエラー（通信・権限）では出す（一時的な失敗で
-        // 機能ごと消えるほうが困る）
-        const { data: ths, error: thErr } = await supabase.from("advice_threads").select("*")
-          .eq("organization_id", organizationId).order("updated_at", { ascending: false });
-        const missingTable = thErr?.code === "42P01" || thErr?.code === "PGRST205"
-          || /does not exist|schema cache/i.test(thErr?.message ?? "");
-        setThreadsReady(!missingTable);
-        if (!missingTable) setThreads((ths ?? []) as AdviceThread[]);
-
         // 作物名の自動一致に使う候補（＝ラベル上の作物名）。
         // 適用情報の本体は農薬パネルを開いたときの遅延ロードだが、それを待つと
         // 「利用者が農薬画面を開くまで自動で当たらない」ことになり、聞かずに済ませる
@@ -730,6 +720,20 @@ export default function App() {
           .select("crop_name").eq("organization_id", organizationId).limit(2000);
         setRegCropNames(cropNameCandidates(((regNames ?? []) as { crop_name?: string }[]).map(r => r.crop_name ?? "")));
       }
+
+      // 相談スレッド一覧（相談タブの中身）。テーブルが無い＝移行SQL未適用なら
+      // 相談タブを出さない。それ以外のエラー（通信・権限）では出す（一時的な失敗で
+      // 機能ごと消えるほうが困る）。
+      // organizationId が取れない場合もここは通す。中に入れていた頃は、組織が
+      // 紐づいていないユーザーだと判定ごと飛んで threadsReady が初期値 false で
+      // 固定され、移行SQLを流した後も相談タブが永久に出なかった。
+      const { data: ths, error: thErr } = await supabase.from("advice_threads").select("*")
+        .eq("organization_id", organizationId).order("updated_at", { ascending: false });
+      const missingTable = thErr?.code === "42P01" || thErr?.code === "PGRST205"
+        || /does not exist|schema cache/i.test(thErr?.message ?? "");
+      if (thErr && !missingTable) console.error("advice_threads fetch error:", thErr);
+      setThreadsReady(!missingTable);
+      if (!missingTable) setThreads((ths ?? []) as AdviceThread[]);
       } catch (e) {
         console.error("Startup error:", e);
         setLoading(false);
