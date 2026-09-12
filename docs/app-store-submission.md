@@ -8,12 +8,20 @@ TestFlight 配信まで）。本書は公開審査に出すための入力項目
 
 ## 前提: 先に終わらせること
 
-1. **RLS の実ポリシー化** — `docs/rls-rollout.md`。現状 `allow_all` のため、
-   anon キーを知っていれば他組織のデータが読める。**公開前に必須**
+1. **RLS の実ポリシー化** — 本体は 2026-09-05 に適用済み（`docs/rls-rollout.md` の実施記録）。
+   2026-09-12 に anon キーで実測したところ `reports`/`crops`/`crop_advice_messages` は 0 件、
+   `users` は 401 で、**残っていた穴は `advice_threads` の1表だけ**だった。
+   `scripts/migrations/2026-09-12-rls-advice-threads.sql` を SQL Editor で流す。**公開前に必須**
 2. **プライバシーポリシーの運営者情報** — `public/privacy.html` の TODO コメント箇所に
    正式名称と連絡用メールアドレスを記入する。審査で連絡先の実在性が見られる
 3. **Vercel Production の `OPENAI_API_KEY`** — Development のみ設定されている疑いがある。
    本番のAI機能（アプリは本番APIを叩く）が動かないと審査で機能不全と判断されうる
+4. **worker アカウントを1つ配る** — 審査の要件ではないが、**0.1.0 のリリース条件に含めた**。
+   worker が0人のままだと、出したあとの判断材料が次も得られない
+   （`docs/decisions/20260912-release-line.md`）
+
+**逆に、前提に入れないもの**: 2組織目での越境アクセス実地テストは**他農場へ配る前**の
+必須項目であって、審査に出るのは霧珠ファームの1組織なので App Store 公開の前提ではない。
 
 ## 1. Apple Developer Program の登録
 
