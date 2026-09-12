@@ -29,7 +29,7 @@
 // 環境変数: OPENAI_API_KEY（Vercelダッシュボードで設定。リポジトリに書かない）
 
 import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
-import { requireUser, denied } from "./_auth.js";
+import { requireUser, checkDailyLimit, denied } from "./_auth.js";
 
 interface RegistrationInfo {
   product_name?: string;
@@ -123,10 +123,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
   const auth = await requireUser(req);
   if (!auth.ok) return denied(res, auth);
+  // 招いた作業者が回しても支出が止まらない状態だったので蓋をする（fail-open）
+  const over = await checkDailyLimit(auth.user.authId, "advice");
+  if (over) return denied(res, over);
 
-  const { crop, today, forecast, registrations, records, aggregates, pesticideUsage, photoDiagnosis, references, question, region, messages, adviceHistory, workTypes } =
+  const { crop, topic, today, forecast, registrations, records, aggregates, pesticideUsage, photoDiagnosis, references, question, region, messages, adviceHistory, workTypes } =
     (req.body ?? {}) as {
       crop?: CropInfo;
+      /** 作付けに紐づかない相談スレッドの主題（例:「今年の防除計画」）。
+       *  crop が無いときは、これが「何についての相談か」を表す */
+      topic?: string;
       today?: string;
       forecast?: string;
       registrations?: RegistrationInfo[];
@@ -165,10 +171,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // FAMIC の適用情報を照合できないため、薬剤の具体値には触れさせない（以下 isGeneral 分岐）
   const isGeneral = crop == null;
   const cropName = typeof crop?.name === "string" ? crop.name.trim() : "";
+  const topicName = typeof topic === "string" ? topic.trim() : "";
   if (!isGeneral) {
     if (!cropName) return res.status(400).json({ error: "crop.name required" });
     if (cropName.length > 60) return res.status(400).json({ error: "crop.name too long" });
   }
+  if (topicName.length > 80) return res.status(400).json({ error: "topic too long" });
 
   const day = typeof today === "string" && ISO_DATE.test(today)
     ? today
@@ -371,7 +379,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const userParts: string[] = [
     "## 対象",
     ...(isGeneral
-      ? ["対象: 農場全体（特定の作付けに絞っていない相談）"]
+      ? [
+          "対象: 農場全体（特定の作付けに絞っていない相談）",
+          ...(topicName ? [`相談の主題: ${topicName}`] : []),
+        ]
       : [`作物: ${cropName}`, ...(famicCropName ? [`農薬登録上の作物名: ${famicCropName}`] : [])]),
     `今日の日付: ${day}`,
     ...(isGeneral
