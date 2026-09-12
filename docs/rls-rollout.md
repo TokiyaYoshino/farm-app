@@ -129,4 +129,16 @@ create policy allow_all on <テーブル名> for all using (true) with check (tr
 
 ## 実施記録
 
-（実施後に追記）
+### 2026-09-05 実施
+
+- Freeプランのためダッシュボードのバックアップ機能は使えず、事前に手動`pg_dump`でバックアップを取得してから開始（`scripts/backup-db.sh`）
+- 手順1〜3を計画通り実施。Auth Hook設定 → JWT確認 → 全テーブル段階適用（`2026-08-02-rls-policies.sql` + `2026-08-23-rls-crop-advice.sql` + `2026-08-04-device-tokens.sql`）
+- 実行前提の「`scripts/migrations/2026-09-05-rls-auth-hook-policy.sql`」「`2026-09-05-rls-storage-fix.sql`」「`scripts/verify-rls.sh`」は結局存在しなかった（別セッションが作成予定だったが未作成のまま）。Auth Hookとstorageの内容は`2026-08-02-rls-policies.sql`に既に含まれていたためそのまま使用し、verify-rls.shの代わりに`select * from pg_policies`の手動SQLで代替した
+- **重大な問題が2つ発覚し、追加対応が必要になった**（詳細は`docs/multitenancy-progress.md`の「RLS実ポリシー化 実施記録」参照）:
+  1. `users`・`pesticide_registrations`の新ポリシーが実際には作成されていなかった（ログインテストは旧`allow_all`のおかげで偶然通っていた）→ 復旧
+  2. `crops`/`fields`/`reports`/`users`/`schedules`/`pesticide_registrations`/`settings`/`projects`/`tickets`に、把握していなかった古い無条件許可ポリシー（`allow_select`/`allow_insert`/`allow_delete`/`allow_all`/`org_access_*`等）が並存しており、新ポリシーを事実上無効化していた → 全削除
+  3. 対象リストに無かった`sessions`テーブルが`allow_all`のまま放置されていた → 本人の行のみに制限するポリシーを追加
+  4. `pesticides_master`が`public`ロール（匿名含む）に開いた`read_all`ポリシーのままだった → `authenticated`限定に修正
+- 最終確認として`select tablename, policyname, cmd, qual, roles from pg_policies where schemaname='public'`を全件確認し、`qual = true`で残っているのは`work_categories_select_authed`／`pesticides_master_select_authed`（ともに`to authenticated`限定）と`users_select_login_lookup`（`to anon`限定＋列grantで`login_id`/`email`のみ）の3件のみであることを確認（いずれも意図した設計）
+- アプリ側の動作確認: ログイン、作物一覧、記録、農薬、分析タブ、農業エージェント（相談スレッド）まで一通り確認し正常
+- 越境アクセステスト（2組織目を作った実地確認）は今回省略。`pg_policies`の全件確認による代替検証のみ実施。今後2組織目を受け入れる前に、`docs/multitenancy-progress.md`のチェックリストで実地確認することが望ましい

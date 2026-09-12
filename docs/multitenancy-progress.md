@@ -1,6 +1,6 @@
 # マルチテナント化 進捗（ブランチ: claude/multitenancy-rls）
 
-最終更新: 2026-07-28
+最終更新: 2026-09-05（RLS実ポリシー化を完了）
 
 関連: `docs/adr-001-multitenancy-and-ai.md`（設計）, `docs/decision-log.md`（意思決定）, `docs/db-schema.md`（テーブル定義）, `scripts/migrations/`（マイグレーションSQL、実行済み）
 
@@ -59,11 +59,23 @@
 ## 残作業（未着手）
 
 - **最優先**: ローカルmainとorigin/mainの分岐解消（前述「要ユーザー対応」参照）
-- JWTカスタムクレームへの`organization_id`設定、Supabase Auth Hookの設定
-- RLSポリシーの`allow_all`撤廃 → `organization_id = auth.jwt() ->> 'organization_id'`への実ポリシー化（テーブルごとに段階適用）
-- 2組織目を受け入れる前の越境アクセス実地検証（下記チェックリスト）
+- ~~JWTカスタムクレームへの`organization_id`設定、Supabase Auth Hookの設定~~ → 2026-09-05完了（下記「RLS実ポリシー化 実施記録」参照）
+- ~~RLSポリシーの`allow_all`撤廃 → `organization_id = auth.jwt() ->> 'organization_id'`への実ポリシー化（テーブルごとに段階適用）~~ → 2026-09-05完了
+- 2組織目を受け入れる前の越境アクセス実地検証（下記チェックリスト）: `pg_policies`の全件確認による代替検証のみ実施、実機での2組織テストは未実施のまま残っている
 - `tickets`テーブルへのクライアント側insert経路が現状無いため、`organization_id`付与コードは未実装（列自体はマイグレーション対象に含まれ適用済み）
 - App.tsx肥大化への対応（ADR-001 4章、本タスクのスコープ外）
+
+## RLS実ポリシー化 実施記録（2026-09-05）
+
+`scripts/migrations/2026-08-02-rls-policies.sql` + `2026-08-23-rls-crop-advice.sql` + `2026-08-04-device-tokens.sql`を本番Supabaseに適用。Auth Hook設定 → 全テーブル段階適用 → 最終確認まで完了。詳細な実施ログは`docs/rls-rollout.md`の「実施記録」に記載。
+
+**作業中に判明した重大な問題（要注意・今後の教訓）**:
+- `users`・`pesticide_registrations`の新ポリシー作成が実は失敗しており、その場のログインテストは残っていた旧`allow_all`のおかげで偶然通っていた。後から古い`allow_all`系ポリシーを一括削除した際に発覚（一時的に全ユーザーがログイン不能になる状態だった）。原因は特定できていないが、**SQL実行後は必ず`select * from pg_policies where tablename = '<table>'`で実際に作成されたか確認すること**（「Success」表示だけでは不十分）
+- `crops`/`fields`/`reports`/`users`/`schedules`/`pesticide_registrations`/`settings`/`projects`/`tickets`に、今回のマイグレーションでは把握していなかった**古い無条件許可ポリシー**（`allow_select`/`allow_insert`/`allow_delete`/`allow_all`/`org_access_*`など）が並存していた。PostgreSQLのRLSは同一操作に対する複数の許可ポリシーをOR結合するため、新しい組織スコープポリシーを追加しても、これら古いポリシーが1つでも残っていれば実質的に無効化される。全て削除済み
+- `sessions`テーブル（作業セッション、`docs/db-schema.md`には記載があったが本ロールアウトの対象リストには入っていなかった）が`allow_all`のまま完全に見落とされていた。本人の行のみに絞るポリシーを新規追加
+- `pesticides_master`に想定と異なる`read_all`（`public`ロール・匿名含む）ポリズが残っていたため、`authenticated`限定に修正
+
+**教訓**: 次回同様の作業をする際は、最初に`select * from pg_policies where schemaname='public'`で**既存の全ポリシーを洗い出してから**着手すること。対象テーブルリストはドキュメントだけでなく`information_schema.tables`等で実際のテーブル一覧と突き合わせること。
 
 ## 要ユーザー対応
 
