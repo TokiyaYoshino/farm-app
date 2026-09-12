@@ -1,0 +1,61 @@
+-- 相談スレッド（advice_threads）の RLS 実ポリシー化
+--
+-- ── なぜ別ファイルなのか ──────────────────────────────────────
+--
+-- advice_threads は 2026-09-09 の相談タブ導入（scripts/migrations/2026-09-09-release.sql）
+-- で新設された表で、そこでは意図的に allow_all で作られている。
+-- docs/decisions/20260909-web-release-and-rollback.md が
+-- 「advice_threads のポリシーも忘れずに作ること（新規テーブルなので allow_all で
+-- 作られる）」と自分で警告していた箇所にあたる。
+--
+-- ── 2026-09-12 時点の実測 ────────────────────────────────────
+--
+-- anon キーだけで本番を叩いたところ、
+--   reports / crops / crop_advice_messages → 0 件（実ポリシーが効いている）
+--   users                                 → 401（列 grant で login_id/email のみ）
+--   advice_threads                        → **3 行そのまま返る**
+-- だった。つまり RLS 全体は 2026-09-05 に適用済みで、**残っている穴はこの1表だけ**。
+--
+-- スレッドの title は利用者が付ける主題（例:「トマトの病害虫」「今年の防除計画」）で、
+-- 作物名・圃場名・農場の関心事がそのまま出る。crop_advice_messages 側（会話本文）は
+-- 既に塞がっているのに、その目次が公開されている状態。
+--
+-- ── 実行順序 ─────────────────────────────────────────────────
+--
+-- 2026-08-02-rls-policies.sql の 0) 1)（custom_access_token_hook / jwt_organization_id）
+-- は 2026-09-05 に適用済みで、Auth Hook も有効。よってこのファイルは単独で流せる。
+-- 手順の全体は docs/rls-rollout.md。
+--
+-- Supabase SQL Editor で実行する。
+
+-- == advice_threads ==
+drop policy if exists allow_all on advice_threads;
+create policy advice_threads_all_own_org on advice_threads for all
+  using (organization_id = public.jwt_organization_id())
+  with check (organization_id = public.jwt_organization_id());
+
+-- ── 適用後の確認（1文ずつ実行する）────────────────────────────
+-- Supabase SQL Editor は複数文をまとめて流すと結果を表示しない。確認は下を
+-- 1文だけ選択して実行する（docs/handoff-input-redesign.md で実際に踏んだ罠）。
+--
+--   select tablename, policyname, cmd, qual
+--     from pg_policies
+--    where tablename = 'advice_threads';
+--
+-- 期待: allow_all が消え、advice_threads_all_own_org だけが残っていること。
+--
+-- **「Success」表示だけでは足りない。** 2026-09-05 の適用時、users と
+-- pesticide_registrations で「成功したのに作成されていない」が実際に起きており、
+-- 旧 allow_all のおかげでその場のテストが偶然通っていた
+-- （docs/multitenancy-progress.md「RLS実ポリシー化 実施記録」）。必ず上の select で確かめる。
+--
+-- ── 適用後のスモークテスト ───────────────────────────────────
+-- 1. Web版をリロードし、相談タブにスレッド一覧が出ること（消えたら JWT に
+--    organization_id が入っていない＝ログアウト→ログインし直す）
+-- 2. anon キーで外から叩いて空が返ること:
+--      curl '<SUPABASE_URL>/rest/v1/advice_threads?select=id&limit=3' -H 'apikey: <anon>'
+--    → [] が返ればOK（適用前は 3 行返っていた）
+--
+-- 切り戻し（ログイン中の全員からスレッドが見えなくなった場合のみ）:
+--   drop policy if exists advice_threads_all_own_org on advice_threads;
+--   create policy allow_all on advice_threads for all using (true) with check (true);
