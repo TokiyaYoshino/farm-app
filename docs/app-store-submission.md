@@ -11,7 +11,7 @@ TestFlight 配信まで）。本書は公開審査に出すための入力項目
 1. **RLS の実ポリシー化** — 本体は 2026-09-05 に適用済み（`docs/rls-rollout.md` の実施記録）。
    2026-09-12 に anon キーで実測したところ `reports`/`crops`/`crop_advice_messages` は 0 件、
    `users` は 401 で、**残っていた穴は `advice_threads` の1表だけ**だった。
-   `scripts/migrations/2026-09-12-rls-advice-threads.sql` を SQL Editor で流す。**公開前に必須**
+   `scripts/migrations/2026-09-12-rls-anon-leaks.sql` を SQL Editor で流す。**公開前に必須**
 2. **プライバシーポリシーの運営者情報** — `public/privacy.html` の TODO コメント箇所に
    正式名称と連絡用メールアドレスを記入する。審査で連絡先の実在性が見られる
 3. **Vercel Production の `OPENAI_API_KEY`** — Development のみ設定されている疑いがある。
