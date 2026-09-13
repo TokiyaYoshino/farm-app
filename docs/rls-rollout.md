@@ -142,3 +142,47 @@ create policy allow_all on <テーブル名> for all using (true) with check (tr
 - 最終確認として`select tablename, policyname, cmd, qual, roles from pg_policies where schemaname='public'`を全件確認し、`qual = true`で残っているのは`work_categories_select_authed`／`pesticides_master_select_authed`（ともに`to authenticated`限定）と`users_select_login_lookup`（`to anon`限定＋列grantで`login_id`/`email`のみ）の3件のみであることを確認（いずれも意図した設計）
 - アプリ側の動作確認: ログイン、作物一覧、記録、農薬、分析タブ、農業エージェント（相談スレッド）まで一通り確認し正常
 - 越境アクセステスト（2組織目を作った実地確認）は今回省略。`pg_policies`の全件確認による代替検証のみ実施。今後2組織目を受け入れる前に、`docs/multitenancy-progress.md`のチェックリストで実地確認することが望ましい
+
+### 2026-09-13 実施（匿名で読めていた2表を塞いだ）
+
+`scripts/migrations/2026-09-12-rls-anon-leaks.sql` を適用。**きっかけは、外から匿名キーで
+全21表を叩いたこと**。ダッシュボードも SQL も使わず、`.env` の `VITE_SUPABASE_ANON_KEY` で
+`Prefer: count=exact` を付けて件数だけ見る方法で、2表が素読みできると分かった。
+
+| 表 | 適用前 | 適用後 |
+|---|---|---|
+| `advice_threads` | 4 行 | **0 行** |
+| `work_categories` | 6 行 | **0 行** |
+| 他19表 | 0 行 または 401 | 変化なし |
+
+**踏んだ罠（今回いちばん重要）**:
+
+- **`work_categories` は RLS そのものが無効だった。** ポリシーを正しく作り直しても匿名から
+  6 行返り続けた。**RLS が無効なテーブルではポリシーが完全に無視される**（存在しないのと同じ）。
+  `alter table work_categories enable row level security;` を足して初めて塞がった
+- これで 2026-09-05 の実施記録との食い違いも説明がついた。あの記録の
+  「`pesticides_master` と同様に `to authenticated` 限定に修正した」は**正しい**。
+  ポリシーは作られていて、**効いていなかっただけ**
+- `advice_threads` は `2026-09-09-release.sql` が意図的に `allow_all` で作っていたもの。
+  同日の ADR が「新規テーブルなのでポリシーを忘れずに」と自分で警告していた箇所
+
+**教訓**: `pg_policies` の目視では、この種の穴は永久に見つからない。確認は3点セットにする。
+
+1. `pg_policies` でポリシーの実在（「Success」表示だけでは足りない・09-05 の教訓）
+2. **RLS が有効なテーブルか**（下記 SQL・期待は0行）
+3. **外から匿名キーで叩く**（唯一、実際に塞がっている証拠になる）
+
+```sql
+select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+ where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity = false
+ order by relname;
+```
+
+**適用後の確認（実測済み）**: ログイン経路（匿名での `login_id` → `email` 解決）は
+200 で生存、`users` の `name`/`role` は 401。相談タブのスレッド一覧は利用者が実機で確認。
+
+**残り**: 2組織目での越境アクセス実地検証は未実施。`work_categories` には
+`organization_id` 列が無く 6 件を全テナントで共有しているため、**他農場を受け入れる前に**
+列の追加・バックフィル・クライアントの絞り込みが要る（`docs/handoff-input-redesign.md` 2.6 の越境②）。
+確認用 SQL は `scripts/migrations/2026-09-13-tenant-separation-check.sql`。
+
