@@ -56,6 +56,12 @@ begin
   end loop;
 end $$;
 
+-- **RLS そのものを有効にする。** 2026-09-13 に実測して分かったが、ポリシーを正しく
+-- 作り直しても匿名から 6 行読めたままだった。RLS が無効なテーブルでは
+-- **ポリシーは完全に無視される**（存在しないのと同じ）。09-05 の実施記録が
+-- 「to authenticated 限定に修正」と書いているのに読めていたのはこれが理由。
+alter table work_categories enable row level security;
+
 create policy work_categories_select_authed on work_categories for select
   to authenticated using (true);
 
@@ -70,6 +76,14 @@ create policy work_categories_select_authed on work_categories for select
 -- 期待:
 --   advice_threads  … advice_threads_all_own_org のみ（allow_all が消えている）
 --   work_categories … work_categories_select_authed のみ（roles が {authenticated}）
+--
+-- **ポリシーの確認だけでは足りない。RLS が有効かも見る**（2026-09-13 の教訓）:
+--
+--   select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+--    where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity = false
+--    order by relname;
+--
+-- 期待: 0 行。ここに出たテーブルは、ポリシーが何本あっても素通しになる。
 --
 -- **「Success」表示だけでは足りない。** 2026-09-05 の適用時、users と
 -- pesticide_registrations で「成功したのに作成されていない」が実際に起きており、
