@@ -1,19 +1,27 @@
 import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
-import { requireUser, denied } from "./_auth.js";
+import { requireAppUser, denied } from "./_auth.js";
 
-// マルチテナント化: LINE通知先を organizations テーブルの組織別設定から取得できるようにする。
-// organization_id が渡され、かつ organizations テーブル/該当行が存在する場合はそちらを優先し、
-// 取得できない場合（未設定・取得失敗）は既存の環境変数にフォールバックする。
+// マルチテナント化: LINE通知先を organizations テーブルの組織別設定から取得する。
+// 取得できない場合（所属なし・未設定・取得失敗）は既存の環境変数にフォールバックする。
 // 詳細: docs/adr-001-multitenancy-and-ai.md
+//
+// **組織は body から受け取らない（2026-09-13）。** 以前は呼び出し元が名乗った
+// organization_id でそのまま organizations を引いていたため、ログイン済みなら誰でも
+// 他組織の LINE トークンを引かせ、その組織のグループに任意のメッセージを送れた。
+// set-user-auth が同じ穴を「呼び出した管理者の所属で固定する」で塞いでいるのに、
+// ここだけ残っていた。契約は scripts/test-api-auth-boundaries.mjs で固定してある。
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
-  const auth = await requireUser(req);
+  // 無認証だと踏み台にされるため、ログイン済みユーザーに限定する。
+  // さらに users 行まで解決して、通知先を**呼び出した人の所属**で決める（api/_auth.ts）
+  const auth = await requireAppUser(req);
   if (!auth.ok) return denied(res, auth);
 
-  const { message, organization_id } = (req.body ?? {}) as { message?: string; organization_id?: string };
+  // body の organization_id は受け取らない。渡されても無視する
+  const { message } = (req.body ?? {}) as { message?: string };
   if (!message) return res.status(400).json({ error: "message required" });
+  const organization_id = auth.user.organizationId;
 
   let token   = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   let groupId = process.env.LINE_GROUP_ID;

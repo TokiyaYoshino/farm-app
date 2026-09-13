@@ -94,7 +94,14 @@ export async function requireUser(req: ApiRequest): Promise<{ ok: true; user: Au
  * set-user-auth は両方を書いているが、過去に作られた行で auth_id が
  * 埋まっていない可能性があるため（未確認）、片方だけに依存しない。
  */
-export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: AppUser } | Fail> {
+/**
+ * ログイン済みであることに加えて、users テーブルの行（所属組織・役割）まで解決する。
+ *
+ * **組織を body から受け取らないための土台。** 呼び出し元が名乗った組織を信じると、
+ * 他組織の設定を引いたり他組織にデータを作ったりできてしまう（2026-08-23 に
+ * set-user-auth で塞いだのと同じ穴が、notify-line に残っていた）。
+ */
+export async function requireAppUser(req: ApiRequest): Promise<{ ok: true; user: AppUser } | Fail> {
   const base = await requireUser(req);
   if (!base.ok) return base;
 
@@ -118,9 +125,6 @@ export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: A
     if (!row) {
       return { ok: false, status: 403, error: "このアカウントに対応する利用者情報が見つかりません。" };
     }
-    if (row.role !== "admin") {
-      return { ok: false, status: 403, error: "この操作は管理者のみ実行できます。" };
-    }
     return {
       ok: true,
       user: {
@@ -134,6 +138,15 @@ export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: A
   } catch {
     return { ok: false, status: 503, error: "権限を確認できませんでした。時間をおいてお試しください。" };
   }
+}
+
+export async function requireAdmin(req: ApiRequest): Promise<{ ok: true; user: AppUser } | Fail> {
+  const app = await requireAppUser(req);
+  if (!app.ok) return app;
+  if (app.user.role !== "admin") {
+    return { ok: false, status: 403, error: "この操作は管理者のみ実行できます。" };
+  }
+  return app;
 }
 
 // ── 日次上限 ─────────────────────────────────────────────────

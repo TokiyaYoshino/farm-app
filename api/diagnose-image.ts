@@ -9,6 +9,22 @@
 import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
 import { requireUser, checkDailyLimit, denied } from "./_auth.js";
 
+/** 自分の Supabase Storage が配る URL かどうか。ホストを厳密に一致させる */
+function isOwnStorageUrl(raw: string): boolean {
+  const base = process.env.VITE_SUPABASE_URL;
+  if (!base) return false;
+  try {
+    const u = new URL(raw);
+    const b = new URL(base);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+    if (u.host !== b.host) return false;
+    return u.pathname.startsWith("/storage/v1/object/public/")
+        || u.pathname.startsWith("/storage/v1/object/sign/");
+  } catch {
+    return false;
+  }
+}
+
 /** 画像が実在して画像として読めるかを確かめる。
  *  HEAD を許さないストレージがあるので、失敗したら1バイトだけ GET して確かめる。
  *  取得できないこと自体は異常ではない（記録が古い・写真を消した）ので、
@@ -42,8 +58,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (over) return denied(res, over);
 
   const { imageUrl, cropName } = (req.body ?? {}) as { imageUrl?: string; cropName?: string };
-  if (!imageUrl || typeof imageUrl !== "string" || !/^https?:\/\//.test(imageUrl)) {
+  if (!imageUrl || typeof imageUrl !== "string") {
     return res.status(400).json({ error: "imageUrl required" });
+  }
+  // **取りに行く先を自分のストレージだけに限る（2026-09-13）。**
+  // 以前は `^https?://` しか見ておらず、サーバーが任意のURLを取りに行っていた（SSRF）。
+  // しかも下の fetchImageStatus は「到達不可 / 画像でない」を区別して返すので、
+  // 内部ホストやポートの当たり判定にも使えた。
+  //
+  // 前方一致で判定するが、**必ず origin を比較してから**にする。
+  // 単純な startsWith だと `https://<project>.supabase.invalid.evil.com/storage/v1/...`
+  // のように自分のURLを接頭辞に持つ別ホストを通してしまう。
+  // 公開URL（/object/public/）と署名付きURL（/object/sign/）の両方を許す
+  // ——後者は署名付きURLへ移行したときに使う。
+  if (!isOwnStorageUrl(imageUrl)) {
+    return res.status(400).json({ error: "imageUrl must be an uploaded photo" });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
