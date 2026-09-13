@@ -1,0 +1,8 @@
+# Expo の CNG（Continuous Native Generation）構成なので、ネイティブプロジェクトは
+# `npx expo prebuild` の生成物。app.json と依存関係から毎回作り直せるため追跡しない。
+# EAS Build もクラウド側で prebuild する（2026-09-13 にローカルで 8,298 ファイル生成）。
+/ios/
+/android/
+
+# ビルド成果物
+/.expo/
