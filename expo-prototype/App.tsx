@@ -10,6 +10,7 @@ import HomeScreen from "./screens/HomeScreen";
 import ReportScreen from "./screens/ReportScreen";
 import AnalyticsScreen from "./screens/AnalyticsScreen";
 import GanttScreen from "./screens/GanttScreen";
+import AdviceScreen from "./screens/AdviceScreen";
 import ManageScreen from "./screens/ManageScreen";
 import QuickReportSheet from "./screens/QuickReportSheet";
 import NotificationsSheet from "./screens/NotificationsSheet";
@@ -21,13 +22,16 @@ import { addPushListeners, getInitialPushPayload, type PushPayload } from "./lib
 import type { Report, Schedule } from "./lib/types";
 
 // ─── ルート（src/App.tsx のヘッダー・サブタブ・ボトムナビ・FAB の移植）────
-type Tab = "home" | "report" | "analytics" | "manage";
+type Tab = "home" | "report" | "advice" | "analytics" | "manage";
 type AnalyticsSubTab = "report" | "backlog";
 type ManageSubTab = "crops" | "fields" | "pesticides";
 
-const NAV_ITEMS: { key: Tab; icon: "home" | "edit-3" | "bar-chart-2" | "settings"; label: string }[] = [
+const NAV_ITEMS: { key: Tab; icon: "home" | "edit-3" | "message-circle" | "bar-chart-2" | "settings"; label: string }[] = [
   { key: "home", icon: "home", label: "ホーム" },
   { key: "report", icon: "edit-3", label: "記録" },
+  // 相談をナビに置く。差別化の中核（docs/spec-crop-advice-agent.md）が
+  // ホームのカード1枚に埋もれていたため。Web は 2026-09-09 に同じ判断をしている
+  { key: "advice", icon: "message-circle", label: "相談" },
   { key: "analytics", icon: "bar-chart-2", label: "分析" },
   { key: "manage", icon: "settings", label: "管理" },
 ];
@@ -35,6 +39,7 @@ const NAV_ITEMS: { key: Tab; icon: "home" | "edit-3" | "bar-chart-2" | "settings
 const TITLES: Record<Tab, string> = {
   home: "農作業レポート",
   report: "作業記録",
+  advice: "相談",
   analytics: "分析",
   manage: "管理",
 };
@@ -210,6 +215,7 @@ function Root() {
       {/* コンテンツ */}
       {tab === "home" && <HomeScreen onGoReport={() => setTab("report")} onQuickReport={() => openQuickReport()} />}
       {tab === "report" && <ReportScreen />}
+      {tab === "advice" && <AdviceScreen />}
       {tab === "analytics" && (analyticsSubTab === "report" ? <AnalyticsScreen /> : <GanttScreen />)}
       {tab === "manage" && <ManageScreen subTab={manageSubTab} onGoCrops={() => setManageSubTab("crops")} />}
 

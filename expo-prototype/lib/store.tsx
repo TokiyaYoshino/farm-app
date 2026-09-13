@@ -98,6 +98,9 @@ interface Store {
   // 全件を fetchAll に積まないのは、作物を開いたときだけ必要で件数が伸び続けるため。
   /** cropId が null なら畑全体のスレッド（crop_id is null）を引く */
   loadCropAdvice: (cropId: number | null) => Promise<{ messages: CropAdviceMessage[]; actions: AdviceAction[] } | null>;
+  /** 相談タブの一覧用。対象（作付け／畑全体）ごとの「やること」。crop_id が null の行は key 0 に入れる */
+  adviceCounts: Record<number, AdviceAction[]>;
+  reloadAdviceCounts: () => Promise<void>;
   // 利用者の質問とAIの返答を1往復ぶんまとめて保存する（やることも同時に切り出す）
   saveCropAdviceTurn: (cropId: number | null, question: string, result: AdviseResult)
     => Promise<{ messages: CropAdviceMessage[]; actions: AdviceAction[] } | null>;
@@ -653,6 +656,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 発言（crop_advice_messages）と、そこから切り出したやること（crop_advice_actions）。
   // **照合結果は保存しない**。作業記録は後から追加・修正されるので、実施済みを
   // 書き込むと実態とずれる。実施したかは lib/adviceMatch.ts で毎回計算する。
+  // 相談タブの一覧に出す「やること」の件数。対象ごとに開かなくても分かるようにする
+  // （Web の 20260909-single-ai-entry-threads.md と同じ意図：行く理由を
+  //  「思い出したとき」から「放置できないものがある」に変える）。
+  // 照合は保存せず adviceMatch.ts で毎回計算するので、ここでは生の行だけ持つ。
+  const [adviceCounts, setAdviceCounts] = useState<Record<number, AdviceAction[]>>({});
+
+  const reloadAdviceCounts = useCallback(async () => {
+    if (!currentOrganizationId) { setAdviceCounts({}); return; }
+    const { data } = await supabase.from("crop_advice_actions").select("*")
+      .eq("organization_id", currentOrganizationId)
+      .order("created_at", { ascending: false }).limit(300);
+    const by: Record<number, AdviceAction[]> = {};
+    ((data ?? []) as AdviceAction[]).forEach(a => {
+      // 畑全体（crop_id が null）は作付けに属さないので 0 番に寄せる
+      const key = a.crop_id ?? 0;
+      (by[key] ??= []).push(a);
+    });
+    setAdviceCounts(by);
+  }, [currentOrganizationId]);
+
   // cropId が null なら畑全体のスレッド（crop_id is null）を引く
   const loadCropAdvice = useCallback(async (cropId: number | null) => {
     if (!currentOrganizationId) return null;
@@ -809,7 +832,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addPesticide, deletePesticide, searchPesticideMaster,
     pRegs, loadSavedRegistrations, prefetchAllRegistrations, openRegistrations, saveRegistrationsFor,
     loadComments, addComment, editComment,
-    loadCropAdvice, saveCropAdviceTurn, dismissAdviceAction,
+    loadCropAdvice, saveCropAdviceTurn, dismissAdviceAction, adviceCounts, reloadAdviceCounts,
   };
 
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
