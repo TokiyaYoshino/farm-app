@@ -295,16 +295,18 @@ export default function ReportScreen() {
           setAiSheet("advise");
         }}
       />
-      <DailyReportSheet open={aiSheet === "report"} onClose={() => setAiSheet(null)} />
+      <DailyReportSheet open={aiSheet === "report"} onClose={() => setAiSheet(null)} entryPoint="record_list" />
       <SearchChatSheet open={aiSheet === "chat"} onClose={() => setAiSheet(null)} initialQuestion={recordQuery} />
       <PhotoDiagnosisSheet
         open={aiSheet === "diag"}
         onClose={() => setAiSheet(null)}
+        entryPoint="record_list"
         onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setAiSheet("advise"); }}
       />
       <AdviseSheet
         open={aiSheet === "advise"}
         onClose={() => { setAiSheet(null); setAdvisePhoto(null); setAdviseCropId(null); }}
+        entryPoint="record_list"
         cropId={adviseCropId}
         photoDiagnosis={advisePhoto}
         onAskRecords={q => { setRecordQuery(q); setAiSheet("chat"); }}

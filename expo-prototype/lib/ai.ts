@@ -32,7 +32,25 @@ export interface DiagnosisResult {
   note: string;
 }
 
+/** AI をどの導線から呼んだか（Web版 src/App.tsx の AiEntryPoint と同一）。
+ *  撤退判断の材料になるので kind では代用しない。
+ *  Expo の相談は作付け単位でスレッドの形が Web と違うが、
+ *  相談タブ本体の発言＝thread／相談の中から開いた道具＝thread_tool で対応させる。
+ *  管理タブの作物行から開く作付けの相談も thread（Web の openThreadForCrop が相談タブへ移るのと同じ扱い）。
+ *  ホーム・記録から開いた相談や道具はその画面の値にし、相談タブの利用数を水増ししない */
+export type AiEntryPoint =
+  | "thread_tool"    // 相談スレッド内の道具
+  | "thread"         // 相談スレッド本体の発言
+  | "quick_picker"   // ＋記録の3択
+  | "note_field"     // 記録フォームのメモ欄
+  | "home"           // ホームのカード
+  | "record_list"    // 記録一覧
+  | "calendar"       // カレンダーの日付
+  | "report_photo"   // 記録一覧の写真直下
+  | "report_detail"; // 記録詳細シート
+
 // ── AI出力の保存（Web版 saveAiOutput と同一） ──
+// entryPoint は必須。任意にすると導線を足したときに書き忘れ、「使われていない」と読めて集計が嘘になる
 export async function saveAiOutput(
   organizationId: string | null,
   userId: number | null,
@@ -40,6 +58,7 @@ export async function saveAiOutput(
   // CHECK 制約が無いのでマイグレーション不要
   kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice",
   payload: {
+    entryPoint: AiEntryPoint;
     reportId?: number | null;
     targetDate?: string | null;
     field?: string | null;
@@ -55,6 +74,7 @@ export async function saveAiOutput(
   const { error } = await supabase.from("ai_outputs").insert([{
     organization_id: organizationId,
     kind,
+    entry_point: payload.entryPoint,
     report_id: payload.reportId ?? null,
     target_date: payload.targetDate ?? new Date().toISOString().slice(0, 10),
     field: payload.field ?? null,

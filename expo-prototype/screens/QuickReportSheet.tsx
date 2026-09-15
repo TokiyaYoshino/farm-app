@@ -156,6 +156,7 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
       if (s.quantity_unit) setQuantityUnit(s.quantity_unit);
       if (s.soil_ph != null) setSoilPh(String(s.soil_ph));
       void saveAiOutput(currentUser?.organization_id ?? null, currentUser?.id ?? null, "voice_structure", {
+        entryPoint: "note_field",
         targetDate: date, field: s.field ?? fieldName ?? null,
         inputSummary: note, outputJson: s,
       });

@@ -53,6 +53,7 @@ export default function ReportDetailSheet({ report, onClose, onAdvise }: Props) 
     if (res.ok) {
       setDiagResult(res.data.diagnosis);
       void saveAiOutput(currentUser?.organization_id ?? null, currentUser?.id ?? null, "diagnosis", {
+        entryPoint: "report_detail",
         reportId: r.id, targetDate: r.date, field: r.field, cropId: r.crop_id,
         inputSummary: `写真:${r.image_url} / 作物:${cropName(r.crop_id)}`,
         outputJson: res.data.diagnosis, usage: res.data.usage, costUsd: res.data.costUsd,
