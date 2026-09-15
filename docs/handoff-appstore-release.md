@@ -61,21 +61,32 @@
 | 1 | **worker アカウントを1人作って現場に渡す** | 数分 | Web → 右上のユーザーアイコン → 「管理画面」。**Expo版には作成UIが無い**ので Web からのみ |
 | 2 | **審査用デモアカウント**を作る | 数分 | 同じ画面。Guideline 2.1 で必須 |
 | 3 | Apple Developer 登録（$99/年・**年額のみ**） | 個人名義で即日〜数日 | 一番待つ。**TestFlight にも必要** |
-| 4 | `public/privacy.html:173` の運営者名・連絡先メール | — | 値をセッションに渡せば記入は AI 側でできる |
+| 4 | 運営者名・連絡先メール → `public/privacy.html` 9章と `public/support.html`（サポートURL）の**2か所** | — | 値をセッションに渡せば記入は AI 側でできる。審査用の連絡先（氏名・電話）も同時に |
 | 5 | 本番 `OPENAI_API_KEY` の確認（Vercel） | 数分 | 未設定ならAI機能が全滅 |
 | 6 | 移行SQL 1本（任意） | 1分 | `alter table crop_advice_messages add column if not exists record_search_query text;` 無くても縮退動作する |
 
-### AI 側ですぐ着手できる
+### AI 側（2026-09-15 に済ませたもの）
 
-- **App Store Connect の入力項目ドラフト**（サブタイトル30字・説明文・キーワード・審査用備考・プライバシー申告の対応表）— 未着手
-- **Expo の `entryPoint` 6箇所** — `expo-prototype/lib/ai.ts` の `saveAiOutput` が `entryPoint` を送っていない。**現場が使うのはアプリなので、このままだと撤退条件（n≧30）の判定データがアプリから1件も残らない**。呼び出しは `ReportDetailSheet` 1 / `QuickReportSheet` 1 / `AiSheets` 4
+- ✅ **App Store Connect の入力項目ドラフト** → `docs/app-store-submission.md` 6章（そのまま貼れる形。【オーナー記入】だけ残る）
+- ✅ **サポートURL用ページ** `public/support.html`（`/support`）— App Store Connect の必須項目なのに存在しなかった
+- ✅ **Expo の `entryPoint`** — `saveAiOutput` で必須にした。型チェックで**7箇所目**（管理タブの作物行 `ManageScreen.tsx`）が見つかった。
+  値の割り当ては `expo-prototype/lib/ai.ts` の `AiEntryPoint` のコメントが正（相談タブ＝`thread`、その中の道具＝`thread_tool`、ホーム・記録から開いたものはその画面の値）
+  - **未検証**: 実機／シミュレータで AI を1回使い、`ai_outputs.entry_point` に値が入ることをまだ見ていない（ログインは人間）
+
+### 申請時に気をつけること（2026-09-15 に判明）
+
+- **5.1.1(v) アカウント削除**: アプリ内作成が無いので対象外と読んでいるが確証なし。指摘されたら設定画面に「アカウントの削除」行を足す（`app-store-submission.md` 7章）
+- **App のプライバシーで「使用状況データ › 製品の操作」を申告する**（`entry_point` は利用者に紐付く操作ログ）
 
 ---
 
 ## 5. スクリーンショット
 
 **5枚撮影済み**（1320×2868・iPhone 17 Pro Max・相談タブ入り・個人名なし）。
-`/tmp/.../scratchpad/appstore/` にあるが**一時領域なので消える**。必要なら撮り直す（手順は7章）。
+**`docs/appstore/screenshots/` に退避済み**（2026-09-15。一時領域から消える前に移した。**未コミット**）。撮り直す場合の手順は7章。
+**⚠ 03（作業を記録）と05（ホーム）に実在の住所（天気の地点名）が写っている。** 規約の「地名を出さない」に触れ、
+ストアに出すと農場の所在地が公開される。提出前に、地点名を隠すか撮り直すかをオーナーが決める。
+提出順は `app-store-submission.md` 6章。
 
 | # | 画面 |
 |---|---|
