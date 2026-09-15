@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2E7D32" />
+    <meta name="description" content="農作業レポート（kishu-farm）のサポート・お問い合わせ" />
+    <link rel="icon" type="image/svg+xml" href="/app-icon.svg" />
+    <title>サポート — 農作業レポート</title>
+    <!-- privacy.html と同じ見た目。App Store Connect の「サポートURL」として提出する -->
+    <style>
+      :root {
+        --bg: #f5f5f6;
+        --card: #fff;
+        --ink: #2e7d32;
+        --text: #1a1c1e;
+        --text-sub: #5a5f65;
+        --hairline: #ebebed;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 16px 64px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+        line-height: 1.85;
+        font-size: 15px;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        background: var(--card);
+        border-radius: 20px;
+        padding: 32px 28px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+      }
+      h1 { font-size: 22px; letter-spacing: -0.4px; margin: 0 0 4px; }
+      .updated { color: var(--text-sub); font-size: 13px; margin: 0 0 28px; }
+      h2 {
+        font-size: 16px;
+        margin: 32px 0 8px;
+        padding-top: 20px;
+        border-top: 1px solid var(--hairline);
+      }
+      h2:first-of-type { border-top: none; padding-top: 0; margin-top: 24px; }
+      p, li { color: var(--text); }
+      ul { padding-left: 20px; margin: 8px 0; }
+      li { margin-bottom: 6px; }
+      a { color: var(--ink); }
+      .note {
+        background: #f0f7f0;
+        border-radius: 14px;
+        padding: 14px 16px;
+        font-size: 14px;
+        color: var(--text-sub);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>サポート</h1>
+      <p class="updated">農作業レポート（kishu-farm）／最終更新日: 2026年9月15日</p>
+
+      <p>
+        農作業レポートは、農場の作業記録・予定・分析を行う業務用アプリです。
+        アプリの使い方や不具合、アカウントについてのお問い合わせは、下記の連絡先までお寄せください。
+      </p>
+
+      <h2>アカウントについて</h2>
+      <ul>
+        <li>アカウントは、所属する農場の管理者が発行します。アプリから新規登録することはできません</li>
+        <li>ログインIDやパスワードを忘れた場合は、農場の管理者に再設定を依頼してください</li>
+        <li>
+          アカウントの削除を希望する場合は、農場の管理者、または下記の連絡先へお申し出ください。
+          アカウント情報とプッシュ通知トークンを削除します。作業記録は農場の業務記録として組織に帰属するため、
+          組織の管理者の指示に従って削除または保持します（<a href="/privacy">プライバシーポリシー</a> 5章）
+        </li>
+      </ul>
+
+      <h2>よくあるお問い合わせ</h2>
+      <ul>
+        <li>写真・位置情報・通知が使えない … 端末の「設定」から本アプリの許可を確認してください</li>
+        <li>
+          病害虫の画像診断・防除の助言は、判断の参考情報です。農薬の使用にあたっては、
+          必ずラベルの登録内容（適用作物・使用回数・使用時期）を確認してください
+        </li>
+      </ul>
+
+      <h2>お問い合わせ先</h2>
+      <!--
+        TODO（申請前に要記入）: privacy.html 9章と同じ運営者名と問い合わせ先メールアドレス。
+        App Store Connect のサポートURLとして提出するため、連絡の取れる実在のアドレスを記載すること。
+      -->
+      <div class="note">
+        運営者: <!-- 正式名称を記入 --><br />
+        お問い合わせ先: <!-- 連絡用メールアドレスを記入 -->
+      </div>
+    </main>
+  </body>
+</html>
