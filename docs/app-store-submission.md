@@ -102,13 +102,24 @@ npx eas-cli submit --platform ios --latest
 4. 計画ガント（横向き）
 5. AI機能（画像診断 or 防除助言）
 
-デモデータは `node scripts/seed-demo-reports.mjs <ID> <PW>` で投入できる
-（`--delete` で撤収。note に `[demo]` が入る）。
+デモデータは `node expo-prototype/scripts/seed-demo-reports.mjs <ID> <PW>` で投入できる
+（`--delete` で撤収。note に `[demo]` が入る）。**パスは `expo-prototype/` 配下**で、
+リポジトリ直下の `scripts/` ではない。実行には `expo-prototype/.env` と、
+**本番の実アカウント**の ID/パスワードが要る（RLS を通すためにログインする）。
+
+**このスクリプトは本番 DB に書き込む。** 入ったデータは note に `[demo]` を含むので、
+リリース条件③「admin 以外の入力が1件以上」を数えるときは**デモデータを実入力に数えない**こと。
 
 ### 審査用情報
 - **デモアカウント**: 審査担当がログインできる ID/パスワードを必ず記載する。
   ログイン必須アプリは、これが無いと「Guideline 2.1」でリジェクトされる。
   審査用の組織・ユーザーを作ってデモデータを入れておくのが安全
+
+  **⚠ デモモードは審査には使えない（2026-09-16 実測）。** `20260909-demo-mode.md` の
+  デモモードは `VITE_DEMO_MODE` で切り替わる **Web版だけの仕組み**で、
+  `expo-prototype/` には実装が無い（`DEMO` の文字列が1つも無く、`LoginScreen` は
+  `login_id` + パスワードでの `signInWithPassword` のみ）。**審査担当が触るのは iOS アプリ**なので、
+  Web のデモモードでは代替できない。**本番に審査用の実アカウントを作って渡す**
 - 備考欄: 「農場の従業員が使う業務アプリで、アカウントは農場管理者が発行します」等、
   一般ユーザーが自由登録できない理由を説明する
 
@@ -157,6 +168,7 @@ npx eas-cli submit --platform ios --latest
   | ②a | Apple Developer Program 登録 | 未 | オーナー（個人名義なら即日〜数日。`20260912-release-line.md` のプレモータム2） |
   | ②b | `public/privacy.html` の運営者名・連絡先 | 未（TODO のまま） | オーナー（値が決まり次第記入） |
   | ②c | Vercel Production の `OPENAI_API_KEY` | **未確認** | オーナー（下記） |
+  | ②d | **審査用アカウント（本番の実アカウント）** | 未 | オーナー。デモモードでは代替できないと 09-16 に判明（6章） |
   | ③ | admin 以外の入力が1件以上 | 未（アカウントは作成済み） | worker に渡して1件記録（`docs/worker-handoff-test.md`） |
 
   **②c の確認方法**: Vercel ダッシュボード → farm-app → Settings → Environment Variables で
