@@ -103,6 +103,7 @@ export default function AdviceScreen() {
 
       <AdviseSheet
         open={openCropId !== undefined}
+        entryPoint="thread"
         onClose={() => { setOpenCropId(undefined); setAdvisePhoto(null); void reloadAdviceCounts(); }}
         cropId={openCropId ?? null}
         photoDiagnosis={advisePhoto}
@@ -112,6 +113,7 @@ export default function AdviceScreen() {
       <SearchChatSheet open={sheet === "chat"} onClose={() => setSheet(null)} initialQuestion={recordQuery} />
       <PhotoDiagnosisSheet
         open={sheet === "diag"}
+        entryPoint="thread_tool"
         onClose={() => setSheet(null)}
         onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setSheet(null); setOpenCropId(null); }}
       />

@@ -285,12 +285,13 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
       </Pressable>
 
       <FieldMapSheet open={showMap} onClose={() => setShowMap(false)} />
-      <PestAdviceSheet open={showPestAdvice} onClose={() => setShowPestAdvice(false)} />
+      <PestAdviceSheet open={showPestAdvice} onClose={() => setShowPestAdvice(false)} entryPoint="home" />
       {/* 作物が1件ならその作付け、0件・複数なら畑全体。目立つ入口を常に畑全体
           （＝農薬の登録情報を照合できない側）へ固定しない
           （docs/decisions/20260906-general-advice-entry.md） */}
       <AdviseSheet
         open={showAdvise}
+        entryPoint="home"
         onClose={() => { setShowAdvise(false); setAdvisePhoto(null); }}
         cropId={crops.length === 1 ? crops[0].id : null}
         photoDiagnosis={advisePhoto}
@@ -300,6 +301,7 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
       <SearchChatSheet open={homeSheet === "chat"} onClose={() => setHomeSheet(null)} initialQuestion={recordQuery} />
       <PhotoDiagnosisSheet
         open={homeSheet === "diag"}
+        entryPoint="home"
         onClose={() => setHomeSheet(null)}
         onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setHomeSheet(null); setShowAdvise(true); }}
       />

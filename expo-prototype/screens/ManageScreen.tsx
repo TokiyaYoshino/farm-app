@@ -639,6 +639,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
 
       <AdviseSheet
         open={adviseCropId != null}
+        entryPoint="crop_row"
         onClose={() => setAdviseCropId(null)}
         cropId={adviseCropId ?? undefined}
       />

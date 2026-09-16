@@ -11,7 +11,7 @@ import { supabase } from "../lib/supabase";
 import {
   formatDayRecords, formatRecordsForChat, fetchPestControlForecast,
   generateReportApi, searchChatApi, pestControlAdviceApi, diagnoseImageApi,
-  adviseApi, saveAiOutput, type DiagnosisResult,
+  adviseApi, saveAiOutput, type DiagnosisResult, type AiEntryPoint,
 } from "../lib/ai";
 import { formatPesticideUsageForPrompt, formatSprayHistoryForPrompt } from "../lib/pesticideUsage";
 import { formatWorkCountsForPrompt } from "../lib/metrics";
@@ -82,7 +82,11 @@ function ErrorText({ msg }: { msg: string }) {
 }
 
 // ── ① AI日報生成 ──
-export function DailyReportSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function DailyReportSheet({ open, onClose, entryPoint }: {
+  open: boolean; onClose: () => void;
+  /** どの画面から開いたか。ai_outputs.entry_point に残す */
+  entryPoint: AiEntryPoint;
+}) {
   const { reports, pesticides, cropName, userName, currentUser } = useStore();
   const organizationId = currentUser?.organization_id ?? null;
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -99,6 +103,7 @@ export function DailyReportSheet({ open, onClose }: { open: boolean; onClose: ()
     if (res.ok) {
       setResult(res.data.report);
       void saveAiOutput(organizationId, currentUser?.id ?? null, "daily_report", {
+        entryPoint,
         targetDate: date, inputSummary: records,
         outputText: res.data.report, usage: res.data.usage, costUsd: res.data.costUsd,
       });
@@ -265,7 +270,11 @@ export function SearchChatSheet({ open, onClose, initialQuestion }: {
 // ── ③ 防除タイミング助言 ──
 // Web版と同一の制約: 1日1回。開くたびに生成すると ai_outputs に重複が溜まるため、
 // 当日ぶんが無いときだけ生成し、あれば保存済みの結果を読み込んで表示する。
-export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function PestAdviceSheet({ open, onClose, entryPoint }: {
+  open: boolean; onClose: () => void;
+  /** どの画面から開いたか。ai_outputs.entry_point に残す */
+  entryPoint: AiEntryPoint;
+}) {
   const { weatherCoords, currentUser, reports, crops, pesticides } = useStore();
   const organizationId = currentUser?.organization_id ?? null;
   const [loading, setLoading] = useState(false);
@@ -314,6 +323,7 @@ export function PestAdviceSheet({ open, onClose }: { open: boolean; onClose: () 
         setResult(res.data.advice);
         setSavedToday(true);
         void saveAiOutput(organizationId, currentUser?.id ?? null, "pest_advice", {
+          entryPoint,
           inputSummary: fc,
           outputText: res.data.advice, usage: res.data.usage, costUsd: res.data.costUsd,
         });
@@ -502,8 +512,10 @@ export const diagnosisForAdvise = (d: DiagnosisResult): { text: string; label: s
 const adviceContent = (a: { reply: string; followUpQuestion?: string | null }): string =>
   [a.reply, a.followUpQuestion].filter(Boolean).join("\n\n");
 
-export function AdviseSheet({ open, onClose, cropId, photoDiagnosis, onAskRecords, onAskPhoto }: {
+export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis, onAskRecords, onAskPhoto }: {
   open: boolean; onClose: () => void;
+  /** どの画面から開いたか。ai_outputs.entry_point に残す */
+  entryPoint: AiEntryPoint;
   /** 相談対象の作付け。null / 未指定は「作物を指定しない畑全体の相談」
    *  （docs/decisions/20260906-general-advice-entry.md） */
   cropId?: number | null;
@@ -688,6 +700,7 @@ export function AdviseSheet({ open, onClose, cropId, photoDiagnosis, onAskRecord
         setError("回答は表示していますが、保存できませんでした（次回この相談は残りません）。");
       }
       void saveAiOutput(organizationId, currentUser?.id ?? null, "advice", {
+        entryPoint,
         cropId: selectedCropId,
         inputSummary: [
           ...(crop ? [`作物:${crop.name}`, `作付け:${crop.start_date ?? "未登録"}`] : ["対象:畑全体"]),
@@ -904,8 +917,10 @@ export function AdviseSheet({ open, onClose, cropId, photoDiagnosis, onAskRecord
 }
 
 // ── ⑤ AI画像診断（単体・写真から直接） ──
-export function PhotoDiagnosisSheet({ open, onClose, onAdvise }: {
+export function PhotoDiagnosisSheet({ open, onClose, entryPoint, onAdvise }: {
   open: boolean; onClose: () => void;
+  /** どの画面から開いたか。ai_outputs.entry_point に残す */
+  entryPoint: AiEntryPoint;
   /** 診断結果を相談へ引き渡す。渡さなければボタンを出さない */
   onAdvise?: (d: DiagnosisResult) => void;
 }) {
@@ -946,6 +961,7 @@ export function PhotoDiagnosisSheet({ open, onClose, onAdvise }: {
       if (res.ok) {
         setResult(res.data.diagnosis);
         void saveAiOutput(organizationId, currentUser?.id ?? null, "diagnosis", {
+          entryPoint,
           inputSummary: `写真:${imageUrl}`,
           outputJson: res.data.diagnosis, usage: res.data.usage, costUsd: res.data.costUsd,
         });

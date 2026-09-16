@@ -32,6 +32,25 @@ export interface DiagnosisResult {
   note: string;
 }
 
+/** AI をどの導線から呼んだか。撤退判断の材料になるので kind では代用しない
+ *  （例: diagnosis は3か所から出る）。値は Web 版 `src/App.tsx` の AiEntryPoint と
+ *  そろえる —— 撤退条件が `thread` / `thread_tool` の占める割合で決まるため、
+ *  片側だけ語彙が違うと集計が混ざる
+ *  （docs/decisions/20260909-advice-tab-keep-with-exit-criteria.md） */
+export type AiEntryPoint =
+  | "thread_tool"    // 相談タブ内の道具
+  | "thread"         // 相談タブ本体の発言
+  | "quick_picker"   // ＋記録の3択
+  | "note_field"     // 記録フォームのメモ欄
+  | "home"           // ホームのカード
+  | "record_list"    // 記録一覧
+  | "calendar"       // カレンダーの日付
+  | "report_photo"   // 記録一覧の写真直下
+  | "report_detail"  // 記録詳細シート
+  // ↓ アプリ版だけにある導線。Web の管理タブに相当の入口が無いので Web 側の型には無い。
+  //   `thread` に寄せると相談タブ経由に見えて撤退条件の割合が狂うため、別の値にしてある
+  | "crop_row";      // 管理タブ 登録作物の「この作付けを相談する」
+
 // ── AI出力の保存（Web版 saveAiOutput と同一） ──
 export async function saveAiOutput(
   organizationId: string | null,
@@ -40,6 +59,9 @@ export async function saveAiOutput(
   // CHECK 制約が無いのでマイグレーション不要
   kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice",
   payload: {
+    /** 必須にしてある。任意にすると導線を足したときに書き忘れ、「使われていない」と
+     *  読めて集計が嘘になる（Web 版 saveAiOutput と同じ理由） */
+    entryPoint: AiEntryPoint;
     reportId?: number | null;
     targetDate?: string | null;
     field?: string | null;
@@ -55,6 +77,7 @@ export async function saveAiOutput(
   const { error } = await supabase.from("ai_outputs").insert([{
     organization_id: organizationId,
     kind,
+    entry_point: payload.entryPoint,
     report_id: payload.reportId ?? null,
     target_date: payload.targetDate ?? new Date().toISOString().slice(0, 10),
     field: payload.field ?? null,
