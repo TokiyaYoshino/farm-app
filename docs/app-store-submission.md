@@ -18,7 +18,9 @@ TestFlight 配信まで）。本書は公開審査に出すための入力項目
    本番のAI機能（アプリは本番APIを叩く）が動かないと審査で機能不全と判断されうる
 4. **worker アカウントを1つ配る** — 審査の要件ではないが、**0.1.0 のリリース条件に含めた**。
    worker が0人のままだと、出したあとの判断材料が次も得られない
-   （`docs/decisions/20260912-release-line.md`）
+   （`docs/decisions/20260912-release-line.md`）。
+   **2026-09-16 時点: アカウントの作成は済み。残りは「admin 以外の入力が1件以上ある」こと。**
+   渡し方と観察の手順は `docs/worker-handoff-test.md`
 
 **逆に、前提に入れないもの**: 2組織目での越境アクセス実地テストは**他農場へ配る前**の
 必須項目であって、審査に出るのは霧珠ファームの1組織なので App Store 公開の前提ではない。
@@ -148,3 +150,18 @@ npx eas-cli submit --platform ios --latest
 
 - 2026-08-04: 申請準備の実装完了（プッシュ通知・EAS設定・プライバシーポリシー）。
   Apple Developer 未登録のため、ここから先はユーザー作業待ち
+- 2026-09-16: リリース条件②③の棚卸し。**③の前半（worker アカウント）のみ済み**で、残りは下の3点。
+
+  | | 項目 | 状態 | 手番 |
+  |---|---|---|---|
+  | ②a | Apple Developer Program 登録 | 未 | オーナー（個人名義なら即日〜数日。`20260912-release-line.md` のプレモータム2） |
+  | ②b | `public/privacy.html` の運営者名・連絡先 | 未（TODO のまま） | オーナー（値が決まり次第記入） |
+  | ②c | Vercel Production の `OPENAI_API_KEY` | **未確認** | オーナー（下記） |
+  | ③ | admin 以外の入力が1件以上 | 未（アカウントは作成済み） | worker に渡して1件記録（`docs/worker-handoff-test.md`） |
+
+  **②c の確認方法**: Vercel ダッシュボード → farm-app → Settings → Environment Variables で
+  `OPENAI_API_KEY` の Environments に **Production** が入っているかを見る。
+  外から叩いて確かめる手は使えない —— `OPENAI_API_KEY` を使う `api/*` は6本とも `requireUser` を先に通すので
+  （`api/generate-report.ts:15`）、未ログインでは 401 が返り、キーの有無まで届かない。
+  確実なのは**本番にログインして AI 機能を1回動かす**こと。
+  `missing env: OPENAI_API_KEY` が出れば未設定

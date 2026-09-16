@@ -45,7 +45,7 @@
 - 無マニュアルテストの運用ルール（2026-08-24）：「説明書を読まずに始められて、必要になった瞬間にその場で分かる」を目指す。手当ての優先順は ①そもそも聞かない → ②初期値・例示 → ③空状態の一行 → ④`?`（最後の手段）。**ヘルプ文言を書きたくなったら、まず書かずに済ませる方法を先に検討する**。これは合否を出す門番ではなく詰まりを可視化する診断で、機能の削除・導線の格下げには使わない（`docs/decisions/20260824-no-manual-test.md`）
 
 ### 進行中
-- **App Store（iOS）0.1.0 の申請**（2026-09-12 に線を引いた）。残るのは Apple Developer 登録・privacy の運営者情報・本番 `OPENAI_API_KEY` の確認・worker アカウントの配布で、**機能開発は無い**。判定条件を「機能の完成度」から3つの事実に置き換え、AI導線の配置の詰め（`docs/handoff-ai-entry-ux.md` 4-1〜4-7）は `ai_outputs.entry_point` が n≧30 に達するまで凍結する（`docs/decisions/20260912-release-line.md`）
+- **App Store（iOS）0.1.0 の申請**（2026-09-12 に線を引いた）。残るのは Apple Developer 登録・privacy の運営者情報・本番 `OPENAI_API_KEY` の確認・worker アカウントの配布で、**機能開発は無い**。2026-09-16 時点で worker アカウントの作成だけ済み、残り3点は未着手（`docs/worker-handoff-test.md` / `docs/app-store-submission.md` の進捗記録）。判定条件を「機能の完成度」から3つの事実に置き換え、AI導線の配置の詰め（`docs/handoff-ai-entry-ux.md` 4-1〜4-7）は `ai_outputs.entry_point` が n≧30 に達するまで凍結する（`docs/decisions/20260912-release-line.md`）
 - マルチテナント化（外部展開の前提）。RLS の実ポリシー化は 2026-09-05 に適用済みで、2026-09-12 に残っていた `advice_threads` の穴を塞いだ。**他農場へ配る前**に2組織目での越境アクセス実地テストが要る（App Store 単独公開の前提ではない）
 
 ### 完了済み（リリース）
