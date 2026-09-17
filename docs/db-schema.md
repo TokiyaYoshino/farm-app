@@ -21,7 +21,7 @@
 | crop_advice_actions | id(uuid), organization_id(FK, not null), crop_id(→crops, nullable), message_id(→crop_advice_messages), title, work_type, due_from, due_to, when_text, why, sort_order, dismissed_at, created_by(→users), created_at |
 
 - RLS は全テーブルで有効。**実ポリシー適用済み**（2026-09-06 に本番で確認）。`allow_all` は全テーブルから消えており、`<table>_all_own_org`（`organization_id = jwt_organization_id()`）が入っている。**anon キーでは1行も読めない**ので、CLI から本番を読むスクリプトは `SUPABASE_DB_PASSWORD` 経由で直接続する（`scripts/backup-db.sh` / `scripts/check-crop-links.mjs`）。テーブル変更時は RLS ポリシーも確認すること
-- マルチテナント化ステップ1〜2（`organizations`テーブル作成・`users.login_id`一意制約・各テーブルへの`organization_id`列追加とクライアントクエリ対応）は完了。SQLは`scripts/migrations/`参照。RLS実ポリシー化は未着手（`docs/adr-001-multitenancy-and-ai.md`参照）
+- マルチテナント化ステップ1〜2（`organizations`テーブル作成・`users.login_id`一意制約・各テーブルへの`organization_id`列追加とクライアントクエリ対応）は完了。SQLは`scripts/migrations/`参照。~~RLS実ポリシー化は未着手~~ **訂正（2026-09-17）: 適用済み。** 本体は 2026-09-05、匿名から読めていた残り2表（`advice_threads` / `work_categories`）は `scripts/migrations/2026-09-12-rls-anon-leaks.sql` で塞ぐ（**このSQLの実行はまだ**。`docs/decisions/20260912-release-line.md`）。1行上の「実ポリシー適用済み」が正しく、この行が古いまま残っていた
 - `tickets`はクライアントからのinsert経路が現状ないため、新規作成時に`organization_id`を設定するコードは未実装（列自体は追加・バックフィル済み）
 - `ai_outputs` / `daily_weather` / `pesticide_registrations` はレガシーの`org`文字列カラムを持たず`organization_id`のみ。SQLは`scripts/migrations/2026-07-31-ai-outputs.sql`
 - `pesticide_registrations`の希釈倍数・使用時期・使用回数は、FAMIC原文に範囲や自然文（「1000～1600倍」「収穫前日まで」「14回以内(土壌灌注は2回以内…)」）が含まれるため**数値に正規化せずtextのまま**保持する。誤った正規化は使用基準の誤判定に直結する（最終的に正しいのは製品ラベルの表示）
