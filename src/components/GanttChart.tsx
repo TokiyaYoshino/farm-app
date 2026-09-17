@@ -13,7 +13,10 @@ const supabase = createClient(
   DEMO ? DEMO_SUPABASE_KEY : (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
 );
 
-const DEFAULT_BAR_COLOR = "#4CAF50";
+// 帯の既定色。利用者が色を選ばなかったときだけ使う（選んだ色は p.color に入る）。
+// トークン外の緑を直書きしていたのをブランド緑へ戻した（他ファイルで色を直書きしない規約）。
+// 既存の行に保存済みの色はそのまま残る —— 変わるのはこれから作る行の初期値だけ
+const DEFAULT_BAR_COLOR: string = C.ink;
 
 interface Crop    { id: number; name: string; }
 interface Field   { id: number; name: string; }
@@ -467,7 +470,7 @@ export default function GanttChart({
                   type="color"
                   value={form.color}
                   onChange={e => setForm(f => ({ ...f, color:e.target.value }))}
-                  style={{ width:44, height:40, padding:3, borderRadius:8, border:`1.5px solid ${C.border}`, cursor:"pointer", background:"#fafcfa" }}
+                  style={{ width:44, height:40, padding:3, borderRadius:8, border:`1.5px solid ${C.border}`, cursor:"pointer", background:C.well }}
                 />
                 <div style={{ flex:1, height:40, borderRadius:8, background:form.color, border:`1.5px solid ${C.border}` }} />
                 <span style={{ fontSize:12, color:C.textMuted, fontFamily:"monospace", minWidth:64 }}>{form.color}</span>

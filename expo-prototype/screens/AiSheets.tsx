@@ -14,6 +14,7 @@ import {
   adviseApi, saveAiOutput, type DiagnosisResult, type AiEntryPoint,
 } from "../lib/ai";
 import { formatPesticideUsageForPrompt, formatSprayHistoryForPrompt } from "../lib/pesticideUsage";
+import { prepareRegistrationFacts, type GroupedRegistrationFact } from "../lib/registrationFacts";
 import { formatWorkCountsForPrompt } from "../lib/metrics";
 import { referencesForCrop } from "../data/maffIpm";
 import {
@@ -461,27 +462,57 @@ function SourcesBlock({ sources, limits }: { sources: string[]; limits: string[]
   );
 }
 
-/** 農薬の適用情報。**必ず原文のまま**出す（AI の文章の数字を根拠にさせない） */
-function RegistrationFactsBlock({ facts }: { facts: NonNullable<CropAdviceMessage["registration_facts"]> }) {
-  if (facts.length === 0) return null;
+/** 農薬の適用情報。**必ず原文のまま**出す（AI の文章の数字を根拠にさせない）。
+ *
+ *  以前は適用行をそのまま全件展開していたため、(1) 質問と無関係でもカードが並び、
+ *  (2) 同じ製品が適用病害ごとに重複していた（Web版と同じ既知課題。アプリ版は
+ *  畳む先が無かったぶん、より埋まりやすかった）。
+ *  **回答が名前を挙げた製品だけを常時表示にし、残りは畳む。**
+ *  まとめ方と判定は lib/registrationFacts.ts（数値は書き換えない）。 */
+function RegistrationFactsBlock({ facts, replyText }: {
+  facts: NonNullable<CropAdviceMessage["registration_facts"]>;
+  /** この回答の本文。ここに名前が出た製品だけを常時表示にする */
+  replyText: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const { shown, folded } = prepareRegistrationFacts(facts, replyText);
+  if (shown.length === 0 && folded.length === 0) return null;
+  const factCard = (f: GroupedRegistrationFact, i: number) => (
+    <View key={i} style={{ backgroundColor: C.card, borderRadius: 10, padding: 10 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+        <Text style={{ fontSize: 12, fontWeight: "700", color: C.text, flex: 1 }}>{f.productName}</Text>
+        {/* 適用病害虫は数値が同じ行がまとまるので複数並ぶことがある */}
+        {f.pestNames.map(p => (
+          <View key={p} style={{ backgroundColor: C.pesticideBg, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
+            <Text style={{ fontSize: 10, fontWeight: "700", color: C.pesticide }}>{p}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={{ fontSize: 11, color: C.textSub, lineHeight: 18 }}>
+        希釈 {f.dilution} / 使用時期 {f.usageTiming}{"\n"}
+        本剤の使用回数 {f.usageCount} / 総使用回数 {f.totalCount}{"\n"}
+        使用方法 {f.application}
+      </Text>
+    </View>
+  );
   return (
     <View style={{ marginTop: 8, gap: 6 }}>
-      <Text style={{ fontSize: 10, fontWeight: "700", color: C.textSub }}>登録のある農薬（農薬登録情報の原文）</Text>
-      {facts.map((f, i) => (
-        <View key={i} style={{ backgroundColor: C.card, borderRadius: 10, padding: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: C.text, flex: 1 }}>{f.productName}</Text>
-            <View style={{ backgroundColor: C.pesticideBg, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: C.pesticide }}>{f.pestName}</Text>
-            </View>
-          </View>
-          <Text style={{ fontSize: 11, color: C.textSub, lineHeight: 18 }}>
-            希釈 {f.dilution} / 使用時期 {f.usageTiming}{"\n"}
-            本剤の使用回数 {f.usageCount} / 総使用回数 {f.totalCount}{"\n"}
-            使用方法 {f.application}
-          </Text>
-        </View>
-      ))}
+      {shown.length > 0 && (
+        <Text style={{ fontSize: 10, fontWeight: "700", color: C.textSub }}>登録のある農薬（農薬登録情報の原文）</Text>
+      )}
+      {shown.map(factCard)}
+      {folded.length > 0 && (
+        <>
+          <Pressable onPress={() => setOpen(v => !v)} hitSlop={8}>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: C.ink }}>
+              {open
+                ? `${shown.length > 0 ? "ほかの登録内容" : "この作付けに登録のある農薬"}を閉じる`
+                : `${shown.length > 0 ? "ほかの登録内容" : "この作付けに登録のある農薬"}（${folded.length}件）を見る`}
+            </Text>
+          </Pressable>
+          {open && folded.map(factCard)}
+        </>
+      )}
     </View>
   );
 }
@@ -845,7 +876,7 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
                           ))}
                         </View>
                       )}
-                      {!!m.registration_facts?.length && <RegistrationFactsBlock facts={m.registration_facts} />}
+                      {!!m.registration_facts?.length && <RegistrationFactsBlock facts={m.registration_facts} replyText={m.content ?? ""} />}
                       <SourcesBlock sources={m.sources ?? []} limits={m.limits ?? []} />
                     </>
                   )}

@@ -43,6 +43,7 @@ import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
 import RowMenu from "./ui/RowMenu";
 import Disclosure from "./ui/Disclosure";
+import { prepareRegistrationFacts, type GroupedRegistrationFact } from "./lib/registrationFacts";
 import CommentThread from "./ui/CommentThread";
 import { canUseAiFeature } from "./ui/aiFeatures";
 
@@ -5703,14 +5704,20 @@ export default function App() {
                   )}
                   {/* 農薬の数値はAIの文章ではなく登録情報の原文を表に出す。
                       文章に混ざった数字を信じさせないため。
-                      2件までは常時、それ以上は畳む（適用行が多い農薬だと吹き出しが埋まる） */}
+                      以前は質問の内容に関係なく先頭2件を常時表示していたため、農薬と
+                      無関係な相談にも情報量ゼロのカードが並んでいた（既知課題2件）。
+                      **回答が名前を挙げた製品だけを常時表示にし、残りは畳む。**
+                      まとめ方と判定は src/lib/registrationFacts.ts（数値は書き換えない） */}
                   {m.registration_facts && m.registration_facts.length > 0 && (() => {
-                    const facts = m.registration_facts!;
-                    const factCard = (f: AdviseRegistrationFact, i: number) => (
+                    const { shown, folded } = prepareRegistrationFacts(m.registration_facts, m.content ?? "");
+                    const factCard = (f: GroupedRegistrationFact, i: number) => (
                       <div key={i} style={{ background:C.card, borderRadius:10, padding:9, marginTop:5 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                          <span style={{ fontSize:12, fontWeight:700, color:C.text, flex:1 }}>{f.productName}</span>
-                          <span style={{ fontSize:10, fontWeight:700, color:C.pesticide, background:C.pesticideBg, borderRadius:999, padding:"2px 8px" }}>{f.pestName}</span>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:12, fontWeight:700, color:C.text, flex:1, minWidth:0 }}>{f.productName}</span>
+                          {/* 適用病害虫は数値が同じ行がまとまるので複数並ぶことがある */}
+                          {f.pestNames.map(p => (
+                            <span key={p} style={{ fontSize:10, fontWeight:700, color:C.pesticide, background:C.pesticideBg, borderRadius:999, padding:"2px 8px" }}>{p}</span>
+                          ))}
                         </div>
                         <div style={{ fontSize:11, color:C.textSub, lineHeight:1.7 }}>
                           希釈 {f.dilution} / 使用時期 {f.usageTiming}<br />
@@ -5720,11 +5727,17 @@ export default function App() {
                     );
                     return (
                       <div style={{ marginTop:8 }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:C.textSub }}>登録のある農薬（登録情報の原文）</div>
-                        {facts.slice(0, 2).map(factCard)}
-                        {facts.length > 2 && (
-                          <Disclosure label="ほかの登録内容" count={facts.length - 2} on="well">
-                            {facts.slice(2).map(factCard)}
+                        {shown.length > 0 && (
+                          <div style={{ fontSize:10, fontWeight:700, color:C.textSub }}>登録のある農薬（登録情報の原文）</div>
+                        )}
+                        {shown.map(factCard)}
+                        {folded.length > 0 && (
+                          <Disclosure
+                            label={shown.length > 0 ? "ほかの登録内容" : "この作付けに登録のある農薬"}
+                            count={folded.length}
+                            on="well"
+                          >
+                            {folded.map(factCard)}
                           </Disclosure>
                         )}
                       </div>
