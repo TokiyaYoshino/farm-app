@@ -2972,6 +2972,14 @@ export default function App() {
         >
           {loginBusy ? "ログイン中..." : "ログイン"}
         </button>
+
+        {/* 公開向けの説明面。URLだけ渡された人がログイン画面しか見えない状態を避ける
+            （docs/decisions/20260920-public-landing-page.md） */}
+        <div style={{ marginTop:20, textAlign:"center" as const }}>
+          <a href="/about" style={{ fontSize:13, color:C.textMuted, textDecoration:"none" }}>
+            このアプリについて
+          </a>
+        </div>
       </div>
     </div>
   );

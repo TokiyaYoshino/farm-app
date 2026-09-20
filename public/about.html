@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2E7D32" />
+    <meta
+      name="description"
+      content="農作業レポートは、農場の作業・農薬・写真を1件にまとめて記録し、前年との比較や農薬の使用回数の確認に返す業務用アプリです。"
+    />
+    <link rel="icon" type="image/svg+xml" href="/app-icon.svg" />
+    <link rel="apple-touch-icon" href="/app-icon.svg" />
+    <title>農作業レポート — 農場の作業記録アプリ</title>
+    <meta property="og:title" content="農作業レポート — 農場の作業記録アプリ" />
+    <meta
+      property="og:description"
+      content="作業・農薬・写真を1件にまとめて記録し、前年との比較や農薬の使用回数の確認に返します。"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="農作業レポート" />
+    <!--
+      TODO（ストア掲載情報の回で対応）: og:image（1200×630 の PNG）。
+      App Store 用スクリーンショットの撮影と同時に作る。
+      経緯は docs/decisions/20260920-public-landing-page.md の Won't this time。
+    -->
+    <style>
+      :root {
+        /* src/ui/tokens.ts と同じ値。静的HTMLからは import できないため転記している
+           （public/privacy.html と同じ方式）。tokens.ts を変えたらここも合わせる */
+        --bg: #f5f5f6;
+        --card: #fff;
+        --well: #efeff1;
+        --ink: #2e7d32;
+        --ink-press: #256628;
+        --ink-soft: #e4f0e4;
+        --text: #1a1c1e;
+        --text-sub: #66696e;
+        --text-muted: #9ea1a6;
+        --hairline: #ebebed;
+        --shadow-card: 0 1px 2px rgba(16, 17, 20, 0.04), 0 8px 24px rgba(16, 17, 20, 0.06);
+        --shadow-pill: 0 2px 8px rgba(16, 17, 20, 0.1);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 16px 64px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+        line-height: 1.8;
+        font-size: 15px;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; }
+
+      /* ── 見出し（ヒーロー） */
+      header { padding: 24px 8px 32px; }
+      .eyebrow {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        color: var(--ink);
+        margin: 0 0 10px;
+      }
+      h1 {
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.8px;
+        line-height: 1.35;
+        margin: 0 0 14px;
+      }
+      .lead { font-size: 16px; color: var(--text-sub); margin: 0; }
+
+      /* ── カード */
+      section {
+        background: var(--card);
+        border-radius: 20px;
+        box-shadow: var(--shadow-card);
+        padding: 28px 24px;
+        margin-bottom: 16px;
+      }
+      h2 {
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+        margin: 0 0 18px;
+      }
+      h3 { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+      p { margin: 0 0 12px; }
+      p:last-child { margin-bottom: 0; }
+
+      /* ── 機能の行（1枚のカードに hairline 区切りの行） */
+      .rows { margin: 0; padding: 0; list-style: none; }
+      .rows li { padding: 16px 0; border-top: 1px solid var(--hairline); }
+      .rows li:first-child { padding-top: 0; border-top: none; }
+      .rows li:last-child { padding-bottom: 0; }
+      .rows p { color: var(--text-sub); font-size: 14px; margin: 0; }
+
+      /* ── 受け皿（well） */
+      .well {
+        background: var(--well);
+        border-radius: 18px;
+        padding: 18px 20px;
+        font-size: 14px;
+        color: var(--text-sub);
+      }
+      .well + .well { margin-top: 12px; }
+      .well strong { color: var(--text); }
+
+      /* ── 定義行（ラベル小・値大） */
+      dl { margin: 0; }
+      dt {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-top: 18px;
+      }
+      dt:first-of-type { margin-top: 0; }
+      dd { margin: 2px 0 0; font-size: 16px; font-weight: 600; }
+      dd span { font-size: 14px; font-weight: 400; color: var(--text-sub); }
+
+      /* ── ボタン（完全ピル） */
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+      .btn {
+        display: inline-block;
+        padding: 13px 26px;
+        border-radius: 999px;
+        font-size: 15px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .btn-primary {
+        background: var(--ink);
+        color: #fff;
+        box-shadow: var(--shadow-pill);
+      }
+      .btn-primary:active { background: var(--ink-press); }
+      .btn-secondary {
+        background: var(--card);
+        color: var(--text);
+        box-shadow: inset 0 0 0 1px var(--hairline);
+      }
+
+      a { color: var(--ink); }
+      footer {
+        padding: 28px 8px 0;
+        font-size: 13px;
+        color: var(--text-muted);
+        text-align: center;
+      }
+      footer a { margin: 0 8px; }
+      @media (max-width: 480px) {
+        h1 { font-size: 25px; }
+        section { padding: 24px 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <p class="eyebrow">農場の作業記録アプリ</p>
+        <h1>書いた記録が、<br />翌年の判断に返ってくる。</h1>
+        <p class="lead">
+          その日の作業・使った農薬・写真・天気を1件にまとめて残し、
+          前年との比較、農薬の使用回数の確認、現場の相談に使えるようにする業務用アプリです。
+        </p>
+      </header>
+
+      <section>
+        <h2>できること</h2>
+        <ul class="rows">
+          <li>
+            <h3>作業の記録</h3>
+            <p>
+              作業の種別・数量・時間に加えて、使った農薬、撮った写真、その日の天気を1件にまとめます。
+              手が塞がっているときは話して記録できます。前の記録をもとに作ることもできます。
+            </p>
+          </li>
+          <li>
+            <h3>前年との比較</h3>
+            <p>
+              収穫量・目標の達成率・作業時間・防除の回数を、前年の同じ時期と並べて表示します。
+              年ごとの推移と作業時間の内訳も見られます。
+            </p>
+          </li>
+          <li>
+            <h3>農薬の使用回数の確認</h3>
+            <p>
+              登録された適用情報と自分の記録を突き合わせ、使用回数が上限を超えている疑いがあるときに知らせます。
+              残りの回数は表示しません。最終的な判断は農薬ラベルの記載によります。
+            </p>
+          </li>
+          <li>
+            <h3>現場の相談</h3>
+            <p>
+              自分の農場の記録と、国が公開している防除マニュアルを踏まえた回答が返ります。
+              病害虫は写真から調べられます。
+            </p>
+          </li>
+          <li>
+            <h3>チームの進捗</h3>
+            <p>
+              担当者ごとの週の予定と実績、記録へのコメント、通知。
+              複数人で作業する農場でも、誰が何をどこまで終えたかが1画面で分かります。
+            </p>
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>使い方</h2>
+        <p>
+          農場の管理者が作物・圃場・農薬を登録し、作業者にアカウントを発行します。
+          作業者は現場でその日の作業を記録します。
+        </p>
+        <div class="well">
+          本アプリは農場の業務用です。<strong>アカウントは農場の管理者が発行します。</strong>
+          一般の方がご自身で登録してご利用いただくことはできません。
+        </div>
+      </section>
+
+      <section>
+        <h2>対応環境</h2>
+        <dl>
+          <dt>ウェブ版</dt>
+          <dd>パソコン・スマートフォンのブラウザ <span>（公開中）</span></dd>
+          <dt>iOS アプリ</dt>
+          <dd>準備中 <span>（App Store への申請準備を進めています）</span></dd>
+          <dt>ご利用</dt>
+          <dd>招待制 <span>（導入のご相談は下記までご連絡ください）</span></dd>
+        </dl>
+      </section>
+
+      <section>
+        <h2>ご利用にあたっての注意</h2>
+        <div class="well">
+          <strong>相談・日報・画像診断の回答は AI が生成した参考情報です。</strong>
+          病害虫の判定や防除の可否を保証するものではありません。
+          実際の防除にあたっては、農薬ラベルの記載と、お住まいの地域の指導機関の情報をご確認ください。
+        </div>
+        <div class="well">
+          <strong>農薬の使用回数の表示は、記録されている内容をもとにした目安です。</strong>
+          記録の漏れがある場合は正しく判定できません。使用基準の最終的な確認は農薬ラベルによります。
+        </div>
+      </section>
+
+      <section>
+        <h2>お問い合わせ</h2>
+        <p>
+          導入のご相談、不具合のご連絡、アカウントに関するお問い合わせは、
+          下記の連絡先までお願いいたします。
+        </p>
+        <!--
+          TODO（申請前に要記入）: 運営者の正式名称と問い合わせ先メールアドレス。
+          App Store Connect のサポートURLとして提出するため、連絡の取れる実在の
+          アドレスを記載すること（審査で確認される）。
+          public/privacy.html の同じ TODO と2箇所セットで埋めること。
+        -->
+        <div class="well">
+          運営者: <!-- 正式名称を記入 --><br />
+          お問い合わせ先: <!-- 連絡用メールアドレスを記入 -->
+        </div>
+      </section>
+
+      <section>
+        <h2>ご利用中の方</h2>
+        <div class="actions">
+          <a class="btn btn-primary" href="/">アプリを開く</a>
+          <a class="btn btn-secondary" href="/privacy">プライバシーポリシーを読む</a>
+        </div>
+      </section>
+
+      <footer>
+        <a href="/">農作業レポート</a>・<a href="/privacy">プライバシーポリシー</a>
+      </footer>
+    </div>
+  </body>
+</html>
