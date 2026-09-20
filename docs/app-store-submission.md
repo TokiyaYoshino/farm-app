@@ -12,8 +12,10 @@ TestFlight 配信まで）。本書は公開審査に出すための入力項目
    2026-09-12 に anon キーで実測したところ `reports`/`crops`/`crop_advice_messages` は 0 件、
    `users` は 401 で、**残っていた穴は `advice_threads` の1表だけ**だった。
    `scripts/migrations/2026-09-12-rls-anon-leaks.sql` を SQL Editor で流す。**公開前に必須**
-2. **プライバシーポリシーの運営者情報** — `public/privacy.html` の TODO コメント箇所に
-   正式名称と連絡用メールアドレスを記入する。審査で連絡先の実在性が見られる
+2. **プライバシーポリシーの運営者情報** — `public/privacy.html` の10章（TODO コメント箇所）に
+   正式名称と連絡用メールアドレスを記入する。審査で連絡先の実在性が見られる。
+   **2026-09-20 以降、このアドレスはアカウント削除の受付窓口も兼ねる**（同 7章）ので、
+   実際に届いて返信できるアドレスにすること
 3. **Vercel Production の `OPENAI_API_KEY`** — Development のみ設定されている疑いがある。
    本番のAI機能（アプリは本番APIを叩く）が動かないと審査で機能不全と判断されうる
 4. **worker アカウントを1つ配る** — 審査の要件ではないが、**0.1.0 のリリース条件に含めた**。
@@ -89,6 +91,10 @@ npx eas-cli submit --platform ios --latest
 - カテゴリ: ビジネス（または仕事効率化）
 - プライバシーポリシーURL: `https://kishu-farm.vercel.app/privacy`
   （独自ドメイン運用中なら `https://kishufarm.com/privacy`）
+- **アプリ内からも同じURLに到達できる**（ユーザーシート → プライバシーポリシー／アカウントの削除）。
+  URLは `expo-prototype/lib/links.ts` の1箇所に集約してあるので、ドメインを変えるときはそこだけ直す。
+  なお**課金を入れた時点で、アプリ内の規約・ポリシーへのリンクは Apple の must になる**
+  （`docs/research/dr-2026-09/DR-06-payment-setup-lead-time.md` §1.3(b)）
 
 ### スクリーンショット（必須）
 6.7インチ（iPhone 15 Pro Max 等）が最低1セット必要。
@@ -133,7 +139,7 @@ npx eas-cli submit --platform ios --latest
 | 2.1 | デモアカウント未提供 | 手順6で必ず記載する |
 | 4.2 | 機能が最小限／WebViewラッパー | ネイティブ実装済み（WebView案は不採用: `docs/decisions/20260801-...`） |
 | 5.1.1 | 権限の説明文が不十分 | `app.json` の `infoPlist` に日本語で記載済み |
-| 5.1.1(v) | ログイン必須の正当性 | 業務用アプリであることを備考で説明 |
+| 5.1.1(v) | **アカウント削除の導線**（アカウントを持つアプリに求められる）＋ログイン必須の正当性 | 2026-09-20 に対応。アプリのユーザーシート（`expo-prototype/App.tsx`）に「アカウントの削除」を置き、`public/privacy.html` の 7章（`#account-deletion`）の手順へ飛ばす。アプリ内に新規登録が無く管理者がアカウントを発行する方式のため、実削除ではなく手順の提示にしている（`docs/decisions/20260920-account-links-in-app.md`）。ログイン必須の正当性は備考で説明 |
 | 1.2 | ユーザー生成コンテンツの通報機能 | コメントは同一組織内のみ。閉じた業務利用として説明する |
 
 ## 8. 申請後

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Linking, Alert } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { C } from "./ui/tokens";
+import Constants from "expo-constants";
+import { C, RADIUS, SHADOW } from "./ui/tokens";
 import { StoreProvider, useStore } from "./lib/store";
 import LoginScreen from "./screens/LoginScreen";
 import HomeScreen from "./screens/HomeScreen";
@@ -19,6 +20,7 @@ import ScheduleDetailSheet from "./screens/ScheduleDetailSheet";
 import BottomSheet from "./ui/BottomSheet";
 import Btn from "./ui/Btn";
 import { addPushListeners, getInitialPushPayload, type PushPayload } from "./lib/push";
+import { PRIVACY_POLICY_URL, ACCOUNT_DELETION_URL } from "./lib/links";
 import type { Report, Schedule } from "./lib/types";
 
 // ─── ルート（src/App.tsx のヘッダー・サブタブ・ボトムナビ・FAB の移植）────
@@ -43,6 +45,29 @@ const TITLES: Record<Tab, string> = {
   analytics: "分析",
   manage: "管理",
 };
+
+// 外部ページ（プライバシーポリシー・アカウント削除の手順）へ移動する行。
+// 1枚のカードに hairline 区切りで積む（CLAUDE.md のレイアウト規則）。
+// 文言は「別画面へ移動するだけの行 → 体言止め」に従う。
+function LinkRow({ icon, label, onPress }: {
+  icon: React.ComponentProps<typeof Feather>["name"];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
+        pressed && { backgroundColor: C.well },
+      ]}
+    >
+      <Feather name={icon} size={17} color={C.textSub} />
+      <Text style={{ flex: 1, fontSize: 15, color: C.text }}>{label}</Text>
+      <Feather name="external-link" size={15} color={C.textMuted} />
+    </Pressable>
+  );
+}
 
 function SubTabBar<T extends string>({ tabs, value, onChange }: {
   tabs: { key: T; label: string }[];
@@ -82,6 +107,16 @@ function Root() {
   // 通知タップからの直接遷移用
   const [notifReport, setNotifReport] = useState<Report | null>(null);
   const [notifSchedule, setNotifSchedule] = useState<Schedule | null>(null);
+
+  // app.json の version。審査・問い合わせでどのビルドかを特定するために出す
+  const appVersion: string = Constants.expoConfig?.version ?? "-";
+
+  // 外部ブラウザでポリシー等を開く。開けない端末でもURLは伝えて手詰まりにしない
+  const openExternal = useCallback((url: string) => {
+    Linking.openURL(url).catch(() => {
+      Alert.alert("ページを開けませんでした", `ブラウザで ${url} を開いてください。`);
+    });
+  }, []);
 
   // ── 対象（記録・予定）の詳細シートを開く。開けたら true ──
   // targetType は comments.target_type と同じ緩い string（"report" 以外は予定扱い）
@@ -264,17 +299,28 @@ function Root() {
       <ReportDetailSheet report={notifReport} onClose={() => setNotifReport(null)} />
       <ScheduleDetailSheet schedule={notifSchedule} onClose={() => setNotifSchedule(null)} />
 
-      {/* ユーザーシート（ログアウト） */}
-      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.4}>
+      {/* ユーザーシート（ポリシー・アカウント削除・ログアウト） */}
+      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.52}>
         <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
           <Text style={{ fontWeight: "700", fontSize: 17, color: C.text, marginBottom: 4 }}>{currentUser?.name ?? ""}</Text>
           <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
             {currentUser?.role === "admin" ? "管理者" : currentUser?.role === "viewer" ? "閲覧者" : "作業者"}
           </Text>
+
+          <View style={{ backgroundColor: C.card, borderRadius: RADIUS.card, overflow: "hidden", marginBottom: 16, ...SHADOW.card }}>
+            <LinkRow icon="shield" label="プライバシーポリシー" onPress={() => openExternal(PRIVACY_POLICY_URL)} />
+            <View style={{ height: 1, backgroundColor: C.hairline, marginLeft: 41 }} />
+            <LinkRow icon="user-x" label="アカウントの削除" onPress={() => openExternal(ACCOUNT_DELETION_URL)} />
+          </View>
+
           <Btn variant="secondary" size="lg" onPress={async () => { setShowUserSheet(false); await logout(); }}
             icon={<Feather name="log-out" size={16} color={C.text} />}>
             ログアウト
           </Btn>
+
+          <Text style={{ fontSize: 11, color: C.textMuted, textAlign: "center", marginTop: 16 }}>
+            バージョン {appVersion}
+          </Text>
         </View>
       </BottomSheet>
     </View>
