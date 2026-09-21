@@ -1293,8 +1293,18 @@ export default function App() {
 
   const deleteUser = (id: number) =>
     confirmDelete("このユーザーを削除しますか？", async () => {
-      const { error } = await supabase.from("users").delete().eq("id", id).eq("organization_id", currentOrganizationId);
-      if (error) { console.error("deleteUser error:", error); return showToast(error.message, "err"); }
+      // 直接テーブルを消すだけだと、削除後も既発行のセッションが有効期限まで
+      // 生き続ける（セキュリティ監査対応）。api/set-user-auth.tsのDELETEで
+      // usersの行とSupabase Authのアカウントを両方消し、セッションを即座に失効させる
+      try {
+        const res = await fetch("/api/set-user-auth", {
+          method: "DELETE", headers: apiHeaders(), body: JSON.stringify({ user_id: id }),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); return showToast(e.error ?? "削除に失敗しました", "err"); }
+      } catch (e) {
+        console.error("deleteUser error:", e);
+        return showToast("削除に失敗しました", "err");
+      }
       setUsers(p => p.filter(u => u.id !== id));
       showToast("ユーザーを削除しました");
     });

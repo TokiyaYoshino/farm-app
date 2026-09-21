@@ -50,6 +50,13 @@ const call = async (handler, body) => {
   return out;
 };
 
+const callMethod = async (handler, method, body) => {
+  let out = null;
+  const res = { status: code => ({ json: b => { out = { code, body: b }; }, end: () => { out = { code, body: null }; } }) };
+  await handler({ method, body, headers: { authorization: "Bearer test-token" } }, res);
+  return out;
+};
+
 // ── 1. notify-line: 通知先は「呼び出した人の所属」で決まる ──────────────
 console.log("\nnotify-line: 通知先の決定（なりすまし防止）:");
 {
@@ -171,6 +178,45 @@ console.log("\ndiagnose-image: 取得先の制限（SSRF防止）:");
     else t(name, r?.code === 400 && !fetched.includes(imageUrl));
   }
 
+}
+
+// ── 4. set-user-auth DELETE: 削除時にAuthアカウントも消してセッションを失効させる ──
+console.log("\nset-user-auth DELETE: ユーザー削除時のセッション失効（2026-09-21のセキュリティ監査対応）:");
+{
+  const setUserAuth = (await import(pathToFileURL(new URL("../api/set-user-auth.ts", import.meta.url).pathname).href)).default;
+
+  let deletedAuthIds = [], deletedUserIds = [];
+  const mock = (targetOrg) => async (u, opts) => {
+    if (url(u).includes("/auth/v1/user")) return authOk();
+    // 呼び出し元は MY_ORG の admin
+    if (url(u).includes("/rest/v1/users") && (!opts || opts.method === undefined) && url(u).includes("auth_id=eq.")) {
+      return { ok: true, json: async () => [{ id: 1, role: "admin", organization_id: MY_ORG, name: "管理者" }], text: async () => "" };
+    }
+    // 削除対象の行を引く
+    if (url(u).includes("/rest/v1/users") && url(u).includes("select=id,organization_id,auth_id")) {
+      return { ok: true, json: async () => [{ id: 99, organization_id: targetOrg, auth_id: "target-auth-id" }], text: async () => "" };
+    }
+    if (url(u).includes("/rest/v1/users") && opts?.method === "DELETE") {
+      deletedUserIds.push(u); return { ok: true, text: async () => "" };
+    }
+    if (url(u).includes("/auth/v1/admin/users/") && opts?.method === "DELETE") {
+      deletedAuthIds.push(u); return { ok: true, text: async () => "" };
+    }
+    throw new Error("想定外の fetch: " + url(u));
+  };
+
+  deletedAuthIds = []; deletedUserIds = [];
+  globalThis.fetch = mock(MY_ORG);
+  const r1 = await callMethod(setUserAuth, "DELETE", { user_id: 99 });
+  t("同じ組織のユーザーは削除できる（200）", r1?.code === 200);
+  t("usersの行を削除する", deletedUserIds.length === 1);
+  t("Authアカウントも削除してセッションを失効させる", deletedAuthIds.some(u => u.includes("target-auth-id")));
+
+  deletedAuthIds = []; deletedUserIds = [];
+  globalThis.fetch = mock(OTHER_ORG);
+  const r2 = await callMethod(setUserAuth, "DELETE", { user_id: 99 });
+  t("他組織のユーザーは削除できない（403）", r2?.code === 403);
+  t("拒否した場合はusers/Authどちらも消さない", deletedUserIds.length === 0 && deletedAuthIds.length === 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
