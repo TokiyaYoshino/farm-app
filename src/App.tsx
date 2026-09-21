@@ -938,10 +938,16 @@ export default function App() {
     setCurrentUser(null);
   };
 
+  // 許可する拡張子・Content-Type（セキュリティ監査対応。直接API呼び出しで任意の
+  // 拡張子・Content-Typeでアップロードされるのを防ぐ。モバイル版は元々固定済み）
+  const ALLOWED_IMAGE_EXT = new Set(["jpg", "jpeg", "png", "heic", "heif", "webp"]);
   const uploadImage = async (file: File): Promise<string> => {
-    const ext  = file.name.split(".").pop() || "jpg";
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    if (!ALLOWED_IMAGE_EXT.has(ext) || !file.type.startsWith("image/")) {
+      throw new Error("画像ファイル（jpg/png/heic/webp）のみアップロードできます。");
+    }
     const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("report-images").upload(path, file);
+    const { error } = await supabase.storage.from("report-images").upload(path, file, { contentType: file.type });
     if (error) throw error;
     return supabase.storage.from("report-images").getPublicUrl(path).data.publicUrl;
   };
