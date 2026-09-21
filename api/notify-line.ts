@@ -1,5 +1,5 @@
 import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
-import { requireAppUser, denied, checkAndRecordNotifyLimit } from "./_auth.js";
+import { requireAppUser, denied, checkAndRecordCallLimit } from "./_auth.js";
 
 const MESSAGE_MAX_LENGTH = 1000;
 
@@ -31,7 +31,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // レート制限（セキュリティ監査で「認証さえ通れば無制限に送れる」ことが判明したため追加）。
   // admin限定ではなく、ログイン済みの誰でも呼べるエンドポイントなので、
   // 誤爆・悪用いずれでも組織のLINEグループへのスパムを防ぐ。
-  const over = await checkAndRecordNotifyLimit(auth.user.userId, organization_id);
+  const over = await checkAndRecordCallLimit(auth.user.userId, organization_id, "notify_line");
   if (over) return denied(res, over);
 
   let token   = process.env.LINE_CHANNEL_ACCESS_TOKEN;

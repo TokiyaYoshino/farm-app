@@ -113,10 +113,10 @@ console.log("\nnotify-line: レート制限・文字数制限:");
     if (url(u).includes("/auth/v1/user")) return authOk();
     if (url(u).includes("/rest/v1/users")) return { ok: true, json: async () => [{ id: 7, role: "worker", organization_id: MY_ORG, name: "テスト" }], text: async () => "" };
     if (url(u).includes("/rest/v1/organizations")) return { ok: true, json: async () => [{}], text: async () => "" };
-    if (url(u).includes("/rest/v1/notification_send_log") && (!opts || opts.method !== "POST")) {
+    if (url(u).includes("/rest/v1/api_call_log") && (!opts || opts.method !== "POST")) {
       return { ok: true, headers: { get: () => `0-0/${countSoFar}` }, json: async () => [], text: async () => "" };
     }
-    if (url(u).includes("/rest/v1/notification_send_log") && opts?.method === "POST") {
+    if (url(u).includes("/rest/v1/api_call_log") && opts?.method === "POST") {
       return { ok: true, json: async () => ({}), text: async () => "" };
     }
     if (url(u).includes("api.line.me")) return { ok: true, json: async () => ({}), text: async () => "" };

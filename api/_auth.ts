@@ -235,24 +235,32 @@ export async function checkDailyLimit(
   }
 }
 
-// ── 通知系エンドポイントのレート制限 ───────────────────────────
+// ── ai_outputs に記録しないエンドポイントのレート制限 ───────────────
 //
-// notify-line は AI機能ではない（OpenAIを呼ばない）ため checkDailyLimit の対象外
-// だったが、レート制限そのものが無いことに変わりはなく、任意の認証済みユーザーが
-// 組織のLINEグループへ無制限にスパムを送れる状態だった（セキュリティ監査で確認）。
-// ai_outputs は「AI出力の監査ログ」という別目的のテーブルなので、そこに数を
-// 混ぜず、専用の notification_send_log で数える。
+// checkDailyLimit は ai_outputs テーブルへの記録件数を数える前提だが、
+// 次の2エンドポイントはそこに記録していないため事実上レート制限が無かった
+// （セキュリティ監査で確認）：
+//   - notify-line   … AI機能ではない（OpenAIを呼ばない）ため、そもそも対象外
+//   - search-chat   … 「保存実装が無いので数に入らない」と意図的に除外されていた
+//
+// ai_outputs にこれらの回数を混ぜると「AI出力の監査ログ」という意味が汚染される
+// （分析タブのAI出力履歴に無関係な行が混ざる）ため、汎用の api_call_log で数える。
 
-const NOTIFY_LINE_DAILY_LIMIT = 30;
+const CALL_LIMIT: Record<string, number> = {
+  notify_line: 30,
+  search_chat: 100,
+};
 
 /**
- * LINE通知の日次上限を確認し、まだ上限内なら送信ログに1件記録する。
+ * ai_outputsを使わないエンドポイントの日次上限を確認し、上限内ならログに1件記録する。
  * checkDailyLimit と同じ方針で fail-open（数えられない環境ではAI機能側と同様に通す）。
  */
-export async function checkAndRecordNotifyLimit(
+export async function checkAndRecordCallLimit(
   userId: number,
   organizationId: string | null,
+  kind: keyof typeof CALL_LIMIT,
 ): Promise<Fail | null> {
+  const limit = CALL_LIMIT[kind];
   const PROJECT_URL = process.env.VITE_SUPABASE_URL;
   const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!PROJECT_URL || !SERVICE_ROLE) return null; // 設定が無い環境では数えない
@@ -270,8 +278,8 @@ export async function checkAndRecordNotifyLimit(
     ) - 9 * 3600 * 1000).toISOString();
 
     const cRes = await fetch(
-      `${PROJECT_URL}/rest/v1/notification_send_log`
-      + `?created_by=eq.${userId}&kind=eq.line`
+      `${PROJECT_URL}/rest/v1/api_call_log`
+      + `?created_by=eq.${userId}&kind=eq.${kind}`
       + `&created_at=gte.${encodeURIComponent(since)}&select=id`,
       { headers: { ...headers, Range: "0-0", Prefer: "count=exact" } },
     );
@@ -280,19 +288,19 @@ export async function checkAndRecordNotifyLimit(
     const total = Number(range.split("/")[1]);
     if (!Number.isFinite(total)) return null;
 
-    if (total >= NOTIFY_LINE_DAILY_LIMIT) {
+    if (total >= limit) {
       return {
         ok: false,
         status: 429,
-        error: `本日のLINE通知の送信回数の上限（${NOTIFY_LINE_DAILY_LIMIT}回）に達しました。明日また使えます。`,
+        error: `本日の利用回数の上限（${limit}回）に達しました。明日また使えます。`,
       };
     }
 
-    // 数え損ねる（=上限がすり抜ける）のを避けるため、送信前に記録する
-    await fetch(`${PROJECT_URL}/rest/v1/notification_send_log`, {
+    // 数え損ねる（=上限がすり抜ける）のを避けるため、実行前に記録する
+    await fetch(`${PROJECT_URL}/rest/v1/api_call_log`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ created_by: userId, organization_id: organizationId, kind: "line" }),
+      body: JSON.stringify({ created_by: userId, organization_id: organizationId, kind }),
     });
 
     return null;

@@ -24,7 +24,7 @@
 // （advise.ts の sources / limits と同じ方式）。
 
 import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
-import { requireUser, denied } from "./_auth.js";
+import { requireAppUser, denied, checkAndRecordCallLimit } from "./_auth.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,8 +32,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
   // 無認証だと OpenAI キーの踏み台にされるため、ログイン済みユーザーに限定する（api/_auth.ts）
-  const auth = await requireUser(req);
+  const auth = await requireAppUser(req);
   if (!auth.ok) return denied(res, auth);
+
+  // 他のAI系エンドポイントと違い ai_outputs に保存しないため checkDailyLimit の対象外
+  // だったが、それは「回数の上限が無い」ことを意味していた（セキュリティ監査で確認）。
+  // 単価は最も低いが、上限ゼロと単価の低さは別の話なので専用の日次上限を設ける。
+  const over = await checkAndRecordCallLimit(auth.user.userId, auth.user.organizationId, "search_chat");
+  if (over) return denied(res, over);
 
   const { question, records, recordCount, today } = (req.body ?? {}) as {
     question?: string; records?: string; recordCount?: number; today?: string;

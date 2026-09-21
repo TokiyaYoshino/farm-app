@@ -1,4 +1,4 @@
-# セキュリティ監査で見つかったHIGH項目3件を修正
+# セキュリティ監査で見つかったHIGH項目3件を修正（＋MEDIUM1件を同じ仕組みで追加対応）
 
 - 日付: 2026-09-21
 - 状態: 採用
@@ -16,11 +16,23 @@
 | 2 | `src/App.tsx`の`printPesticideReport()`が未エスケープでHTMLを組み立て、同一オリジンiframeへ`doc.write`していた（stored XSS） |
 | 3 | `supabase/functions/push-comment/index.ts`が`reports`/`schedules`/送信者名の参照に`organization_id`フィルタを付けておらず、他組織のreport/scheduleを参照してなりすまし通知を送れた（＋Webhook共有シークレット未設定時のfail-open） |
 
+修正1の実装中に、同じ根本原因（ai_outputsに保存しないエンドポイントは事実上レート制限が
+無い）を持つMEDIUM項目`api/search-chat.ts`（日次上限が一切無い）も同じ仕組みで直せると
+分かったため、当初「notify-line専用」で作った表を汎用化し、同日中にsearch-chatも合わせて
+直した（下記4）。
+
+| # | 内容 |
+|---|---|
+| 4 | `api/search-chat.ts`に日次上限が一切無く、OpenAI呼び出しのコストが無制限になりうった |
+
 ## 決めたこと
 
-1. **notify-line**: 新規テーブル`notification_send_log`（`api_outputs`とは別。AI出力監査ログを
-   通知回数のカウントで汚染しないため）を使い、1日30回の上限とメッセージ1000文字の上限を追加。
-   `scripts/test-api-auth-boundaries.mjs`に回帰テストを追加
+1. **notify-line / search-chat 共通**: 新規テーブル`api_call_log`（`ai_outputs`とは別。
+   AI出力監査ログを非AI系エンドポイントの呼び出し回数カウントで汚染しないため）を使い、
+   `checkAndRecordCallLimit(userId, organizationId, kind)`という汎用ヘルパーを
+   `api/_auth.ts`に追加した。notify-lineは1日30回＋メッセージ1000文字上限、
+   search-chatは1日100回上限（単価が最も低いためAI系の中では最も緩い数値にした）。
+   `scripts/test-api-auth-boundaries.mjs`と`scripts/test-search-chat.mjs`に回帰テストを追加
 2. **printPesticideReport**: `escapeHtml`関数を追加し、HTML化する全フィールド（日付・圃場・作物・
    農薬名・希釈倍率・使用量・作業者・対象期間）に適用
 3. **push-comment**: `reports`/`schedules`/送信者名の参照クエリすべてに`organization_id=eq.${c.organization_id}`
@@ -29,20 +41,26 @@
 
 ## 影響範囲
 
-- DB: `notification_send_log`テーブルを新規追加（`scripts/migrations/2026-09-21-notification-send-log.sql`、
+- DB: `api_call_log`テーブルを新規追加（`scripts/migrations/2026-09-21-api-call-log.sql`、
   要Supabase SQL Editorでの手動適用）。ポリシーを1本も作らず、authenticated/anonからは常に
-  アクセス不可（service_roleキーのみが使う）
-- 既存機能: 削除なし。1日30回のLINE通知という上限は通常の業務利用（作業報告のたびに通知等）を
-  妨げない広さとして設定（`checkDailyLimit`の他機能が50/日である水準を踏襲）
+  アクセス不可（service_roleキーのみが使う）。
+  ※ 当初`notification_send_log`という名前で作ったが、本番未適用のうちにsearch-chatにも
+  同じ仕組みが要ると分かったため、同日中に`api_call_log`へ汎用化して置き換えた
+  （`scripts/migrations/2026-09-21-notification-send-log.sql`は削除済み）
+- 既存機能: 削除なし。1日30回のLINE通知・1日100回のsearch-chatという上限は通常の業務利用を
+  妨げない広さとして設定（`checkDailyLimit`の他AI機能が50/日である水準を踏襲）
+- api/search-chat.tsの認証を`requireUser`から`requireAppUser`に変更（userId/organizationIdを
+  取得するため）。動作要件が1段厳しくなる（usersテーブルに対応行が無いと403）が、
+  他のAI系エンドポイントは元々この要件を持っているため実質的な影響は無いはず
 - デプロイ: `api/*.ts`と`src/App.tsx`はgit push でVercelへ自動デプロイされる。
   `supabase/functions/push-comment/index.ts`は**別途 `supabase functions deploy push-comment --no-verify-jwt`
   の実行が必要**（Vercelのデプロイ対象外）
 
 ## プレモータム
 
-1. **notification_send_logのマイグレーションを適用し忘れる。** →
-   `checkAndRecordNotifyLimit`は表が無い場合`!cRes.ok`でfail-openするため、
-   通知機能自体は止まらない（レート制限が効かないだけ）。ただしそれでは今回の
+1. **api_call_logのマイグレーションを適用し忘れる。** →
+   `checkAndRecordCallLimit`は表が無い場合`!cRes.ok`でfail-openするため、
+   通知・検索機能自体は止まらない（レート制限が効かないだけ）。ただしそれでは今回の
    修正の意味が無いため、マイグレーション適用は必達
 2. **push-commentの新しいコードをデプロイし忘れる。** → Vercelのgit push自動デプロイに
    慣れていると見落としやすい。Edge Functionは明示的な`supabase functions deploy`が必要

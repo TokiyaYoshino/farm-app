@@ -30,6 +30,8 @@ process.env.VITE_SUPABASE_URL = "https://test.supabase.invalid";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 
 const isAuthUrl = url => String(url).includes("/auth/v1/user");
+const isUsersUrl = url => String(url).includes("/rest/v1/users");
+const isCallLogUrl = url => String(url).includes("/rest/v1/api_call_log");
 const authOk = () => ({ ok: true, status: 200, json: async () => ({ id: "test-auth-id", email: "t@example.com" }), text: async () => "" });
 
 let captured = null;
@@ -41,6 +43,15 @@ const DEFAULT_LLM_JSON = {
 };
 globalThis.fetch = async (url, opts) => {
   if (isAuthUrl(url)) return authOk();
+  // requireAppUser が呼び出し元の users 行（role/organization_id）を解決するための問い合わせ
+  if (isUsersUrl(url)) {
+    return { ok: true, json: async () => [{ id: 7, role: "worker", organization_id: "11111111-1111-1111-1111-111111111111", name: "テスト" }], text: async () => "" };
+  }
+  // checkAndRecordCallLimit の日次上限カウント/記録（セキュリティ監査対応で追加）
+  if (isCallLogUrl(url)) {
+    if (opts?.method === "POST") return { ok: true, json: async () => ({}), text: async () => "" };
+    return { ok: true, headers: { get: () => "0-0/0" }, json: async () => [], text: async () => "" };
+  }
   captured = JSON.parse(opts.body);
   return {
     ok: true,
@@ -68,6 +79,19 @@ const RECORDS = [
   "2025-09-20 【ほうれん草・上の段】作業:防除 / 農薬:ﾀﾞｺﾆｰﾙ1000(300L)",
 ].join("\n");
 const Q = "去年の梅の防除は何回した？";
+
+console.log("\n日次上限（2026-09-21のセキュリティ監査対応。ai_outputsに保存しないため専用に数える）:");
+{
+  const savedFetch = globalThis.fetch;
+  globalThis.fetch = async (u, opts) => {
+    if (isAuthUrl(u)) return authOk();
+    if (isUsersUrl(u)) return { ok: true, json: async () => [{ id: 7, role: "worker", organization_id: "11111111-1111-1111-1111-111111111111", name: "テスト" }], text: async () => "" };
+    if (isCallLogUrl(u)) return { ok: true, headers: { get: () => "0-0/100" }, json: async () => [], text: async () => "" };
+    throw new Error("上限到達後はOpenAIを呼んではいけない: " + u);
+  };
+  t("1日の上限（100回）に達したら429で拒否する", (await call({ question: Q, records: RECORDS })).code === 429);
+  globalThis.fetch = savedFetch;
+}
 
 console.log("\n入力の検証:");
 t("question 無しは 400", (await call({ records: RECORDS })).code === 400);
@@ -156,11 +180,17 @@ console.log("\nLLM 出力の取り扱い:");
 r = await call({ question: Q, records: RECORDS });
 t("costUsd を算出する", typeof r.body.costUsd === "number" && r.body.costUsd > 0);
 const saved = globalThis.fetch;
-globalThis.fetch = async url => isAuthUrl(url) ? authOk()
-  : ({ ok: true, json: async () => ({ choices: [{ message: { content: "これはJSONではない" } }] }), text: async () => "" });
+const withAuthAndUser = openaiMock => async (url, opts) => {
+  if (isAuthUrl(url)) return authOk();
+  if (isUsersUrl(url)) return { ok: true, json: async () => [{ id: 7, role: "worker", organization_id: "11111111-1111-1111-1111-111111111111", name: "テスト" }], text: async () => "" };
+  if (isCallLogUrl(url)) return opts?.method === "POST"
+    ? { ok: true, json: async () => ({}), text: async () => "" }
+    : { ok: true, headers: { get: () => "0-0/0" }, json: async () => [], text: async () => "" };
+  return openaiMock();
+};
+globalThis.fetch = withAuthAndUser(() => ({ ok: true, json: async () => ({ choices: [{ message: { content: "これはJSONではない" } }] }), text: async () => "" }));
 t("JSON でない応答は 502（壊れた表示を出さない）", (await call({ question: Q, records: RECORDS })).code === 502);
-globalThis.fetch = async url => isAuthUrl(url) ? authOk()
-  : ({ ok: false, status: 429, text: async () => "rate limit", json: async () => ({}) });
+globalThis.fetch = withAuthAndUser(() => ({ ok: false, status: 429, text: async () => "rate limit", json: async () => ({}) }));
 t("OpenAI エラーは 502", (await call({ question: Q, records: RECORDS })).code === 502);
 globalThis.fetch = saved;
 llmJson = { answer: "   ", answerable: true, evidence: [] };
