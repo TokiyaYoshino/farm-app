@@ -647,10 +647,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [currentUser, currentOrganizationId]);
 
   const editComment = useCallback(async (id: string, message: string): Promise<boolean> => {
-    const { error } = await supabase.from("comments").update({ message }).eq("id", id).eq("organization_id", currentOrganizationId);
+    // user_idを条件に含めないと、RLSが組織スコープしか見ていないため他人のコメントを
+    // 書き換えられてしまう（2026-09-21のセキュリティ監査対応。RLS側も同時に修正する）
+    if (!currentUser) return false;
+    const { error } = await supabase.from("comments").update({ message })
+      .eq("id", id).eq("organization_id", currentOrganizationId).eq("user_id", currentUser.id);
     if (!error) setComments(prev => prev.map(cm => cm.id === id ? { ...cm, message } : cm));
     return !error;
-  }, [currentOrganizationId]);
+  }, [currentUser, currentOrganizationId]);
 
   // ── 作物ごとの相談スレッド（農業エージェント） ──
   // 発言（crop_advice_messages）と、そこから切り出したやること（crop_advice_actions）。

@@ -1720,7 +1720,11 @@ export default function App() {
   };
 
   const editComment = async (id: string, message: string): Promise<boolean> => {
-    const { error } = await supabase.from("comments").update({ message }).eq("id", id).eq("organization_id", currentOrganizationId);
+    // user_idを条件に含めないと、RLSが組織スコープしか見ていないため他人のコメントを
+    // 書き換えられてしまう（2026-09-21のセキュリティ監査対応。RLS側も同時に修正する）
+    if (!currentUser) return false;
+    const { error } = await supabase.from("comments").update({ message })
+      .eq("id", id).eq("organization_id", currentOrganizationId).eq("user_id", currentUser.id);
     if (!error) setAllComments(prev => prev.map(cm => cm.id === id ? { ...cm, message } : cm));
     return !error;
   };
