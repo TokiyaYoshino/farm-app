@@ -21,6 +21,7 @@
 | crop_advice_actions | id(uuid), organization_id(FK, not null), crop_id(→crops, nullable), message_id(→crop_advice_messages), title, work_type, due_from, due_to, when_text, why, sort_order, dismissed_at, created_by(→users), created_at |
 
 - RLS は全テーブルで有効。**実ポリシー適用済み**（2026-09-06 に本番で確認）。`allow_all` は全テーブルから消えており、`<table>_all_own_org`（`organization_id = jwt_organization_id()`）が入っている。**anon キーでは1行も読めない**ので、CLI から本番を読むスクリプトは `SUPABASE_DB_PASSWORD` 経由で直接続する（`scripts/backup-db.sh` / `scripts/check-crop-links.mjs`）。テーブル変更時は RLS ポリシーも確認すること
+- **`crops`/`fields`/`pesticides`/`settings` は role も見る（2026-09-21）**: セキュリティ監査で `<table>_all_own_org` が role を一切見ていないため worker が直接削除・改変できることが判明し、select は組織スコープのみ・insert/update/delete は `jwt_is_admin()` を追加で要求する形に分割した。`users` の delete も同様に admin 限定にした。加えて `users.role` の変更は `trg_prevent_role_self_change` トリガーで `service_role`（`api/set-user-auth.ts`）経由以外を拒否する（`scripts/migrations/2026-09-21-fix-role-based-authorization.sql`、`docs/decisions/20260921-security-audit-role-based-rls.md`）
 - マルチテナント化ステップ1〜2（`organizations`テーブル作成・`users.login_id`一意制約・各テーブルへの`organization_id`列追加とクライアントクエリ対応）は完了。SQLは`scripts/migrations/`参照。RLS実ポリシー化は未着手（`docs/adr-001-multitenancy-and-ai.md`参照）
 - `tickets`はクライアントからのinsert経路が現状ないため、新規作成時に`organization_id`を設定するコードは未実装（列自体は追加・バックフィル済み）
 - `ai_outputs` / `daily_weather` / `pesticide_registrations` はレガシーの`org`文字列カラムを持たず`organization_id`のみ。SQLは`scripts/migrations/2026-07-31-ai-outputs.sql`
