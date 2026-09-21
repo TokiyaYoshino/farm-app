@@ -11,6 +11,11 @@
 //      サーバーが任意のURLを取りに行っていた（SSRF）。エラー文言が
 //      「到達不可 / 画像でない」を区別するので当たり判定にも使えた
 //
+// 2026-09-21 のセキュリティ監査（cloudflare/security-audit-skill）で見つかった
+// もう1件も固定する。
+//   3. notify-line にレート制限・文字数制限が一切無く、ログイン済みの誰でも
+//      （adminでなくても）組織のLINEグループへ無制限にスパムを送れた
+//
 // LLM の出力品質ではなく、**サーバー側で固定している契約**だけを見る。
 import { pathToFileURL } from "node:url";
 import { registerHooks } from "node:module";
@@ -99,7 +104,39 @@ console.log("\nnotify-line: 通知先の決定（なりすまし防止）:");
   t("所属が無ければ環境変数にフォールバックする", r2?.code === 200 && sentTo?.auth === "Bearer env-token" && sentTo?.to === "env-group");
 }
 
-// ── 2. diagnose-image: 取りに行く先を自分のストレージに限る ──────────────
+// ── 2. notify-line: レート制限・文字数制限（2026-09-21のセキュリティ監査対応）──
+console.log("\nnotify-line: レート制限・文字数制限:");
+{
+  const notify = (await import(pathToFileURL(new URL("../api/notify-line.ts", import.meta.url).pathname).href)).default;
+
+  const mockCounter = (countSoFar) => async (u, opts) => {
+    if (url(u).includes("/auth/v1/user")) return authOk();
+    if (url(u).includes("/rest/v1/users")) return { ok: true, json: async () => [{ id: 7, role: "worker", organization_id: MY_ORG, name: "テスト" }], text: async () => "" };
+    if (url(u).includes("/rest/v1/organizations")) return { ok: true, json: async () => [{}], text: async () => "" };
+    if (url(u).includes("/rest/v1/notification_send_log") && (!opts || opts.method !== "POST")) {
+      return { ok: true, headers: { get: () => `0-0/${countSoFar}` }, json: async () => [], text: async () => "" };
+    }
+    if (url(u).includes("/rest/v1/notification_send_log") && opts?.method === "POST") {
+      return { ok: true, json: async () => ({}), text: async () => "" };
+    }
+    if (url(u).includes("api.line.me")) return { ok: true, json: async () => ({}), text: async () => "" };
+    throw new Error("想定外の fetch: " + url(u));
+  };
+
+  globalThis.fetch = mockCounter(5);
+  const under = await call(notify, { message: "今日の作業終わりました" });
+  t("上限未満なら送信できる（200）", under?.code === 200);
+
+  globalThis.fetch = mockCounter(30);
+  const atLimit = await call(notify, { message: "本日30回目" });
+  t("1日の上限（30回）に達したら429で拒否する", atLimit?.code === 429);
+
+  globalThis.fetch = mockCounter(0);
+  const tooLong = await call(notify, { message: "あ".repeat(1001) });
+  t("1000文字を超えるメッセージは400で拒否する", tooLong?.code === 400);
+}
+
+// ── 3. diagnose-image: 取りに行く先を自分のストレージに限る ──────────────
 console.log("\ndiagnose-image: 取得先の制限（SSRF防止）:");
 {
   const diag = (await import(pathToFileURL(new URL("../api/diagnose-image.ts", import.meta.url).pathname).href)).default;

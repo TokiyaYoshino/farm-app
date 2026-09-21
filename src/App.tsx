@@ -2712,6 +2712,10 @@ export default function App() {
   };
   const EXPORT_HEADERS = ["日付", "圃場", "作物", "農薬名", "希釈倍率", "使用量", "作業者"];
   const csvEscape = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  // crops/fields/pesticides/usersの名称はworkerでも書き込める値のため、
+  // HTMLとして描画する前に必ずエスケープする（stored XSS対策、2026-09-21セキュリティ監査）
+  const escapeHtml = (v: string) =>
+    String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
   const downloadPesticideCsv = () => {
     const rows = pesticideExportRows();
     const lines = [EXPORT_HEADERS, ...rows.map(r => [r.date, r.field, r.crop, r.pesticide, r.dilutionRate, r.amount, r.worker])]
@@ -2726,7 +2730,7 @@ export default function App() {
   const printPesticideReport = () => {
     const rows = pesticideExportRows();
     const tableRows = rows.map(r =>
-      `<tr><td>${r.date}</td><td>${r.field}</td><td>${r.crop}</td><td>${r.pesticide}</td><td>${r.dilutionRate}</td><td>${r.amount}</td><td>${r.worker}</td></tr>`
+      `<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.field)}</td><td>${escapeHtml(r.crop)}</td><td>${escapeHtml(r.pesticide)}</td><td>${escapeHtml(r.dilutionRate)}</td><td>${escapeHtml(r.amount)}</td><td>${escapeHtml(r.worker)}</td></tr>`
     ).join("");
     const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>農薬使用履歴</title><style>
       body { font-family: -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif; padding: 24px; color: #1A1C1E; }
@@ -2738,7 +2742,7 @@ export default function App() {
       @media print { body { padding: 0; } }
     </style></head><body>
       <h1>農薬使用履歴</h1>
-      <div class="meta">対象期間: ${exportFrom} 〜 ${exportTo}　${rows.length}件</div>
+      <div class="meta">対象期間: ${escapeHtml(exportFrom)} 〜 ${escapeHtml(exportTo)}　${rows.length}件</div>
       <table><thead><tr>${EXPORT_HEADERS.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${tableRows}</tbody></table>
     </body></html>`;
     const iframe = document.createElement("iframe");

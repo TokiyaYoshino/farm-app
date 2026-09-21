@@ -1,5 +1,7 @@
 import type { ApiRequest, ApiResponse, ExternalJson } from "./types.js";
-import { requireAppUser, denied } from "./_auth.js";
+import { requireAppUser, denied, checkAndRecordNotifyLimit } from "./_auth.js";
+
+const MESSAGE_MAX_LENGTH = 1000;
 
 // マルチテナント化: LINE通知先を organizations テーブルの組織別設定から取得する。
 // 取得できない場合（所属なし・未設定・取得失敗）は既存の環境変数にフォールバックする。
@@ -21,7 +23,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // body の organization_id は受け取らない。渡されても無視する
   const { message } = (req.body ?? {}) as { message?: string };
   if (!message) return res.status(400).json({ error: "message required" });
+  if (message.length > MESSAGE_MAX_LENGTH) {
+    return res.status(400).json({ error: `メッセージが長すぎます（${MESSAGE_MAX_LENGTH}文字以内）。` });
+  }
   const organization_id = auth.user.organizationId;
+
+  // レート制限（セキュリティ監査で「認証さえ通れば無制限に送れる」ことが判明したため追加）。
+  // admin限定ではなく、ログイン済みの誰でも呼べるエンドポイントなので、
+  // 誤爆・悪用いずれでも組織のLINEグループへのスパムを防ぐ。
+  const over = await checkAndRecordNotifyLimit(auth.user.userId, organization_id);
+  if (over) return denied(res, over);
 
   let token   = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   let groupId = process.env.LINE_GROUP_ID;

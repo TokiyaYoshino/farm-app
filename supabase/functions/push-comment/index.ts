@@ -51,15 +51,20 @@ async function resolveRecipients(c: CommentRow): Promise<number[]> {
     if (u.id !== c.user_id && u.name && c.message.includes(`@${u.name}`)) ids.add(u.id);
   }
 
+  // organization_id を必ず付ける（2026-09-21のセキュリティ監査で見つかった穴）。
+  // comments は organization_id のRLSしか無く、target_id が同じ組織のreport/scheduleを
+  // 指しているかは検証していないため、ここで付けないと他組織のreport/scheduleを
+  // service_roleキーで（RLSをバイパスして）参照できてしまう＝越境の情報漏えい＋
+  // なりすまし通知の経路になる。
   if (c.target_type === "report") {
     const rows = await rest<{ user_id: number }[]>(
-      `reports?id=eq.${c.target_id}&select=user_id`,
+      `reports?id=eq.${c.target_id}&organization_id=eq.${c.organization_id}&select=user_id`,
     );
     const owner = rows[0]?.user_id;
     if (owner != null) ids.add(owner);
   } else {
     const rows = await rest<{ user_id: number; assigned_user_id: number | null }[]>(
-      `schedules?id=eq.${c.target_id}&select=user_id,assigned_user_id`,
+      `schedules?id=eq.${c.target_id}&organization_id=eq.${c.organization_id}&select=user_id,assigned_user_id`,
     );
     const sc = rows[0];
     const owner = sc?.assigned_user_id ?? sc?.user_id;
@@ -89,7 +94,14 @@ async function pruneTokens(tokens: string[]): Promise<void> {
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  if (WEBHOOK_SECRET && req.headers.get("x-webhook-secret") !== WEBHOOK_SECRET) {
+  // fail-closed: シークレット未設定を「誰でも呼べる」に倒さない
+  // （2026-09-21のセキュリティ監査で、旧実装が `WEBHOOK_SECRET &&` の短絡評価により
+  //   未設定時に認可チェックそのものが無効化されるfail-open設計だったと判明したため）
+  if (!WEBHOOK_SECRET) {
+    console.error("push-comment: PUSH_WEBHOOK_SECRET が未設定です。設定するまでこの関数は全リクエストを拒否します。");
+    return new Response("Server misconfigured", { status: 500 });
+  }
+  if (req.headers.get("x-webhook-secret") !== WEBHOOK_SECRET) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -114,7 +126,9 @@ Deno.serve(async (req: Request) => {
     );
     if (tokenRows.length === 0) return Response.json({ sent: 0, reason: "no tokens" });
 
-    const senders = await rest<{ name: string }[]>(`users?id=eq.${c.user_id}&select=name`);
+    const senders = await rest<{ name: string }[]>(
+      `users?id=eq.${c.user_id}&organization_id=eq.${c.organization_id}&select=name`,
+    );
     const senderName = senders[0]?.name ?? "メンバー";
 
     const messages = tokenRows.map(t => ({

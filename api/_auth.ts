@@ -235,6 +235,72 @@ export async function checkDailyLimit(
   }
 }
 
+// ── 通知系エンドポイントのレート制限 ───────────────────────────
+//
+// notify-line は AI機能ではない（OpenAIを呼ばない）ため checkDailyLimit の対象外
+// だったが、レート制限そのものが無いことに変わりはなく、任意の認証済みユーザーが
+// 組織のLINEグループへ無制限にスパムを送れる状態だった（セキュリティ監査で確認）。
+// ai_outputs は「AI出力の監査ログ」という別目的のテーブルなので、そこに数を
+// 混ぜず、専用の notification_send_log で数える。
+
+const NOTIFY_LINE_DAILY_LIMIT = 30;
+
+/**
+ * LINE通知の日次上限を確認し、まだ上限内なら送信ログに1件記録する。
+ * checkDailyLimit と同じ方針で fail-open（数えられない環境ではAI機能側と同様に通す）。
+ */
+export async function checkAndRecordNotifyLimit(
+  userId: number,
+  organizationId: string | null,
+): Promise<Fail | null> {
+  const PROJECT_URL = process.env.VITE_SUPABASE_URL;
+  const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!PROJECT_URL || !SERVICE_ROLE) return null; // 設定が無い環境では数えない
+
+  const headers = {
+    Authorization: `Bearer ${SERVICE_ROLE}`,
+    apikey: SERVICE_ROLE,
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const nowJst = new Date(Date.now() + 9 * 3600 * 1000);
+    const since = new Date(Date.UTC(
+      nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate(),
+    ) - 9 * 3600 * 1000).toISOString();
+
+    const cRes = await fetch(
+      `${PROJECT_URL}/rest/v1/notification_send_log`
+      + `?created_by=eq.${userId}&kind=eq.line`
+      + `&created_at=gte.${encodeURIComponent(since)}&select=id`,
+      { headers: { ...headers, Range: "0-0", Prefer: "count=exact" } },
+    );
+    if (!cRes.ok) return null; // 表が無い（未適用）等はfail-open
+    const range = cRes.headers.get("content-range") ?? "";
+    const total = Number(range.split("/")[1]);
+    if (!Number.isFinite(total)) return null;
+
+    if (total >= NOTIFY_LINE_DAILY_LIMIT) {
+      return {
+        ok: false,
+        status: 429,
+        error: `本日のLINE通知の送信回数の上限（${NOTIFY_LINE_DAILY_LIMIT}回）に達しました。明日また使えます。`,
+      };
+    }
+
+    // 数え損ねる（=上限がすり抜ける）のを避けるため、送信前に記録する
+    await fetch(`${PROJECT_URL}/rest/v1/notification_send_log`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ created_by: userId, organization_id: organizationId, kind: "line" }),
+    });
+
+    return null;
+  } catch {
+    return null; // fail-open
+  }
+}
+
 /** 失敗をそのままレスポンスに変換する。各ハンドラの定型文を減らすため */
 export function denied(res: ApiResponse, f: Fail): void {
   res.status(f.status).json({ error: f.error });
