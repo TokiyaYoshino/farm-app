@@ -185,12 +185,23 @@ export async function checkDailyLimit(
 
   const PROJECT_URL = process.env.VITE_SUPABASE_URL;
   const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!PROJECT_URL || !SERVICE_ROLE) return null; // 設定が無い環境では数えない
+  if (!PROJECT_URL || !SERVICE_ROLE) {
+    console.error(`checkDailyLimit fail-open (${kind}): missing env VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY`);
+    return null;
+  }
 
   const headers = {
     Authorization: `Bearer ${SERVICE_ROLE}`,
     apikey: SERVICE_ROLE,
     Prefer: "count=exact",
+  };
+
+  // fail-openの発生をログから見分けられるようにする（セキュリティ監査対応）。
+  // 従来は成功時と同じ`return null`だったため、上限チェックが機能しているのか
+  // 数えられずに素通ししているのかがログから区別できなかった
+  const failOpen = (reason: string) => {
+    console.error(`checkDailyLimit fail-open (${kind}): ${reason}`);
+    return null;
   };
 
   try {
@@ -199,10 +210,10 @@ export async function checkDailyLimit(
       `${PROJECT_URL}/rest/v1/users?auth_id=eq.${encodeURIComponent(authId)}&select=id`,
       { headers },
     );
-    if (!uRes.ok) return null;
+    if (!uRes.ok) return failOpen(`users lookup failed: ${uRes.status}`);
     const uRows = await uRes.json();
     const userId = Array.isArray(uRows) && uRows.length > 0 ? uRows[0].id : null;
-    if (userId == null) return null;
+    if (userId == null) return null; // 対応するusers行が無いのは正常系（別の場所で弾かれる）
 
     // その日の 00:00 以降。日付の境目は UTC ではなく日本時間で切る
     const nowJst = new Date(Date.now() + 9 * 3600 * 1000);
@@ -216,11 +227,11 @@ export async function checkDailyLimit(
       + `&created_at=gte.${encodeURIComponent(since)}&select=id`,
       { headers: { ...headers, Range: "0-0" } },
     );
-    if (!cRes.ok) return null;
+    if (!cRes.ok) return failOpen(`count query failed: ${cRes.status}`);
     // Content-Range: "0-0/12" の分母が総件数
     const range = cRes.headers.get("content-range") ?? "";
     const total = Number(range.split("/")[1]);
-    if (!Number.isFinite(total)) return null;
+    if (!Number.isFinite(total)) return failOpen(`content-range not parseable: "${range}"`);
 
     if (total >= limit) {
       return {
@@ -230,8 +241,8 @@ export async function checkDailyLimit(
       };
     }
     return null;
-  } catch {
-    return null; // fail-open
+  } catch (e) {
+    return failOpen(`exception: ${e}`);
   }
 }
 
