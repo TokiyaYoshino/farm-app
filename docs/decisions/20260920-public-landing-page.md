@@ -70,6 +70,10 @@ worker にURLを渡したとき、ログイン画面しか見えないと何の�
   （`playwright` 等の devDependency 追加は、この1枚のためには重い）。
   **ストア掲載情報の回（スクリーンショット5枚を撮る作業）と同時に作る**のが筋なので、そこへ送る。
   壊れた `og:image` を今置く方が害が大きいため、タグ自体を足さない
+  > **追記（2026-09-21・解消）**: ストア掲載情報の回で作成した（`public/og-image.png`）。
+  > **`package.json` には何も足していない**——playwright を作業ディレクトリの外に入れて
+  > chromium で1回描画しただけで、元データは `scripts/og-image.html` に置いた（再生成手順も同ファイル）。
+  > `index.html` と `public/about.html` の両方に絶対URLで `og:image` を入れてある
 - **アプリの実画面スクリーンショット** — 同上。デモモード（`npm run demo`）で撮れるが、
   App Store 用の撮影と一緒にやる
 - **運営者の正式名称・連絡先メール** — オーナーの手番。`privacy.html` と同じ形式で

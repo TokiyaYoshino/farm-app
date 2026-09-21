@@ -84,10 +84,15 @@ npx eas-cli submit --platform ios --latest
 
 ## 6. App Store Connect の入力項目
 
+> **文言の確定版は `docs/app-store-listing.md`。** 名前・サブタイトル・キーワード・
+> プロモーションテキスト・説明文・スクリーンショットの構成・審査備考は、すべてそこに
+> 文字数の実測つきで置いてある。以下は項目の一覧として残す。
+
 ### アプリ情報
-- 名前: 農作業レポート
-- サブタイトル（30字以内）: 例「農場の作業記録・予定・分析」
-- カテゴリ: ビジネス（または仕事効率化）
+- 名前: `農作業レポート - 農家の作業日誌`（17字）
+- サブタイトル（30字以内）: `作業・農薬・写真の記録と前年比較`（16字）
+- キーワード（100字以内）/ プロモーションテキスト（170字以内）/ 説明文: `app-store-listing.md` 1章
+- カテゴリ: ビジネス（第2: 仕事効率化）
 - プライバシーポリシーURL: `https://kishu-farm.vercel.app/privacy`
   （独自ドメイン運用中なら `https://kishufarm.com/privacy`）
 - **サポートURL（必須）**: `https://kishu-farm.vercel.app/about`
@@ -108,8 +113,11 @@ npx eas-cli submit --platform ios --latest
 4. 計画ガント（横向き）
 5. AI機能（画像診断 or 防除助言）
 
-デモデータは `node scripts/seed-demo-reports.mjs <ID> <PW>` で投入できる
-（`--delete` で撤収。note に `[demo]` が入る）。
+デモデータは **`expo-prototype/` から** `node scripts/seed-demo-reports.mjs <ID> <PW>` で
+投入できる（`--delete` で撤収。note に `[demo]` が入る）。
+**スクリプトの実体は `expo-prototype/scripts/` にある**（リポジトリ直下の `scripts/` ではない）。
+
+**撮る内容とキャプションは `docs/app-store-listing.md` 3章に確定させた。**
 
 ### 審査用情報
 - **デモアカウント**: 審査担当がログインできる ID/パスワードを必ず記載する。

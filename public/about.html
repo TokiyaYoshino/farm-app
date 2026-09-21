@@ -18,11 +18,13 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="農作業レポート" />
-    <!--
-      TODO（ストア掲載情報の回で対応）: og:image（1200×630 の PNG）。
-      App Store 用スクリーンショットの撮影と同時に作る。
-      経緯は docs/decisions/20260920-public-landing-page.md の Won't this time。
-    -->
+    <!-- 絶対URLでないと LINE / X / Facebook のクローラが拾わない。
+         独自ドメインを主にするときは下2行を差し替える -->
+    <meta property="og:image" content="https://kishu-farm.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="農作業レポート — 農場の作業記録アプリ" />
+    <meta name="twitter:card" content="summary_large_image" />
     <style>
       :root {
         /* src/ui/tokens.ts と同じ値。静的HTMLからは import できないため転記している

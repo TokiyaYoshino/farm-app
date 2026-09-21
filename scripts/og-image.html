@@ -1,0 +1,66 @@
+<!--
+  OGP画像（public/og-image.png）の元データ。1200×630。
+
+  再生成（この repo に依存は足さない。playwright は作業ディレクトリの外に入れる）:
+    mkdir -p /tmp/og && cd /tmp/og && npm init -y && npm i playwright
+    node -e '
+      const {chromium} = require("playwright");
+      (async () => {
+        const b = await chromium.launch({ executablePath: process.env.CHROME });
+        const p = await b.newPage({ viewport: { width: 1200, height: 630 } });
+        await p.goto("file://<repo>/scripts/og-image.html", { waitUntil: "networkidle" });
+        await p.screenshot({ path: "<repo>/public/og-image.png" });
+        await b.close();
+      })();'
+  CHROME には playwright が入れた chromium の実体を渡す（例: /opt/pw-browsers/chromium-*/chrome-linux/chrome）。
+
+  色は src/ui/tokens.ts と同じ値を転記している。トークンを変えたらここも合わせる。
+-->
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8" />
+<style>
+  /* src/ui/tokens.ts と同じ値 */
+  :root { --bg:#F5F5F6; --card:#FFFFFF; --ink:#2E7D32; --ink-soft:#E4F0E4;
+          --text:#1A1C1E; --text-sub:#66696E; --hairline:#EBEBED; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1200px; height:630px; background:var(--bg); display:flex;
+         align-items:center; justify-content:center;
+         font-family:"IPAGothic","Noto Sans JP",sans-serif; }
+  .card { width:1080px; height:510px; background:var(--card); border-radius:40px;
+          box-shadow:0 2px 6px rgba(16,17,20,.05), 0 24px 64px rgba(16,17,20,.10);
+          padding:64px 72px; display:flex; flex-direction:column; justify-content:space-between; }
+  .top { display:flex; align-items:center; gap:22px; }
+  .icon { width:76px; height:76px; border-radius:22px; background:var(--ink);
+          display:flex; align-items:center; justify-content:center; flex:none; }
+  .eyebrow { font-size:25px; font-weight:700; color:var(--ink); letter-spacing:.5px; }
+  h1 { font-size:82px; font-weight:700; color:var(--text); letter-spacing:-2px; line-height:1.15; }
+  .sub { font-size:33px; color:var(--text-sub); line-height:1.6; }
+  .chips { display:flex; gap:14px; }
+  .chip { background:var(--ink-soft); color:var(--ink); font-size:26px; font-weight:700;
+          padding:14px 28px; border-radius:999px; }
+</style></head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="#fff"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/>
+          <path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/>
+          <path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/>
+        </svg>
+      </div>
+      <div class="eyebrow">農場の作業記録アプリ</div>
+    </div>
+    <div>
+      <h1>農作業レポート</h1>
+      <p class="sub">作業・使った農薬・写真を1件にまとめて記録し、<br />前年との比較と農薬の使用回数の確認に返します。</p>
+    </div>
+    <div class="chips">
+      <div class="chip">作業の記録</div>
+      <div class="chip">前年との比較</div>
+      <div class="chip">農薬の使用回数</div>
+    </div>
+  </div>
+</body></html>
