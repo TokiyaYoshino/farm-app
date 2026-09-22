@@ -39,6 +39,8 @@ export interface AppUser extends AuthedUser {
   role: string;
   organizationId: string | null;
   name: string | null;
+  /** 退会時の本人確認（自分のIDを入力してもらう）に使う。未設定の行では null */
+  loginId: string | null;
 }
 
 type Fail = { ok: false; status: number; error: string };
@@ -108,7 +110,7 @@ export async function requireAppUser(req: ApiRequest): Promise<{ ok: true; user:
   const PROJECT_URL = process.env.VITE_SUPABASE_URL!;
   const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const headers = { Authorization: `Bearer ${SERVICE_ROLE}`, apikey: SERVICE_ROLE };
-  const select = "select=id,role,organization_id,name";
+  const select = "select=id,role,organization_id,name,login_id";
 
   const lookup = async (query: string) => {
     const r = await fetch(`${PROJECT_URL}/rest/v1/users?${query}&${select}`, { headers });
@@ -133,6 +135,7 @@ export async function requireAppUser(req: ApiRequest): Promise<{ ok: true; user:
         role: row.role,
         organizationId: row.organization_id ?? null,
         name: row.name ?? null,
+        loginId: row.login_id ?? null,
       },
     };
   } catch {

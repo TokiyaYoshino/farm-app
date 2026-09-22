@@ -3,7 +3,8 @@
 //       （本番は Supabase 認証が要り、開発環境からはログインできないため）
 //
 // 安全策:
-//   1. VITE_DEMO_MODE=1 のときだけ有効。既定 off なので Vercel では死にコード
+//   1. VITE_DEMO_MODE=1（開発）か、ログイン前の「デモを見る」（本番）でだけ有効。
+//      どちらでもなければ既定 off
 //   2. DEMO 時は Supabase クライアントを必ずダミーURLにする（本番キーが置かれていても書き込めない）
 //   3. 画面上に「デモデータ」バッジを出す（本番に紛れ込んだら一目で分かる）
 //
@@ -14,7 +15,39 @@
 
 import type { Schedule, Comment } from "../components/CalendarView";
 
-export const DEMO: boolean = import.meta.env.VITE_DEMO_MODE === "1";
+/** ログイン前の「デモを見る」でデモに入ったことを覚えるキー。タブを閉じれば消える */
+export const DEMO_SESSION_KEY = "farm-app-demo";
+
+/**
+ * デモ中かどうか。
+ *
+ * 開発時は `npm run demo`（VITE_DEMO_MODE=1）で、本番ではログイン前の
+ * 「デモを見る」から入る。**後者は sessionStorage に印を付けてリロードする**
+ * 形にした（2026-09-22）。この定数はモジュール読み込み時に1回だけ評価され、
+ * 20か所以上の useState 初期値と createClient がこれを見ているため、
+ * 実行中に切り替えられるようにすると全部を作り直すことになる。
+ * リロードを挟めば分岐は1つも増えず、安全策3点もそのまま効く。
+ *
+ * sessionStorage はプライベートモードや設定によっては例外を投げるので握りつぶす。
+ */
+function demoFromSession(): boolean {
+  try { return sessionStorage.getItem(DEMO_SESSION_KEY) === "1"; } catch { return false; }
+}
+
+export const DEMO: boolean =
+  import.meta.env.VITE_DEMO_MODE === "1" || demoFromSession();
+
+/** 「デモを見る」から呼ぶ。印を付けてリロードすると DEMO が true で立ち上がる */
+export function enterDemo(): void {
+  try { sessionStorage.setItem(DEMO_SESSION_KEY, "1"); } catch { /* 使えなくても落とさない */ }
+  location.reload();
+}
+
+/** デモバッジの「終了」から呼ぶ。印を消して通常の起動に戻す */
+export function exitDemo(): void {
+  try { sessionStorage.removeItem(DEMO_SESSION_KEY); } catch { /* 同上 */ }
+  location.reload();
+}
 
 // DEMO 時に createClient へ渡す値。実URLを渡さないことで本番DBへの書き込みを構造的に防ぐ
 export const DEMO_SUPABASE_URL = "https://demo.invalid";

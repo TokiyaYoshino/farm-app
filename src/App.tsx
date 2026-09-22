@@ -27,7 +27,7 @@ import { harvestQty, excludedHarvestCount, formatWorkCountsForPrompt } from "./l
 import { referencesForCrop } from "./data/maffIpm";
 import { summarizeUsageByCrop, formatPesticideUsageForPrompt, formatSprayHistoryForPrompt, lastSpray } from "./lib/pesticideUsage";
 import {
-  DEMO, DEMO_SUPABASE_URL, DEMO_SUPABASE_KEY,
+  DEMO, DEMO_SUPABASE_URL, DEMO_SUPABASE_KEY, enterDemo, exitDemo,
   demoUsers, demoCurrentUser, demoCrops, demoFields, demoWorkCategories,
   demoPesticides, demoReports, demoSchedules, demoComments, demoWeatherCoords,
   demoThreads, demoThreadMessages, demoAdviceActions,
@@ -38,6 +38,8 @@ import {
 } from "./lib/adviceMatch";
 import { matchCropName, cropNameCandidates } from "./lib/cropAlias";
 import PesticideUsageSummary, { PesticideUsageCard } from "./components/PesticideUsageSummary";
+import Onboarding from "./components/Onboarding";
+import type { OnboardingStep, SignupValues } from "./components/Onboarding";
 import { C, SHADOW, RADIUS, roleLabel, roleColor, workTypeColor, cropColor } from "./ui/tokens";
 import { btn } from "./ui/styles";
 import BottomSheet from "./ui/BottomSheet";
@@ -425,6 +427,15 @@ export default function App() {
   const [showPass, setShowPass]           = useState(false);
   const [loginError, setLoginError]       = useState("");
   const [loginBusy, setLoginBusy]         = useState(false);
+  // ログイン前にどの画面を出すか。ストアから来た人は「何のアプリか」も
+  // 「アカウントの作り方」も知らないので、ログイン画面ではなく案内から始める
+  // （docs/decisions/20260922-onboarding-and-signup.md）
+  const [authView, setAuthView]           = useState<OnboardingStep | "login">("welcome");
+  // アカウント削除（App Store 5.1.1(v) で必須。docs/decisions/20260922-onboarding-and-signup.md）
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId]     = useState("");
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
+  const [deleteAccountError, setDeleteAccountErr] = useState("");
 
   // ─── App state ───────────────────────────────────────────
   const [tab, setTab]                     = useState("home");
@@ -880,6 +891,31 @@ export default function App() {
     finally   { setLoginBusy(false); }
   };
 
+  // ─── 農場の新規登録（セルフサインアップ）────────────────────
+  // 組織と最初の管理者を api/signup.ts が service_role で作る。
+  // 作成後はそのままログインさせる（もう一度IDを打たせない）
+  const handleSignup = async (v: SignupValues): Promise<string | null> => {
+    try {
+      const r = await fetch("/api/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(v),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return d?.error ?? "登録できませんでした。時間をおいてお試しください。";
+      const { error } = await supabase.auth.signInWithPassword({ email: d.email, password: v.password });
+      if (error) {
+        // 登録自体は済んでいるので、作り直させずにログインへ送る
+        setAuthView("login");
+        setLoginId(v.login_id);
+        return null;
+      }
+      return null;
+    } catch {
+      return "登録できませんでした。通信環境をご確認ください。";
+    }
+  };
+
   // ─── ユーザー招待（管理者のみ） ───────────────────────────
   const inviteUser = async () => {
     const { name, role, login_id, password } = invForm;
@@ -936,6 +972,34 @@ export default function App() {
     setAuthSession(null);
     setUsers([]); setCrops([]); setFields([]); setReports([]);
     setCurrentUser(null);
+  };
+
+  // ─── アカウントの削除 ────────────────────────────────────
+  // 組織に自分しかいなければ農場ごと、他に利用者がいれば自分の分だけ消す。
+  // どちらになるかは api/delete-account.ts が決め、画面は結果を伝えるだけにする
+  // （数え方を2か所に書くと画面とサーバーで食い違う）。
+  const handleDeleteAccount = async () => {
+    setDeleteAccountBusy(true);
+    setDeleteAccountErr("");
+    try {
+      const r = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({ confirm_login_id: deleteConfirmId.trim() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setDeleteAccountErr(d?.error ?? "削除できませんでした。"); return; }
+      await supabase.auth.signOut();
+      setAuthSession(null);
+      setUsers([]); setCrops([]); setFields([]); setReports([]);
+      setCurrentUser(null);
+      setShowDeleteAccount(false);
+      setAuthView("welcome");
+    } catch {
+      setDeleteAccountErr("削除できませんでした。通信環境をご確認ください。");
+    } finally {
+      setDeleteAccountBusy(false);
+    }
   };
 
   const uploadImage = async (file: File): Promise<string> => {
@@ -2927,6 +2991,17 @@ export default function App() {
     </div>
   );
 
+  // ログイン前の案内・紹介・農場の登録。ログイン画面はこの後ろに置く
+  if (!authSession && authView !== "login") return (
+    <Onboarding
+      step={authView}
+      onStep={setAuthView}
+      onLogin={() => setAuthView("login")}
+      onDemo={enterDemo}
+      onSignup={handleSignup}
+    />
+  );
+
   if (!authSession) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ width:"100%", maxWidth:360 }}>
@@ -2972,6 +3047,13 @@ export default function App() {
         >
           {loginBusy ? "ログイン中..." : "ログイン"}
         </button>
+
+        <button
+          onClick={() => { setAuthView("welcome"); setLoginError(""); }}
+          style={{ ...btn("tertiary", "md"), marginTop: 12 }}
+        >
+          戻る
+        </button>
       </div>
     </div>
   );
@@ -2993,11 +3075,15 @@ export default function App() {
            tab === "analytics" ? "分析" :
            tab === "manage" ? "メニュー" : "農作業レポート"}
         </div>
-        {/* デモモードの目印。本番に紛れ込んだら一目で分かるように必ず出す */}
+        {/* デモモードの目印。本番に紛れ込んだら一目で分かるように必ず出す。
+            押すとデモを終えて通常の起動に戻る（出口が無いと閉じるしかなくなる） */}
         {DEMO && (
-          <span style={{ fontSize:10, fontWeight:700, color:C.warning, background:C.warningBg, borderRadius:999, padding:"3px 8px", marginLeft:8, flexShrink:0, whiteSpace:"nowrap" as const }}>
-            デモデータ
-          </span>
+          <button
+            onClick={exitDemo}
+            style={{ fontSize:10, fontWeight:700, color:C.warning, background:C.warningBg, borderRadius:999, padding:"3px 8px", marginLeft:8, flexShrink:0, whiteSpace:"nowrap" as const, border:"none", cursor:"pointer" }}
+          >
+            デモデータ／終了
+          </button>
         )}
         <div style={{ display:"flex", alignItems:"center", gap:8, flex:"0 0 auto", flexShrink:0 }}>
           {currentUser && (
@@ -5334,7 +5420,83 @@ export default function App() {
               <LogOut size={15} strokeWidth={2} />
               ログアウト
             </button>
+            {/* App Store 5.1.1(v): アカウント作成を提供するアプリは、削除も
+                アプリ内から提供しなければならない。隠さず、ログアウトの隣に置く */}
+            <button
+              onClick={() => { setShowUserPicker(false); setDeleteConfirmId(""); setDeleteAccountErr(""); setShowDeleteAccount(true); }}
+              style={{ ...btn("tertiary", "md"), width:"100%", marginTop:4, color:C.danger }}
+            >
+              アカウントを削除
+            </button>
             </div>
+      </BottomSheet>
+
+      {/* アカウント削除の確認。破壊的操作なので必ずここを挟む */}
+      <BottomSheet open={showDeleteAccount} onClose={() => setShowDeleteAccount(false)}>
+        {(() => {
+          // auth_id を持つ行が「まだ入れる利用者」。退会済みの行は数えない
+          const activeMembers = users.filter(u => u.auth_id).length;
+          const sole = activeMembers <= 1;
+          return (
+            <div style={{ padding:"6px 16px 0" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                <div style={{ background:C.dangerBg, borderRadius:12, padding:8, flexShrink:0 }}>
+                  <Trash2 size={18} color={C.danger} strokeWidth={2} />
+                </div>
+                <div style={{ fontSize:17, fontWeight:700, color:C.text }}>
+                  {sole ? "農場ごと削除" : "アカウントの削除"}
+                </div>
+              </div>
+
+              <div style={{ background:C.well, borderRadius:RADIUS.well, padding:14, marginBottom:16, fontSize:13, color:C.textSub, lineHeight:1.8 }}>
+                {sole ? (
+                  <>
+                    この農場を使っているのはあなただけです。削除すると、
+                    <b style={{ color:C.text }}>作業記録・作物・圃場・農薬・相談のすべてが消えます。</b>
+                    元に戻すことはできません。
+                  </>
+                ) : (
+                  <>
+                    あなたのログイン情報とお名前を消します。
+                    <b style={{ color:C.text }}>これまでの作業記録は農場に残ります</b>
+                    （農薬の使用回数の集計が欠けないようにするためです）。
+                    {isAdmin && " あなたが最後の管理者のときは、いちばん古くから参加している方に管理者を引き継ぎます。"}
+                  </>
+                )}
+              </div>
+
+              {sole && (
+                <div style={{ marginBottom:16 }}>
+                  <label style={{ fontSize:12, fontWeight:600, color:C.textMuted, display:"block", marginBottom:8 }}>
+                    確認のため、ご自分のユーザーIDを入力してください
+                  </label>
+                  <input
+                    style={{ width:"100%", padding:"10px 0", border:"none", borderBottom:`1.5px solid ${C.hairline}`, fontSize:16, background:"transparent", color:C.text, boxSizing:"border-box" as const, outline:"none" }}
+                    placeholder={currentUser?.login_id ?? "ユーザーID"}
+                    autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                    value={deleteConfirmId}
+                    onChange={e => { setDeleteConfirmId(e.target.value); setDeleteAccountErr(""); }}
+                  />
+                </div>
+              )}
+
+              {deleteAccountError && (
+                <div style={{ color:C.danger, fontSize:13, marginBottom:14, lineHeight:1.6 }}>{deleteAccountError}</div>
+              )}
+
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteAccountBusy}
+                style={{ ...btn("danger", "lg"), opacity:deleteAccountBusy ? 0.7 : 1, marginBottom:10 }}
+              >
+                {deleteAccountBusy ? "削除中..." : (sole ? "農場ごと削除する" : "アカウントを削除する")}
+              </button>
+              <button onClick={() => setShowDeleteAccount(false)} style={{ ...btn("tertiary", "md"), marginBottom:8 }}>
+                やめる
+              </button>
+            </div>
+          );
+        })()}
       </BottomSheet>
 
       {/* 削除確認ボトムシート */}
