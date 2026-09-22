@@ -32,6 +32,10 @@ interface Store {
   refreshing: boolean;
   refresh: () => Promise<void>;
   login: (loginId: string, password: string) => Promise<string | null>; // エラーメッセージ or null
+  /** 農場の新規登録。組織と最初の管理者を作ってそのままログインする */
+  signup: (v: { farm_name: string; name: string; login_id: string; password: string }) => Promise<string | null>;
+  /** アカウントの削除（App Store 5.1.1(v)）。自分しか居なければ農場ごと消える */
+  deleteAccount: (confirmLoginId: string) => Promise<string | null>;
   logout: () => Promise<void>;
   // data
   currentUser: User | null;
@@ -281,6 +285,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return null;
     } catch {
       return "ログインに失敗しました";
+    }
+  }, []);
+
+  // ── 農場の新規登録（Web版 handleSignup と同一）──
+  // 組織と最初の管理者は api/signup.ts が service_role で作る。
+  // 端末側から organizations / users へ直接 insert しない（RLS を迂回させない）
+  const signup = useCallback(async (
+    v: { farm_name: string; name: string; login_id: string; password: string },
+  ): Promise<string | null> => {
+    try {
+      const r = await fetch(`${API_BASE}/api/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...v, login_id: v.login_id.trim().toLowerCase() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return d?.error ?? "登録できませんでした。時間をおいてお試しください。";
+      const { error } = await supabase.auth.signInWithPassword({ email: d.email, password: v.password });
+      // 登録自体は済んでいるので、作り直させずにログイン画面へ送る
+      if (error) return "登録できました。ログイン画面からお入りください。";
+      return null;
+    } catch {
+      return "登録できませんでした。通信環境をご確認ください。";
+    }
+  }, []);
+
+  // ── アカウントの削除（Web版 handleDeleteAccount と同一）──
+  // 何が消えるか（農場ごと／自分の分だけ）は api/delete-account.ts が決める。
+  // 端末側で数え方を持つと画面とサーバーで食い違う
+  const deleteAccount = useCallback(async (confirmLoginId: string): Promise<string | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(`${API_BASE}/api/delete-account`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ confirm_login_id: confirmLoginId.trim() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return d?.error ?? "削除できませんでした。";
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      return null;
+    } catch {
+      return "削除できませんでした。通信環境をご確認ください。";
     }
   }, []);
 
@@ -818,7 +869,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     comments.filter(cm => cm.target_type === type && cm.target_id === String(id)).length, [comments]);
 
   const store: Store = {
-    authSession, authLoading, loading, loadError, retryLoad, refreshing, refresh, login, logout,
+    authSession, authLoading, loading, loadError, retryLoad, refreshing, refresh, login, signup, deleteAccount, logout,
     currentUser, isAdmin: (currentUser?.role ?? "worker") === "admin",
     users, crops, fields, reports, schedules, pesticides, projects, workCategories, comments,
     weatherCoords, wxAuto, wxLoading,

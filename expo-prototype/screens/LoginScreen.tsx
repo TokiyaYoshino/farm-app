@@ -7,7 +7,12 @@ import { useStore } from "../lib/store";
 
 // ─── ログイン（src/App.tsx の Auth ゲート内ログインフォームの移植）───────
 // ユーザーID(login_id) + パスワード。下線入力・primary ピルボタン。
-export default function LoginScreen() {
+interface Props {
+  /** 案内画面へ戻る。無いと行き止まりになる */
+  onBack?: () => void;
+}
+
+export default function LoginScreen({ onBack }: Props) {
   const { login } = useStore();
   const [loginId, setLoginId] = useState("");
   const [loginPass, setLoginPass] = useState("");
@@ -83,6 +88,11 @@ export default function LoginScreen() {
         <Btn variant="primary" size="lg" onPress={handleLogin}>
           {busy ? "ログイン中..." : "ログイン"}
         </Btn>
+        {onBack && (
+          <Btn variant="tertiary" size="md" style={{ marginTop: 12 }} onPress={() => { setError(""); onBack(); }}>
+            戻る
+          </Btn>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
