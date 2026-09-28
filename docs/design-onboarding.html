@@ -154,7 +154,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>チュートリアル構成案 — アカウント作成〜初回利用の3パターン（改訂版）</h1>
+  <h1>チュートリアル構成案 — アカウント作成〜初回利用（推奨の組み合わせ版＋3パターン）</h1>
   <p class="lead">タスク管理アプリの導入の流れを手本に、farm-app 向けに組み直した静的モック。各行は横にスクロールでき、左から順に画面が進む。色・角丸・影は <code>src/ui/tokens.ts</code> と同値。</p>
 
   <div class="box">
@@ -174,6 +174,177 @@
       <li><b>作物ボタンは自動で紐付く品目に限る：</b>案Aの作物の選択肢は、<code>src/lib/cropAlias.ts</code> の自動一致（表記ゆれを揃えた完全一致か別名表）で農薬登録上の作物名に確実に当たる品目だけにする（実装時に1件ずつ確認）。そうすれば農薬チェックの紐付けが最初から済む。それ以外は「ほかの作物」から手入力し、紐付けは今の画面どおり後で候補から選んでもらう。</li>
     </ul>
   </div>
+
+  <!-- ================= 組み合わせ版 ================= -->
+  <section>
+    <div class="sh"><span class="no" style="background:#1A1C1E">推奨</span><h2>組み合わせ版：答えて始める → はじめにやること</h2><span class="model">案A を3問に短縮 ＋ 案B のリスト</span></div>
+    <p class="desc">登録後の質問は「農園名・作物・圃場」の3問だけ（案A、上部プレビュー付き）。ホームに着いた時点で作物と圃場が入っていて、空の画面にならない。残りの機能は案Bの「はじめにやること」で本物の画面に案内する。圃場は設定で済んでいるので、リストは最初から 1/5 で始まる。</p>
+    <div class="strip">
+
+      <div class="col">
+        <div class="phone"><div class="sb"></div>
+          <div class="pad" style="align-items:center;text-align:center">
+            <div class="logo"><i data-i="sprout" data-s="32"></i></div>
+            <div class="ttl" style="margin-top:22px">農作業レポート</div>
+            <div class="sub">毎日の作業を、その場で記録。<br>日報も農薬の管理もひとつに。</div>
+          </div>
+          <div class="foot">
+            <button class="btn dark"><i data-i="apple" data-s="18"></i>Apple で続ける</button>
+            <button class="btn line"><i data-i="google" data-s="18"></i>Google で続ける</button>
+            <div class="or">招待された方</div>
+            <button class="btn ter">招待コードで参加する</button>
+          </div>
+        </div>
+        <div class="cap">① アカウント作成<small>新規と招待の入口を1画面に。招待は⑧の短い流れへ。</small></div>
+      </div>
+
+      <div class="col">
+        <div class="phone"><div class="sb"></div>
+          <div class="pbar"><i class="on"></i><i></i><i></i></div>
+          <div class="prev"><div class="pl"><i data-i="home" data-s="13"></i>できあがるホーム</div>
+            <div class="mini"><div class="hd"><span class="new" style="padding:0 4px;margin:0 -4px">みどり農園</span></div>
+              <div class="r"><span class="em">作物 —</span><span class="em">圃場 —</span></div></div></div>
+          <div class="pad">
+            <div class="ttl">農園名</div>
+            <div class="well" style="margin-top:10px"><div class="wrow"><div class="l">農園名</div><div class="v">みどり農園<span class="caret"></span></div></div></div>
+          </div>
+          <div class="foot" style="padding-bottom:10px"><button class="btn pri">次へ進む</button></div>
+          <div class="kbd"><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k g"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k g"></i></div><div class="row"><i class="k g"></i><i class="k w"></i><i class="k g"></i></div></div>
+        </div>
+        <div class="cap">② 農園名（1/3）<small>進捗は3区切り。終わりが見えていると離脱しにくい。</small></div>
+      </div>
+
+      <div class="col">
+        <div class="phone"><div class="sb"></div>
+          <div class="pbar"><i class="on"></i><i class="on"></i><i></i></div>
+          <div class="prev"><div class="pl"><i data-i="home" data-s="13"></i>できあがるホーム</div>
+            <div class="mini"><div class="hd">みどり農園</div>
+              <div class="r"><span class="new" style="display:flex;gap:10px;padding:0 4px;margin:0 -4px"><span style="display:flex;align-items:center;gap:4px"><span class="dot" style="background:#E0533D"></span>トマト</span><span style="display:flex;align-items:center;gap:4px"><span class="dot" style="background:#4CAF50"></span>きゅうり</span></span><span class="em">圃場 —</span></div></div></div>
+          <div class="pad">
+            <div class="ttl">育てている作物</div>
+            <div class="sub">いくつでも選べます</div>
+            <div class="chips">
+              <span class="chip on"><i data-i="check" data-s="16"></i>トマト</span>
+              <span class="chip on"><i data-i="check" data-s="16"></i>きゅうり</span>
+              <span class="chip">なす</span><span class="chip">ピーマン</span>
+              <span class="chip">キャベツ</span><span class="chip">いちご</span>
+              <span class="chip add"><i data-i="plus" data-s="16"></i>ほかの作物</span>
+            </div>
+          </div>
+          <div class="foot"><button class="btn pri">次へ進む</button></div>
+        </div>
+        <div class="cap">③ 育てている作物（2/3）<small>押すだけ。選んだ作物は農薬チェックの紐付けまで自動で済む。</small></div>
+      </div>
+
+      <div class="col">
+        <div class="phone"><div class="sb"></div>
+          <div class="pbar"><i class="on"></i><i class="on"></i><i class="on"></i><span class="skip">あとで</span></div>
+          <div class="prev"><div class="pl"><i data-i="home" data-s="13"></i>できあがるホーム</div>
+            <div class="mini"><div class="hd">みどり農園</div>
+              <div class="r"><span>トマト・きゅうり</span><span class="new" style="padding:0 4px;margin:0 -4px">ハウス1・東の畑</span></div></div></div>
+          <div class="pad">
+            <div class="ttl">圃場</div>
+            <div class="well" style="margin-top:10px">
+              <div class="wrow" style="display:flex;justify-content:space-between;align-items:center"><div class="v" style="margin:0">ハウス1</div><span style="color:var(--ink)"><i data-i="check" data-s="18"></i></span></div>
+              <div class="wrow"><div class="v">東の畑<span class="caret"></span></div></div>
+            </div>
+          </div>
+          <div class="foot" style="padding-bottom:10px;flex-direction:row"><button class="btn line" style="flex:none;width:auto;padding:15px 16px;white-space:nowrap"><i data-i="plus" data-s="17"></i>追加する</button><button class="btn pri" style="flex:1">始める</button></div>
+          <div class="kbd"><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k g"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k g"></i></div><div class="row"><i class="k g"></i><i class="k w"></i><i class="k g"></i></div></div>
+        </div>
+        <div class="cap">④ 圃場（3/3）<small>「あとで」で飛ばすと、リストの「圃場の登録」が未完了で残る。招待はここで聞かずリストへ回す。</small></div>
+      </div>
+
+      <div class="col">
+        <div class="phone"><div class="sb"></div>
+          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="17"></i></div></div>
+          <div class="body">
+            <div class="card ck">
+              <div class="top"><b>はじめにやること</b><span>1 / 5</span></div>
+              <div class="bar"><i style="width:20%"></i></div>
+              <div class="ci done"><span class="cb on"><i data-i="check" data-s="14"></i></span><span class="tx">圃場の登録</span></div>
+              <div class="ci next"><span class="cb"></span><span class="tx">最初の作業記録</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">声での記録</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">写真での病害虫診断</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">家族・従業員の招待</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+            </div>
+            <div class="sec">作物</div>
+            <div class="card list">
+              <div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト</div><div class="mt">ハウス1</div></div><span class="chev"><i data-i="chev" data-s="18"></i></span></div>
+            </div>
+          </div>
+          <div class="nav"><div class="on"><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
+        </div>
+        <div class="cap">⑤ ホーム（1/5 から開始）<small>作物・圃場が入った本物のホーム。設定で済んだ項目は最初から完了。</small></div>
+      </div>
+
+      <div class="col">
+        <div class="phone"><div class="sb"></div>
+          <div class="appbar"><div class="t">みどり農園</div></div>
+          <div class="body" style="opacity:.5"><div class="card list"><div class="li"><span class="dot" style="background:#E0533D"></span><div class="nm">トマト</div></div></div></div>
+          <div class="scrim"></div>
+          <div class="sheet"><div class="grab"></div>
+            <div class="hint" style="margin-bottom:12px">
+              <div class="ico i"><i data-i="mic" data-s="18"></i></div>
+              <div class="tx"><b>声での記録</b><p>「話して記録」を押して「トマト、誘引、1時間」と話すと、項目が埋まります。</p></div>
+            </div>
+            <div class="pick" style="background:var(--inkSoft)"><div class="ico g" style="background:#fff"><i data-i="mic" data-s="20"></i></div><div><div class="nm">話して記録</div></div></div>
+            <div class="pick"><div class="ico" style="background:#fff"><i data-i="bug" data-s="20"></i></div><div><div class="nm">写真で調べる</div><div class="mt">病害虫の見当をつける</div></div></div>
+            <div class="pick"><div class="ico" style="background:#fff"><i data-i="pencil" data-s="20"></i></div><div><div class="nm">手で入力</div><div class="mt">いつものフォーム</div></div></div>
+          </div>
+        </div>
+        <div class="cap">⑥ リストから「＋記録」シートへ<small>本物のシートの中に説明カードを1枚だけ。画面全体は暗くしない。</small></div>
+      </div>
+
+      <div class="col">
+        <div class="phone"><div class="sb"></div>
+          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="17"></i></div></div>
+          <div class="body">
+            <div class="toast"><span class="c"><i data-i="check" data-s="14"></i></span>声での記録　完了</div>
+            <div class="card ck">
+              <div class="top"><b>はじめにやること</b><span>3 / 5</span></div>
+              <div class="bar"><i style="width:60%"></i></div>
+              <div class="ci done"><span class="cb on"><i data-i="check" data-s="14"></i></span><span class="tx">圃場の登録</span></div>
+              <div class="ci done"><span class="cb on"><i data-i="check" data-s="14"></i></span><span class="tx">最初の作業記録</span></div>
+              <div class="ci done"><span class="cb on"><i data-i="check" data-s="14"></i></span><span class="tx">声での記録</span></div>
+              <div class="ci next"><span class="cb"></span><span class="tx">写真での病害虫診断</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">家族・従業員の招待</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+            </div>
+            <div class="sec">今日の記録</div>
+            <div class="card list"><div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト　誘引</div><div class="mt">ハウス1・1時間</div></div><span class="wtag">管理</span></div></div>
+          </div>
+          <div class="nav"><div class="on"><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
+        </div>
+        <div class="cap">⑦ 保存すると自動でチェック<small>話して記録で保存した1件で「最初の作業記録」も同時に完了。全部終われば「準備完了」になり、閉じたら二度と出さない。</small></div>
+      </div>
+
+      <div class="col">
+        <div class="phone"><div class="sb"></div>
+          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="17"></i></div></div>
+          <div class="body">
+            <div class="hint" style="margin-bottom:12px">
+              <div class="ico i"><i data-i="user" data-s="18"></i></div>
+              <div class="tx"><b>みどり農園への参加完了</b><p>作物や圃場は管理者が登録済みです。今日の作業から記録できます。</p></div>
+            </div>
+            <div class="card ck">
+              <div class="top"><b>はじめにやること</b><span>0 / 3</span></div>
+              <div class="bar"><i style="width:3%"></i></div>
+              <div class="ci next"><span class="cb"></span><span class="tx">最初の作業記録</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">声での記録</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">写真での病害虫診断</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+            </div>
+          </div>
+          <div class="nav"><div class="on"><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
+        </div>
+        <div class="cap">⑧ 招待された人のホーム<small>①→招待コード→このホームへ直行。設定の3問は出さず、リストも記録系の3項目だけ。</small></div>
+      </div>
+
+    </div>
+    <div class="pros">
+      <div><b>良い点</b>登録後の質問は3問だけで、着いたホームは空ではない。気づかれにくい機能（声・写真）への誘導はリストが引き受ける。招待された人は設定を丸ごと飛ばせる。</div>
+      <div><b>注意点</b>作るものは「設定3画面」と「リストの完了判定」の両方で、案A・B単体より多い。作物ボタンの品目選定と、自分で登録する流れ（OAuth・農園作成）は冒頭の前提どおり別途必要。</div>
+    </div>
+  </section>
 
   <!-- ================= A ================= -->
   <section>
