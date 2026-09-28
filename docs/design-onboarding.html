@@ -6,163 +6,192 @@
 <title>チュートリアル構成案</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  /* tokens.ts と同値。読ませる文字は textSub 以上（textMuted は飾り・入力欄の見本文字のみ） */
   :root{--bg:#F5F5F6;--well:#EFEFF1;--card:#FFFFFF;--text:#1A1C1E;--sub:#66696E;--muted:#9EA1A6;--hair:#EBEBED;
         --ink:#2E7D32;--inkSoft:#E4F0E4;--warn:#DD8A0A;--warnBg:#FBF1DF;--info:#3773E1;--infoBg:#E7EEFC;--danger:#D4453C;
         --shCard:0 1px 2px rgba(16,17,20,.04),0 8px 24px rgba(16,17,20,.06);--shFloat:0 12px 40px rgba(16,17,20,.14);}
   body{background:#E5E5E7;font-family:-apple-system,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;color:var(--text);padding:26px 16px 60px;}
-  .wrap{max-width:1240px;margin:0 auto;}
+  .wrap{max-width:1300px;margin:0 auto;}
   h1{font-size:20px;font-weight:700;margin-bottom:6px;}
-  .lead{font-size:13px;color:var(--sub);line-height:1.6;margin-bottom:8px;}
-  .rules{font-size:12px;color:var(--sub);background:#fff;border-radius:14px;padding:10px 14px;line-height:1.7;margin-bottom:28px;box-shadow:var(--shCard);}
+  .lead{font-size:13px;color:var(--sub);line-height:1.6;margin-bottom:10px;}
+  .box{background:#fff;border-radius:14px;padding:12px 16px;font-size:12.5px;color:var(--sub);line-height:1.75;margin-bottom:12px;box-shadow:var(--shCard);max-width:980px;}
+  .box b{color:var(--text);}
+  .box ul{padding-left:18px;}
+  .box.warn{background:var(--warnBg);box-shadow:none;}
+  code{font-size:11.5px;background:var(--well);padding:1px 5px;border-radius:5px;}
 
-  section{margin-bottom:44px;}
+  section{margin:36px 0 44px;}
   .sh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
   .sh .no{font-size:13px;font-weight:700;color:#fff;background:var(--ink);border-radius:999px;padding:3px 11px;}
   .sh h2{font-size:17px;font-weight:700;}
   .sh .model{font-size:12px;color:var(--sub);}
-  .desc{font-size:12.5px;color:var(--sub);line-height:1.6;margin:4px 0 14px;max-width:880px;}
+  .desc{font-size:12.5px;color:var(--sub);line-height:1.6;margin:4px 0 14px;max-width:900px;}
   .strip{display:flex;gap:18px;overflow-x:auto;padding:6px 4px 14px;scroll-snap-type:x mandatory;}
   .col{display:flex;flex-direction:column;gap:8px;flex-shrink:0;scroll-snap-align:start;}
   .cap{font-size:12px;font-weight:700;padding-left:4px;}
-  .cap small{display:block;font-weight:400;color:var(--sub);font-size:11px;line-height:1.45;margin-top:2px;max-width:280px;}
-  .pros{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:6px;max-width:880px;}
+  .cap small{display:block;font-weight:400;color:var(--sub);font-size:11px;line-height:1.45;margin-top:2px;max-width:300px;}
+  .pros{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:6px;max-width:900px;}
   .pros div{background:#fff;border-radius:14px;padding:10px 14px;font-size:12px;line-height:1.6;color:var(--sub);box-shadow:var(--shCard);}
   .pros b{color:var(--text);display:block;margin-bottom:2px;}
 
-  /* ---- phone ---- */
-  .phone{width:280px;height:590px;background:var(--bg);border-radius:30px;border:7px solid #fff;box-shadow:0 12px 40px rgba(16,17,20,.16);overflow:hidden;position:relative;display:flex;flex-direction:column;}
+  /* ---- phone（実機幅に近い 300px。本文 15px 以上） ---- */
+  .phone{width:300px;height:640px;background:var(--bg);border-radius:32px;border:7px solid #fff;box-shadow:0 12px 40px rgba(16,17,20,.16);overflow:hidden;position:relative;display:flex;flex-direction:column;}
   .sb{height:22px;flex-shrink:0;}
-  .pbar{display:flex;gap:4px;padding:4px 18px 0;}
-  .pbar i{flex:1;height:4px;border-radius:999px;background:var(--well);}
+  .pbar{display:flex;gap:5px;padding:4px 18px 0;align-items:center;}
+  .pbar i{flex:1;height:5px;border-radius:999px;background:#DCDDE0;}
   .pbar i.on{background:var(--ink);}
-  .skip{position:absolute;top:30px;right:16px;font-size:12px;color:var(--sub);font-weight:600;}
-  .pad{padding:18px 18px 0;flex:1;display:flex;flex-direction:column;min-height:0;}
-  .ttl{font-size:22px;font-weight:700;line-height:1.35;margin-top:10px;}
-  .sub{font-size:13px;color:var(--sub);line-height:1.55;margin-top:6px;}
-  .foot{padding:12px 18px 18px;display:flex;flex-direction:column;gap:8px;flex-shrink:0;}
-  .btn{border:none;border-radius:999px;font-weight:700;font-size:15px;padding:14px 16px;display:flex;align-items:center;justify-content:center;gap:7px;width:100%;font-family:inherit;}
+  .pbar .skip{flex:none;font-size:14px;color:var(--sub);font-weight:700;margin-left:8px;}
+  .pad{padding:14px 18px 0;flex:1;display:flex;flex-direction:column;min-height:0;}
+  .ttl{font-size:24px;font-weight:700;line-height:1.35;margin-top:6px;}
+  .sub{font-size:15px;color:var(--sub);line-height:1.6;margin-top:4px;}
+  .foot{padding:10px 18px 18px;display:flex;flex-direction:column;gap:8px;flex-shrink:0;}
+  .btn{border:none;border-radius:999px;font-weight:700;font-size:17px;padding:15px 16px;display:flex;align-items:center;justify-content:center;gap:7px;width:100%;font-family:inherit;}
   .btn.pri{background:var(--ink);color:#fff;box-shadow:0 2px 8px rgba(46,125,50,.28);}
-  .btn.line{background:#fff;color:var(--text);box-shadow:inset 0 0 0 1px var(--hair);}
+  .btn.line{background:#fff;color:var(--text);box-shadow:inset 0 0 0 1px #DCDDE0;}
   .btn.dark{background:#111;color:#fff;}
-  .btn.ter{background:none;color:var(--sub);font-weight:600;padding:8px;}
+  .btn.ter{background:none;color:var(--sub);font-weight:700;padding:10px;font-size:16px;}
   .btn.soft{background:var(--inkSoft);color:var(--ink);}
-  .btn.danger{background:var(--danger);color:#fff;}
-  .btn.sm{font-size:12px;padding:7px 12px;width:auto;white-space:nowrap;}
-  .or{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin:4px 0;}
+  .btn.sm{font-size:14px;padding:9px 15px;width:auto;white-space:nowrap;}
+  .or{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub);margin:2px 0;}
   .or::before,.or::after{content:"";flex:1;height:1px;background:var(--hair);}
 
-  .well{background:var(--well);border-radius:18px;padding:6px;display:flex;flex-direction:column;gap:6px;margin-top:16px;}
-  .wrow{background:#fff;border-radius:14px;padding:11px 13px;}
-  .wrow .l{font-size:11px;color:var(--muted);font-weight:600;}
-  .wrow .v{font-size:16px;font-weight:700;margin-top:2px;}
-  .wrow .v.ph{color:var(--muted);font-weight:400;}
-  .caret{display:inline-block;width:2px;height:17px;background:var(--ink);vertical-align:-3px;margin-left:1px;}
+  .well{background:var(--well);border-radius:18px;padding:6px;display:flex;flex-direction:column;gap:6px;margin-top:14px;}
+  .wrow{background:#fff;border-radius:14px;padding:11px 14px;}
+  .wrow .l{font-size:13px;color:var(--sub);font-weight:600;}
+  .wrow .v{font-size:18px;font-weight:700;margin-top:2px;}
+  .wrow .v.ph{color:var(--muted);font-weight:400;font-size:16px;}
+  .caret{display:inline-block;width:2px;height:19px;background:var(--ink);vertical-align:-3px;margin-left:1px;}
 
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
-  .chip{font-size:15px;font-weight:600;padding:11px 16px;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px var(--hair);display:flex;align-items:center;gap:6px;}
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px;}
+  .chip{font-size:17px;font-weight:700;padding:12px 18px;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px #DCDDE0;display:flex;align-items:center;gap:6px;}
   .chip.on{background:var(--ink);color:#fff;box-shadow:none;}
   .chip.add{color:var(--sub);background:var(--well);box-shadow:none;}
 
-  /* live preview (A) */
-  .prev{margin-top:auto;background:var(--well);border-radius:20px 20px 0 0;margin-left:-18px;margin-right:-18px;padding:12px 14px 0;height:190px;overflow:hidden;position:relative;}
-  .prev .pl{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.08em;margin-bottom:8px;}
-  .mini{background:var(--bg);border-radius:16px 16px 0 0;padding:10px;height:100%;box-shadow:var(--shCard);}
-  .mini .hd{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;}
-  .mini .card{background:#fff;border-radius:12px;padding:8px 10px;margin-top:8px;box-shadow:var(--shCard);font-size:11px;}
-  .new{animation:pop 1.6s ease-out infinite alternate;}
-  @keyframes pop{from{box-shadow:0 0 0 0 rgba(46,125,50,.0)}to{box-shadow:0 0 0 3px rgba(46,125,50,.35)}}
+  /* 案A：できあがるホーム（上部固定。キーボードに隠れない位置） */
+  .prev{margin:10px 12px 0;background:var(--well);border-radius:18px;padding:9px 10px 10px;flex-shrink:0;}
+  .prev .pl{font-size:12px;font-weight:700;color:var(--sub);margin:0 2px 6px;display:flex;align-items:center;gap:5px;}
+  .mini{background:#fff;border-radius:13px;padding:9px 11px;box-shadow:var(--shCard);}
+  .mini .hd{font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px;}
+  .mini .r{font-size:13px;color:var(--sub);margin-top:5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .mini .r .em{color:var(--muted);}
+  .new{border-radius:6px;animation:pop 1.4s ease-out infinite alternate;}
+  @keyframes pop{from{box-shadow:0 0 0 0 rgba(46,125,50,0)}to{box-shadow:0 0 0 3px rgba(46,125,50,.35)}}
   @media (prefers-reduced-motion:reduce){.new{animation:none;box-shadow:0 0 0 3px rgba(46,125,50,.35)}}
 
+  /* ソフトキーボード（実機でどこが隠れるかを示す） */
+  .kbd{height:196px;background:#D2D4D9;flex-shrink:0;padding:8px 4px 6px;display:flex;flex-direction:column;gap:7px;}
+  .kbd .row{display:flex;gap:5px;justify-content:center;}
+  .kbd .k{height:38px;flex:1;max-width:25px;background:#fff;border-radius:6px;box-shadow:0 1px 0 rgba(0,0,0,.25);}
+  .kbd .k.w{max-width:none;flex:3;}
+  .kbd .k.g{background:#AEB2B9;max-width:40px;}
+
   /* app screens */
-  .appbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 8px;flex-shrink:0;}
-  .appbar .t{font-size:17px;font-weight:700;}
-  .circ{width:32px;height:32px;border-radius:999px;background:var(--well);display:flex;align-items:center;justify-content:center;color:var(--sub);}
+  .appbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;flex-shrink:0;}
+  .appbar .t{font-size:19px;font-weight:700;display:flex;align-items:center;gap:7px;}
+  .circ{width:34px;height:34px;border-radius:999px;background:var(--well);display:flex;align-items:center;justify-content:center;color:var(--sub);}
   .body{flex:1;overflow:hidden;padding:2px 12px 12px;position:relative;}
   .card{background:#fff;border-radius:20px;box-shadow:var(--shCard);}
-  .lbl{font-size:11px;font-weight:600;color:var(--muted);}
-  .sec{font-size:11px;font-weight:600;color:var(--muted);margin:14px 4px 7px;letter-spacing:.04em;}
+  .sec{font-size:13px;font-weight:700;color:var(--sub);margin:14px 4px 7px;}
   .list{overflow:hidden;}
   .li{display:flex;align-items:center;gap:10px;padding:12px 14px;}
   .li+.li{border-top:1px solid var(--hair);}
-  .li .nm{font-size:14px;font-weight:600;}
-  .li .mt{font-size:11px;color:var(--muted);margin-top:2px;}
-  .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-  .ico{width:34px;height:34px;border-radius:999px;background:var(--well);display:flex;align-items:center;justify-content:center;color:var(--sub);flex-shrink:0;}
+  .li .nm{font-size:16px;font-weight:700;}
+  .li .mt{font-size:13px;color:var(--sub);margin-top:2px;}
+  .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .ico{width:36px;height:36px;border-radius:999px;background:var(--well);display:flex;align-items:center;justify-content:center;color:var(--sub);flex-shrink:0;}
   .ico.g{background:var(--inkSoft);color:var(--ink);}
-  .chev{color:var(--muted);margin-left:auto;}
+  .ico.i{background:#fff;color:var(--info);}
+  .chev{color:var(--sub);margin-left:auto;}
   .nav{display:flex;justify-content:space-around;background:#fff;padding:8px 4px 12px;border-top:1px solid var(--hair);flex-shrink:0;}
-  .nav div{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9.5px;color:var(--muted);font-weight:600;}
+  .nav div{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--sub);font-weight:600;}
   .nav div.on{color:var(--ink);}
-  .fab{position:absolute;right:14px;bottom:12px;background:var(--ink);color:#fff;border-radius:999px;padding:12px 16px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(46,125,50,.35);}
-  .wtag{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--inkSoft);color:var(--ink);}
-  .demo{font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--warnBg);color:var(--warn);}
+  .fab{position:absolute;right:14px;bottom:12px;background:var(--ink);color:#fff;border-radius:999px;padding:13px 20px;font-size:17px;font-weight:700;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(46,125,50,.35);}
+  .wtag{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--inkSoft);color:var(--ink);margin-left:auto;flex-shrink:0;}
+  .demo{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--warnBg);color:#9A5E00;}
+
+  /* 説明カード：画面を暗くせず、画面の流れの中に置く（押せる場所を奪わない） */
+  .hint{background:var(--infoBg);border-radius:18px;padding:13px 14px;display:flex;gap:11px;align-items:flex-start;}
+  .hint .tx{flex:1;}
+  .hint b{display:block;font-size:16px;margin-bottom:3px;}
+  .hint p{font-size:15px;line-height:1.6;color:var(--text);}
+  .hint .x{font-size:14px;font-weight:700;color:var(--info);margin-top:8px;display:inline-block;}
 
   /* checklist (B) */
   .ck{padding:14px 14px 6px;}
   .ck .top{display:flex;justify-content:space-between;align-items:baseline;}
-  .ck .top b{font-size:15px;}
-  .ck .top span{font-size:13px;font-weight:700;color:var(--ink);}
-  .ck .bar{height:6px;border-radius:999px;background:var(--well);margin:9px 0 4px;overflow:hidden;}
+  .ck .top b{font-size:17px;}
+  .ck .top span{font-size:15px;font-weight:700;color:var(--ink);}
+  .ck .bar{height:7px;border-radius:999px;background:var(--well);margin:9px 0 4px;overflow:hidden;}
   .ck .bar i{display:block;height:100%;background:var(--ink);border-radius:999px;}
-  .ci{display:flex;align-items:center;gap:10px;padding:10px 0;}
+  .ci{display:flex;align-items:center;gap:10px;padding:11px 0;}
   .ci+.ci{border-top:1px solid var(--hair);}
-  .box{width:22px;height:22px;border-radius:999px;box-shadow:inset 0 0 0 2px #D5D6D9;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
-  .box.on{background:var(--ink);box-shadow:none;color:#fff;}
-  .ci .tx{font-size:14px;font-weight:600;flex:1;}
-  .ci.done .tx{color:var(--muted);text-decoration:line-through;}
-  .ci .go{color:var(--muted);}
-  .ci.next{background:var(--inkSoft);margin:0 -8px;padding:10px 8px;border-radius:12px;}
+  .cb{width:24px;height:24px;border-radius:999px;box-shadow:inset 0 0 0 2px #C9CACE;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .cb.on{background:var(--ink);box-shadow:none;color:#fff;}
+  .ci .tx{font-size:16px;font-weight:700;flex:1;}
+  .ci.done .tx{color:var(--sub);text-decoration:line-through;font-weight:600;}
+  .ci .go{color:var(--sub);}
+  .ci.next{background:var(--inkSoft);margin:0 -8px;padding:11px 8px;border-radius:12px;}
   .ci.next+.ci{border-top:none;}
 
-  /* overlays */
-  .dim{position:absolute;inset:0;background:rgba(16,17,20,.45);}
-  .spot{position:absolute;border-radius:999px;box-shadow:0 0 0 9999px rgba(16,17,20,.5);}
-  .tip{position:absolute;background:#fff;border-radius:16px;padding:12px 14px;box-shadow:var(--shFloat);font-size:13px;line-height:1.55;}
-  .tip b{display:block;font-size:14px;margin-bottom:3px;}
-  .tip .row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;}
-  .tip .row span{font-size:11px;color:var(--muted);}
-  .tip::after{content:"";position:absolute;width:14px;height:14px;background:#fff;transform:rotate(45deg);}
-  .tip.down::after{bottom:-6px;right:34px;}
-  .tip.up::after{top:-6px;left:40px;}
-  .tip.mid{left:calc(50% - 105px)!important;}
-  .tip.mid::after{right:auto;left:calc(50% - 7px);}
   .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:24px 24px 0 0;padding:10px 18px 18px;box-shadow:var(--shFloat);}
+  .scrim{position:absolute;inset:0;background:rgba(16,17,20,.35);}
   .grab{width:36px;height:5px;border-radius:999px;background:var(--hair);margin:0 auto 12px;}
-  .toast{position:absolute;left:14px;right:14px;top:10px;background:#1A1C1E;color:#fff;border-radius:14px;padding:11px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;box-shadow:var(--shFloat);}
-  .toast .c{width:20px;height:20px;border-radius:999px;background:var(--ink);display:flex;align-items:center;justify-content:center;}
+  .toast{background:#1A1C1E;color:#fff;border-radius:14px;padding:12px 14px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;box-shadow:var(--shFloat);margin-bottom:10px;}
+  .toast .c{width:22px;height:22px;border-radius:999px;background:var(--ink);display:flex;align-items:center;justify-content:center;}
+  .pick{display:flex;align-items:center;gap:12px;padding:14px;border-radius:16px;background:var(--well);}
+  .pick+.pick{margin-top:8px;}
+  .pick .nm{font-size:17px;font-weight:700;}
+  .pick .mt{font-size:13px;color:var(--sub);margin-top:1px;}
 
   .logo{width:64px;height:64px;border-radius:20px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;margin-top:40px;box-shadow:0 6px 20px rgba(46,125,50,.35);}
   .seg{display:flex;flex-direction:column;gap:10px;margin-top:18px;}
   .opt{background:#fff;border-radius:18px;padding:14px 16px;box-shadow:var(--shCard);display:flex;align-items:center;gap:12px;}
   .opt.on{box-shadow:0 0 0 2px var(--ink),var(--shCard);}
-  .radio{width:22px;height:22px;border-radius:999px;box-shadow:inset 0 0 0 2px #D5D6D9;flex-shrink:0;}
+  .radio{width:24px;height:24px;border-radius:999px;box-shadow:inset 0 0 0 2px #C9CACE;flex-shrink:0;}
   .opt.on .radio{box-shadow:inset 0 0 0 7px var(--ink);}
-  svg{display:block;}
+  svg{display:block;flex-shrink:0;}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>チュートリアル構成案 — アカウント作成〜初回利用の3パターン</h1>
-  <p class="lead">タスク管理アプリの導入の流れを手本に、farm-app 向けに組み直した静的モック。各行は横にスクロールでき、左から順に画面が進む。色・角丸・影は <code>src/ui/tokens.ts</code> に合わせている。</p>
-  <div class="rules">守っている規約：見出し＝体言止め／押すボタン＝動詞／問いかけ形なし（✗「何を育てていますか？」→ ○「育てている作物」）／入口に「AI」の語・きらめきアイコンを出さない／作物例はトマト・きゅうり等の汎用品目。<br>招待された人は、どの案でも農園の設定を飛ばし「ログイン → 最初の記録（または説明）」だけにする。</div>
+  <h1>チュートリアル構成案 — アカウント作成〜初回利用の3パターン（改訂版）</h1>
+  <p class="lead">タスク管理アプリの導入の流れを手本に、farm-app 向けに組み直した静的モック。各行は横にスクロールでき、左から順に画面が進む。色・角丸・影は <code>src/ui/tokens.ts</code> と同値。</p>
+
+  <div class="box">
+    <b>初版からの修正</b>
+    <ul>
+      <li><b>案Aのプレビューをキーボードに隠れない位置へ：</b>「できあがるホーム」を画面上部に移し、文字入力の画面にはキーボードも描いて、実機で見える範囲を確かめられるようにした。</li>
+      <li><b>画面を暗くする吹き出しを廃止：</b>説明は画面の中に置く青い「説明カード」にした。暗い部分を押して何も起きない、という迷いが出ない。</li>
+      <li><b>文字を大きく・濃く：</b>本文 15px 以上、ボタン 17px。読ませる文字はすべて <code>textSub</code> 以上の濃さにし、薄い <code>textMuted</code> は入力欄の見本文字だけに限った。</li>
+      <li><b>語形の規約違反を修正：</b>説明カードの見出しとリスト項目（別画面へ移動する行）を体言止めにした（例「圃場の登録」）。押して処理が走るボタンだけ動詞。</li>
+      <li><b>実在しない機能・名前を削除：</b>創作のアプリ名をやめて実際の「農作業レポート」にした。写真の長押しもやめ、今ある導線（右下「＋記録」→「話して記録」「写真で調べる」）に合わせた。</li>
+    </ul>
+  </div>
+  <div class="box warn">
+    <b>このモックの前提（実装前に決める必要がある点）</b>
+    <ul>
+      <li><b>自分で登録する流れはまだない：</b>今のアプリは「管理者が招待 → パスワードでログイン」だけ。Apple/Google ログインと自分で登録する流れを入れるには、Supabase の OAuth 設定・新しい農園（organization）の作成・RLS の確認が別途必要で、チュートリアル本体より大きな工事になる。先にやるなら、今の招待制のまま「招待された人の初回」だけに絞る手もある。</li>
+      <li><b>作物ボタンは自動で紐付く品目に限る：</b>案Aの作物の選択肢は、<code>src/lib/cropAlias.ts</code> の自動一致（表記ゆれを揃えた完全一致か別名表）で農薬登録上の作物名に確実に当たる品目だけにする（実装時に1件ずつ確認）。そうすれば農薬チェックの紐付けが最初から済む。それ以外は「ほかの作物」から手入力し、紐付けは今の画面どおり後で候補から選んでもらう。</li>
+    </ul>
+  </div>
 
   <!-- ================= A ================= -->
   <section>
     <div class="sh"><span class="no">案A</span><h2>答えるだけで自分の農園ができあがる</h2><span class="model">手本：Asana のセットアップ画面</span></div>
-    <p class="desc">1画面1問。下半分に「できあがるホーム」が常に見えていて、入力したものがその場で増えていく。終わると、入力した内容がそのまま入った本物のホームに着く。</p>
+    <p class="desc">1画面1問。画面上部に「できあがるホーム」が常に見えていて、入力したものがその場で増えていく（キーボードが出ても隠れない位置）。終わると、入力した内容がそのまま入った本物のホームに着く。</p>
     <div class="strip">
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
           <div class="pad" style="align-items:center;text-align:center">
             <div class="logo"><i data-i="sprout" data-s="32"></i></div>
-            <div class="ttl" style="margin-top:22px">毎日の作業を、<br>その場で記録</div>
-            <div class="sub">記録・日報・農薬の管理を<br>ひとつのアプリで</div>
+            <div class="ttl" style="margin-top:22px">農作業レポート</div>
+            <div class="sub">毎日の作業を、その場で記録。<br>日報も農薬の管理もひとつに。</div>
           </div>
           <div class="foot">
-            <button class="btn dark"><i data-i="apple" data-s="17"></i>Apple で続ける</button>
-            <button class="btn line"><i data-i="google" data-s="17"></i>Google で続ける</button>
-            <button class="btn ter">メールアドレスで登録</button>
+            <button class="btn dark"><i data-i="apple" data-s="18"></i>Apple で続ける</button>
+            <button class="btn line"><i data-i="google" data-s="18"></i>Google で続ける</button>
+            <button class="btn ter">メールアドレスで登録する</button>
           </div>
         </div>
         <div class="cap">① アカウント作成<small>ワンタップ登録を主に。メールは補助。</small></div>
@@ -171,77 +200,74 @@
       <div class="col">
         <div class="phone"><div class="sb"></div>
           <div class="pbar"><i class="on"></i><i></i><i></i><i></i></div>
+          <div class="prev"><div class="pl"><i data-i="home" data-s="13"></i>できあがるホーム</div>
+            <div class="mini"><div class="hd"><span class="new" style="padding:0 4px;margin:0 -4px">みどり農園</span></div>
+              <div class="r"><span class="em">作物 —</span><span class="em">圃場 —</span></div></div></div>
           <div class="pad">
             <div class="ttl">農園名</div>
-            <div class="sub">画面の上や日報に表示されます</div>
-            <div class="well"><div class="wrow"><div class="l">農園名</div><div class="v">みどり農園<span class="caret"></span></div></div></div>
-            <div class="prev"><div class="pl">できあがるホーム</div>
-              <div class="mini"><div class="hd new" style="border-radius:8px;padding:2px 4px;margin:-2px -4px">みどり農園</div>
-                <div class="card" style="color:var(--muted)">作物 —</div><div class="card" style="color:var(--muted)">圃場 —</div></div></div>
+            <div class="well" style="margin-top:10px"><div class="wrow"><div class="l">農園名</div><div class="v">みどり農園<span class="caret"></span></div></div></div>
           </div>
-          <div class="foot"><button class="btn pri">次へ進む</button></div>
+          <div class="foot" style="padding-bottom:10px"><button class="btn pri">次へ進む</button></div>
+          <div class="kbd"><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k g"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k g"></i></div><div class="row"><i class="k g"></i><i class="k w"></i><i class="k g"></i></div></div>
         </div>
-        <div class="cap">② 農園名<small>下半分に完成形が見え、入力が即反映される。</small></div>
+        <div class="cap">② 農園名（キーボード表示中）<small>プレビューは上部なので、入力中も反映が見える。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
           <div class="pbar"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+          <div class="prev"><div class="pl"><i data-i="home" data-s="13"></i>できあがるホーム</div>
+            <div class="mini"><div class="hd">みどり農園</div>
+              <div class="r"><span class="new" style="display:flex;gap:10px;padding:0 4px;margin:0 -4px"><span style="display:flex;align-items:center;gap:4px"><span class="dot" style="background:#E0533D"></span>トマト</span><span style="display:flex;align-items:center;gap:4px"><span class="dot" style="background:#4CAF50"></span>きゅうり</span></span><span class="em">圃場 —</span></div></div></div>
           <div class="pad">
             <div class="ttl">育てている作物</div>
-            <div class="sub">いくつでも選べます。あとで変更できます</div>
+            <div class="sub">いくつでも選べます</div>
             <div class="chips">
-              <span class="chip on"><i data-i="check" data-s="15"></i>トマト</span>
-              <span class="chip on"><i data-i="check" data-s="15"></i>きゅうり</span>
+              <span class="chip on"><i data-i="check" data-s="16"></i>トマト</span>
+              <span class="chip on"><i data-i="check" data-s="16"></i>きゅうり</span>
               <span class="chip">なす</span><span class="chip">ピーマン</span>
               <span class="chip">キャベツ</span><span class="chip">いちご</span>
-              <span class="chip add"><i data-i="plus" data-s="15"></i>ほかの作物</span>
+              <span class="chip add"><i data-i="plus" data-s="16"></i>ほかの作物</span>
             </div>
-            <div class="prev"><div class="pl">できあがるホーム</div>
-              <div class="mini"><div class="hd">みどり農園</div>
-                <div class="card new" style="display:flex;gap:10px"><span style="display:flex;align-items:center;gap:4px"><span class="dot" style="background:#E0533D"></span>トマト</span><span style="display:flex;align-items:center;gap:4px"><span class="dot" style="background:#4CAF50"></span>きゅうり</span></div>
-                <div class="card" style="color:var(--muted)">圃場 —</div></div></div>
           </div>
           <div class="foot"><button class="btn pri">次へ進む</button></div>
         </div>
-        <div class="cap">③ 育てている作物<small>大きいボタンを押すだけ。文字入力なし。</small></div>
+        <div class="cap">③ 育てている作物<small>押すだけで文字入力なし。この画面が案Aの主役。選択肢は自動で紐付く品目だけ。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="pbar"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
-          <span class="skip">あとで</span>
+          <div class="pbar"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><span class="skip">あとで</span></div>
+          <div class="prev"><div class="pl"><i data-i="home" data-s="13"></i>できあがるホーム</div>
+            <div class="mini"><div class="hd">みどり農園</div>
+              <div class="r"><span>トマト・きゅうり</span><span class="new" style="padding:0 4px;margin:0 -4px">ハウス1・東の畑</span></div></div></div>
           <div class="pad">
             <div class="ttl">圃場</div>
-            <div class="sub">畑やハウスの呼び名を登録します</div>
-            <div class="well">
-              <div class="wrow"><div class="l">圃場 1</div><div class="v">ハウス1</div></div>
-              <div class="wrow"><div class="l">圃場 2</div><div class="v">東の畑<span class="caret"></span></div></div>
-              <div class="wrow" style="display:flex;align-items:center;gap:6px;color:var(--ink);font-weight:700;font-size:14px"><i data-i="plus" data-s="16"></i>圃場を追加</div>
+            <div class="well" style="margin-top:10px">
+              <div class="wrow" style="display:flex;justify-content:space-between;align-items:center"><div class="v" style="margin:0">ハウス1</div><span style="color:var(--ink)"><i data-i="check" data-s="18"></i></span></div>
+              <div class="wrow"><div class="v">東の畑<span class="caret"></span></div></div>
             </div>
-            <div class="prev" style="height:150px"><div class="pl">できあがるホーム</div>
-              <div class="mini"><div class="hd">みどり農園</div>
-                <div class="card new">ハウス1 ・ 東の畑</div></div></div>
           </div>
-          <div class="foot"><button class="btn pri">次へ進む</button></div>
+          <div class="foot" style="padding-bottom:10px;flex-direction:row"><button class="btn line" style="flex:none;width:auto;padding:15px 16px;white-space:nowrap"><i data-i="plus" data-s="17"></i>追加する</button><button class="btn pri" style="flex:1">次へ進む</button></div>
+          <div class="kbd"><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k g"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k g"></i></div><div class="row"><i class="k g"></i><i class="k w"></i><i class="k g"></i></div></div>
         </div>
-        <div class="cap">④ 圃場<small>「あとで」で飛ばせる。地図は後日でよい。</small></div>
+        <div class="cap">④ 圃場（キーボード表示中）<small>1つ入れるごとに「追加する」。「あとで」で飛ばせる。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="pbar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
-          <span class="skip">あとで</span>
+          <div class="pbar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><span class="skip">あとで</span></div>
+          <div class="prev"><div class="pl"><i data-i="home" data-s="13"></i>できあがるホーム</div>
+            <div class="mini"><div class="hd">みどり農園
+                <span style="margin-left:auto;display:flex"><span class="ico g" style="width:24px;height:24px;font-size:11px;font-weight:700">吉</span><span class="ico new" style="width:24px;height:24px;margin-left:-6px;border:2px solid #fff;border-radius:999px"><i data-i="plus" data-s="12"></i></span></span></div>
+              <div class="r"><span>トマト・きゅうり</span><span>ハウス1・東の畑</span></div></div></div>
           <div class="pad">
             <div class="ttl">一緒に使う人</div>
             <div class="sub">家族や従業員に招待を送ると、同じ記録を見られます</div>
             <div class="well">
-              <div class="wrow" style="display:flex;align-items:center;gap:10px"><div class="ico g"><i data-i="message" data-s="17"></i></div><div><div class="v" style="font-size:15px;margin:0">LINE で送る</div></div></div>
-              <div class="wrow" style="display:flex;align-items:center;gap:10px"><div class="ico"><i data-i="link" data-s="17"></i></div><div><div class="v" style="font-size:15px;margin:0">招待リンクをコピー</div></div></div>
+              <div class="wrow" style="display:flex;align-items:center;gap:11px"><div class="ico g"><i data-i="message" data-s="18"></i></div><div class="v" style="font-size:17px;margin:0">LINE で送る</div></div>
+              <div class="wrow" style="display:flex;align-items:center;gap:11px"><div class="ico"><i data-i="link" data-s="18"></i></div><div class="v" style="font-size:17px;margin:0">招待リンクをコピー</div></div>
             </div>
-            <div class="prev" style="height:130px"><div class="pl">できあがるホーム</div>
-              <div class="mini"><div class="hd">みどり農園
-                <span style="margin-left:auto;display:flex"><span class="ico g" style="width:22px;height:22px;font-size:10px">吉</span><span class="ico new" style="width:22px;height:22px;margin-left:-6px;border:2px solid #fff"><i data-i="plus" data-s="11"></i></span></span></div></div></div>
           </div>
           <div class="foot"><button class="btn pri">始める</button></div>
         </div>
@@ -250,51 +276,51 @@
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="16"></i></div></div>
+          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="17"></i></div></div>
           <div class="body">
-            <div class="card" style="padding:14px;background:var(--inkSoft);box-shadow:none">
-              <div style="font-size:15px;font-weight:700;color:var(--ink)">準備ができました</div>
-              <div style="font-size:12px;color:var(--sub);margin-top:3px;line-height:1.5">最初の作業を記録すると、ここに並びます</div>
+            <div class="hint">
+              <div class="ico i"><i data-i="check" data-s="18"></i></div>
+              <div class="tx"><b>準備完了</b><p>右下の「＋記録」から、今日の作業を1件入れてみてください。</p><span class="x">閉じる</span></div>
             </div>
             <div class="sec">作物</div>
             <div class="card list">
-              <div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト</div><div class="mt">ハウス1</div></div><span class="chev"><i data-i="chev" data-s="16"></i></span></div>
-              <div class="li"><span class="dot" style="background:#4CAF50"></span><div><div class="nm">きゅうり</div><div class="mt">東の畑</div></div><span class="chev"><i data-i="chev" data-s="16"></i></span></div>
+              <div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト</div><div class="mt">ハウス1</div></div><span class="chev"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="li"><span class="dot" style="background:#4CAF50"></span><div><div class="nm">きゅうり</div><div class="mt">東の畑</div></div><span class="chev"><i data-i="chev" data-s="18"></i></span></div>
             </div>
             <div class="sec">今日の記録</div>
-            <div class="card" style="padding:18px 14px;text-align:center;font-size:12px;color:var(--muted)">まだ記録がありません</div>
-                        <div class="tip down" style="right:14px;bottom:70px;width:210px;z-index:3"><b>作業を記録する</b>ここから今日の作業を1件入れてみましょう<div class="row"><span>あと1歩</span><button class="btn pri sm">記録する</button></div></div>
-            <div class="fab" style="z-index:2;box-shadow:0 0 0 9999px rgba(16,17,20,.5)"><i data-i="plus" data-s="16"></i>記録する</div>
+            <div class="card" style="padding:16px 14px;text-align:center;font-size:15px;color:var(--sub)">まだ記録がありません</div>
+            <div class="fab"><i data-i="plus" data-s="19"></i>記録</div>
           </div>
-          <div class="nav"><div class="on"><i data-i="home" data-s="19"></i>ホーム</div><div><i data-i="cal" data-s="19"></i>カレンダー</div><div><i data-i="message" data-s="19"></i>相談</div><div><i data-i="chart" data-s="19"></i>分析</div><div><i data-i="menu" data-s="19"></i>メニュー</div></div>
+          <div class="nav"><div class="on"><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
         </div>
-        <div class="cap">⑥ 完成したホーム<small>入力した作物・圃場が入った本物の画面。最後に記録ボタンだけ示す。</small></div>
+        <div class="cap">⑥ 完成したホーム<small>入力した作物・圃場が入った本物の画面。画面は暗くせず、説明カードで次の一歩だけ示す。</small></div>
       </div>
 
     </div>
     <div class="pros">
-      <div><b>良い点</b>終わった瞬間に空の画面がない。入力＝実データなので、消す手間がない。</div>
-      <div><b>注意点</b>画面数が多め。④⑤は「あとで」を必ず置く。作物一覧の品目選定が必要。</div>
+      <div><b>良い点</b>終わった瞬間に空の画面がない。入力＝実データなので消す手間がない。自動で紐付く作物から選ぶので、農薬チェックの紐付けも同時に済む。</div>
+      <div><b>注意点</b>画面数が多め。④⑤は「あとで」を必ず置く。文字入力の画面はキーボードで下が埋まるので、1画面に置くのは入力欄1つとボタン1つまで。</div>
     </div>
   </section>
 
   <!-- ================= B ================= -->
   <section>
     <div class="sh"><span class="no">案B</span><h2>はじめにやることリスト</h2><span class="model">手本：Todoist の「はじめに」プロジェクト</span></div>
-    <p class="desc">登録は最小限（2画面）ですぐホームへ。ホーム最上部の進捗付きカードから本物の画面に飛び、やり終えると自動でチェックが付いて戻る。使い方を「やること」として覚える。</p>
+    <p class="desc">登録は最小限（2画面）ですぐホームへ。ホーム最上部の進捗付きカードから本物の画面に移動し、やり終えると自動でチェックが付いて戻る。項目は別画面へ移動する行なので体言止め。</p>
     <div class="strip">
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
           <div class="pad" style="align-items:center;text-align:center">
             <div class="logo"><i data-i="sprout" data-s="32"></i></div>
-            <div class="ttl" style="margin-top:22px">毎日の作業を、<br>その場で記録</div>
+            <div class="ttl" style="margin-top:22px">農作業レポート</div>
+            <div class="sub">毎日の作業を、その場で記録</div>
           </div>
           <div class="foot">
-            <button class="btn dark"><i data-i="apple" data-s="17"></i>Apple で続ける</button>
-            <button class="btn line"><i data-i="google" data-s="17"></i>Google で続ける</button>
-            <div class="or">または</div>
-            <button class="btn ter">招待コードで参加</button>
+            <button class="btn dark"><i data-i="apple" data-s="18"></i>Apple で続ける</button>
+            <button class="btn line"><i data-i="google" data-s="18"></i>Google で続ける</button>
+            <div class="or">招待された方</div>
+            <button class="btn ter">招待コードで参加する</button>
           </div>
         </div>
         <div class="cap">① アカウント作成<small>招待された人の入口もここに並べる。</small></div>
@@ -303,135 +329,132 @@
       <div class="col">
         <div class="phone"><div class="sb"></div>
           <div class="pad">
-            <div class="ttl">農園名</div>
+            <div class="ttl" style="margin-top:20px">農園名</div>
             <div class="sub">あとから変更できます</div>
             <div class="well"><div class="wrow"><div class="l">農園名</div><div class="v">みどり農園<span class="caret"></span></div></div></div>
           </div>
-          <div class="foot"><button class="btn pri">始める</button></div>
+          <div class="foot" style="padding-bottom:10px"><button class="btn pri">始める</button></div>
+          <div class="kbd"><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i></div><div class="row"><i class="k g"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k g"></i></div><div class="row"><i class="k g"></i><i class="k w"></i><i class="k g"></i></div></div>
         </div>
         <div class="cap">② 農園名<small>登録で聞くのはこれだけ。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="16"></i></div></div>
+          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="17"></i></div></div>
           <div class="body">
             <div class="card ck">
               <div class="top"><b>はじめにやること</b><span>0 / 5</span></div>
               <div class="bar"><i style="width:3%"></i></div>
-              <div class="ci next"><span class="box"></span><span class="tx">圃場を登録する</span><span class="go"><i data-i="chev" data-s="16"></i></span></div>
-              <div class="ci"><span class="box"></span><span class="tx">作業を1件記録する</span><span class="go"><i data-i="chev" data-s="16"></i></span></div>
-              <div class="ci"><span class="box"></span><span class="tx">話して記録する</span><span class="go"><i data-i="chev" data-s="16"></i></span></div>
-              <div class="ci"><span class="box"></span><span class="tx">写真で調べる</span><span class="go"><i data-i="chev" data-s="16"></i></span></div>
-              <div class="ci"><span class="box"></span><span class="tx">家族や従業員を招く</span><span class="go"><i data-i="chev" data-s="16"></i></span></div>
+              <div class="ci next"><span class="cb"></span><span class="tx">圃場の登録</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">最初の作業記録</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">声での記録</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">写真での病害虫診断</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">家族・従業員の招待</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
             </div>
-            <div class="sec">今日の記録</div>
-            <div class="card" style="padding:16px 14px;text-align:center;font-size:12px;color:var(--muted)">まだ記録がありません</div>
+            <div style="text-align:right;font-size:14px;font-weight:700;color:var(--sub);margin:8px 6px 0">非表示にする</div>
           </div>
-          <div class="nav"><div class="on"><i data-i="home" data-s="19"></i>ホーム</div><div><i data-i="cal" data-s="19"></i>カレンダー</div><div><i data-i="message" data-s="19"></i>相談</div><div><i data-i="chart" data-s="19"></i>分析</div><div><i data-i="menu" data-s="19"></i>メニュー</div></div>
+          <div class="nav"><div class="on"><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
         </div>
-        <div class="cap">③ ホーム（0/5）<small>次にやる1項目だけ淡い緑で目立たせる。</small></div>
+        <div class="cap">③ ホーム（0/5）<small>次にやる1項目だけ淡い緑。放置したい人向けに「非表示にする」。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="appbar"><div class="t">作業の記録</div><div class="circ"><i data-i="x" data-s="16"></i></div></div>
-          <div class="body">
-            <div class="well" style="margin-top:4px">
-              <div class="wrow"><div class="l">作物</div><div class="v">トマト</div></div>
-              <div class="wrow"><div class="l">作業</div><div class="v">誘引</div></div>
-              <div class="wrow"><div class="l">メモ</div><div class="v ph">話して入力もできます</div></div>
+          <div class="appbar"><div class="t">みどり農園</div></div>
+          <div class="body" style="opacity:.5"><div class="card list"><div class="li"><span class="dot" style="background:#E0533D"></span><div class="nm">トマト　誘引</div></div></div></div>
+          <div class="scrim"></div>
+          <div class="sheet"><div class="grab"></div>
+            <div class="hint" style="margin-bottom:12px">
+              <div class="ico i"><i data-i="mic" data-s="18"></i></div>
+              <div class="tx"><b>声での記録</b><p>「話して記録」を押して「トマト、誘引、1時間」と話すと、項目が埋まります。</p></div>
             </div>
-            <div style="display:flex;justify-content:center;margin-top:18px"><div class="ico g" style="width:64px;height:64px"><i data-i="mic" data-s="28"></i></div></div>
-            <div style="text-align:center;font-size:12px;color:var(--sub);margin-top:6px;font-weight:600">話して記録</div>
-            <div class="spot" style="left:calc(50% - 38px);top:222px;width:76px;height:76px"></div>
-            <div class="tip down mid" style="top:80px;width:210px"><b>話して記録する</b>マイクを押して「トマト、誘引、1時間」と話すだけ<div class="row"><span>3 / 5</span><button class="btn soft sm">わかった</button></div></div>
+            <div class="pick" style="background:var(--inkSoft)"><div class="ico g" style="background:#fff"><i data-i="mic" data-s="20"></i></div><div><div class="nm">話して記録</div><div class="mt">話した内容から入力します</div></div></div>
+            <div class="pick"><div class="ico" style="background:#fff"><i data-i="bug" data-s="20"></i></div><div><div class="nm">写真で調べる</div><div class="mt">病害虫の見当をつける</div></div></div>
+            <div class="pick"><div class="ico" style="background:#fff"><i data-i="pencil" data-s="20"></i></div><div><div class="nm">手で入力</div><div class="mt">いつものフォーム</div></div></div>
           </div>
-          <div class="foot" style="padding-top:0"><button class="btn pri">保存する</button></div>
         </div>
-        <div class="cap">④ リストから飛んだ先<small>本物の画面の上に、その項目の説明を1枚だけ重ねる。</small></div>
+        <div class="cap">④ リストから移動した先<small>実際の「＋記録」シートを開き、その中に説明カードを1枚だけ置く。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="16"></i></div></div>
+          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="17"></i></div></div>
           <div class="body">
-            <div class="toast"><span class="c"><i data-i="check" data-s="13"></i></span>「話して記録する」が完了</div>
-            <div class="card ck" style="margin-top:0">
+            <div class="toast"><span class="c"><i data-i="check" data-s="14"></i></span>声での記録　完了</div>
+            <div class="card ck">
               <div class="top"><b>はじめにやること</b><span>3 / 5</span></div>
               <div class="bar"><i style="width:60%"></i></div>
-              <div class="ci done"><span class="box on"><i data-i="check" data-s="13"></i></span><span class="tx">圃場を登録する</span></div>
-              <div class="ci done"><span class="box on"><i data-i="check" data-s="13"></i></span><span class="tx">作業を1件記録する</span></div>
-              <div class="ci done"><span class="box on"><i data-i="check" data-s="13"></i></span><span class="tx">話して記録する</span></div>
-              <div class="ci next"><span class="box"></span><span class="tx">写真で調べる</span><span class="go"><i data-i="chev" data-s="16"></i></span></div>
-              <div class="ci"><span class="box"></span><span class="tx">家族や従業員を招く</span><span class="go"><i data-i="chev" data-s="16"></i></span></div>
+              <div class="ci done"><span class="cb on"><i data-i="check" data-s="14"></i></span><span class="tx">圃場の登録</span></div>
+              <div class="ci done"><span class="cb on"><i data-i="check" data-s="14"></i></span><span class="tx">最初の作業記録</span></div>
+              <div class="ci done"><span class="cb on"><i data-i="check" data-s="14"></i></span><span class="tx">声での記録</span></div>
+              <div class="ci next"><span class="cb"></span><span class="tx">写真での病害虫診断</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
+              <div class="ci"><span class="cb"></span><span class="tx">家族・従業員の招待</span><span class="go"><i data-i="chev" data-s="18"></i></span></div>
             </div>
-            <div class="sec">今日の記録</div>
-            <div class="card list"><div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト　誘引</div><div class="mt">ハウス1 ・ 1時間</div></div><span class="wtag" style="margin-left:auto">管理</span></div></div>
           </div>
-          <div class="nav"><div class="on"><i data-i="home" data-s="19"></i>ホーム</div><div><i data-i="cal" data-s="19"></i>カレンダー</div><div><i data-i="message" data-s="19"></i>相談</div><div><i data-i="chart" data-s="19"></i>分析</div><div><i data-i="menu" data-s="19"></i>メニュー</div></div>
+          <div class="nav"><div class="on"><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
         </div>
-        <div class="cap">⑤ 戻ると自動でチェック<small>記録がホームに並び、進捗が進む。</small></div>
+        <div class="cap">⑤ 戻ると自動でチェック<small>記録を保存した時点で完了扱い。進捗が進む。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="16"></i></div></div>
+          <div class="appbar"><div class="t">みどり農園</div><div class="circ"><i data-i="user" data-s="17"></i></div></div>
           <div class="body">
             <div class="card" style="padding:18px 16px;text-align:center">
-              <div class="ico g" style="width:52px;height:52px;margin:0 auto"><i data-i="check" data-s="26"></i></div>
-              <div style="font-size:17px;font-weight:700;margin-top:10px">準備完了</div>
-              <div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.55">基本の使い方はこれで全部です。<br>使い方はメニューの「使い方」からいつでも。</div>
+              <div class="ico g" style="width:54px;height:54px;margin:0 auto"><i data-i="check" data-s="28"></i></div>
+              <div style="font-size:19px;font-weight:700;margin-top:10px">準備完了</div>
+              <div style="font-size:15px;color:var(--sub);margin-top:4px;line-height:1.6">使い方はメニューの<br>「使い方」からいつでも見られます</div>
               <button class="btn soft sm" style="margin:12px auto 0">カードを閉じる</button>
             </div>
             <div class="sec">今日の記録</div>
             <div class="card list">
-              <div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト　誘引</div><div class="mt">ハウス1 ・ 1時間</div></div><span class="wtag" style="margin-left:auto">管理</span></div>
-              <div class="li"><span class="dot" style="background:#4CAF50"></span><div><div class="nm">きゅうり　収穫</div><div class="mt">東の畑 ・ 12kg</div></div><span class="wtag" style="margin-left:auto;background:var(--warnBg);color:var(--warn)">収穫</span></div>
+              <div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト　誘引</div><div class="mt">ハウス1・1時間</div></div><span class="wtag">管理</span></div>
+              <div class="li"><span class="dot" style="background:#4CAF50"></span><div><div class="nm">きゅうり　収穫</div><div class="mt">東の畑・12kg</div></div><span class="wtag" style="background:var(--warnBg);color:#9A5E00">収穫</span></div>
             </div>
           </div>
-          <div class="nav"><div class="on"><i data-i="home" data-s="19"></i>ホーム</div><div><i data-i="cal" data-s="19"></i>カレンダー</div><div><i data-i="message" data-s="19"></i>相談</div><div><i data-i="chart" data-s="19"></i>分析</div><div><i data-i="menu" data-s="19"></i>メニュー</div></div>
+          <div class="nav"><div class="on"><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
         </div>
         <div class="cap">⑥ 準備完了（5/5）<small>カードは閉じたら二度と出さない。</small></div>
       </div>
 
     </div>
     <div class="pros">
-      <div><b>良い点</b>実装が一番軽い（ホームにカード1枚＋完了判定）。話して記録・写真で調べる など気づかれにくい機能へ誘導できる。</div>
-      <div><b>注意点</b>最初のホームは空。リストを放置する人もいる（途中で「非表示にする」を用意）。</div>
+      <div><b>良い点</b>実装が一番軽い（ホームにカード1枚＋完了判定）。声での記録・写真での診断など、気づかれにくい機能へ誘導できる。</div>
+      <div><b>注意点</b>最初のホームは空。項目名を体言止めにした分、やることリストとしての勢いはやや弱い（動詞にするなら規約の例外として決める）。</div>
     </div>
   </section>
 
   <!-- ================= C ================= -->
   <section>
-    <div class="sh"><span class="no">案C</span><h2>見本で触ってから始める＋その場ヒント</h2><span class="model">手本：Things 3 の見本の項目／登録部分は Linear</span></div>
-    <p class="desc">入力ゼロで、見本データ入りの完成画面から始める。見本を開くとその場で説明が出て、各タブは初めて開いたときだけ1枚説明を出す。満足したら見本を一括で消して本番へ。既存のデモモード（<code>src/lib/demoData.ts</code>）を流用できる。</p>
+    <div class="sh"><span class="no">案C</span><h2>見本で触ってから始める</h2><span class="model">手本：Things 3 の見本の項目／登録部分は Linear</span></div>
+    <p class="desc">入力ゼロで、見本データ入りの完成画面から始める。見本の中に説明カードを置き、各タブは初めて開いたときだけ説明を1枚出す。満足したら見本を一括で消して本番へ。既存のデモモード（<code>src/lib/demoData.ts</code>）を流用できる。</p>
     <div class="strip">
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
           <div class="pad" style="align-items:center;text-align:center">
             <div class="logo"><i data-i="sprout" data-s="32"></i></div>
-            <div class="ttl" style="margin-top:22px">みどりの記録帳</div>
-            <div class="sub">見本を触ってから、自分の農園を始められます</div>
+            <div class="ttl" style="margin-top:22px">農作業レポート</div>
+            <div class="sub">見本を触ってから、<br>自分の農園を始められます</div>
           </div>
           <div class="foot">
-            <button class="btn dark"><i data-i="apple" data-s="17"></i>Apple で続ける</button>
-            <button class="btn line"><i data-i="google" data-s="17"></i>Google で続ける</button>
+            <button class="btn dark"><i data-i="apple" data-s="18"></i>Apple で続ける</button>
+            <button class="btn line"><i data-i="google" data-s="18"></i>Google で続ける</button>
             <button class="btn ter">登録せずに見本を見る</button>
           </div>
         </div>
-        <div class="cap">① アカウント作成<small>「登録せずに見本を見る」で先に触ってもらう選択肢も。</small></div>
+        <div class="cap">① アカウント作成<small>「登録せずに見本を見る」はデモモードをそのまま使えば認証不要。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
           <div class="pad">
-            <div class="ttl">文字の大きさ</div>
+            <div class="ttl" style="margin-top:20px">文字の大きさ</div>
             <div class="sub">あとから設定で変えられます</div>
             <div class="seg">
-              <div class="opt"><span class="radio"></span><div><div style="font-size:15px;font-weight:700">標準</div><div style="font-size:12px;color:var(--sub)">トマト　誘引　1時間</div></div></div>
-              <div class="opt on"><span class="radio"></span><div><div style="font-size:19px;font-weight:700">大きめ</div><div style="font-size:15px;color:var(--sub)">トマト　誘引　1時間</div></div></div>
+              <div class="opt"><span class="radio"></span><div><div style="font-size:16px;font-weight:700">標準</div><div style="font-size:14px;color:var(--sub)">トマト　誘引　1時間</div></div></div>
+              <div class="opt on"><span class="radio"></span><div><div style="font-size:20px;font-weight:700">大きめ</div><div style="font-size:17px;color:var(--sub)">トマト　誘引　1時間</div></div></div>
             </div>
           </div>
           <div class="foot"><button class="btn pri">次へ進む</button></div>
@@ -441,84 +464,82 @@
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="appbar"><div class="t" style="display:flex;align-items:center;gap:6px">見本農園<span class="demo">見本</span></div><div class="circ"><i data-i="user" data-s="16"></i></div></div>
+          <div class="appbar"><div class="t">見本農園<span class="demo">見本</span></div><div class="circ"><i data-i="user" data-s="17"></i></div></div>
           <div class="body">
             <div class="card" style="padding:12px 14px;background:var(--warnBg);box-shadow:none">
-              <div style="font-size:12px;line-height:1.5;color:var(--text)"><b>見本のデータです</b>　自由に触れます</div>
-              <button class="btn pri sm" style="margin-top:8px">自分の農園を始める</button>
+              <div style="font-size:15px;line-height:1.5"><b>見本のデータです。</b>自由に触れます</div>
+              <button class="btn pri sm" style="margin-top:9px">自分の農園を始める</button>
             </div>
             <div class="sec">今日の記録</div>
             <div class="card list">
-              <div class="li" style="background:var(--inkSoft)"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト　誘引</div><div class="mt">ハウス1 ・ 1時間 ・ 写真1枚</div></div><span class="wtag" style="margin-left:auto;background:#fff">管理</span></div>
-              <div class="li"><span class="dot" style="background:#4CAF50"></span><div><div class="nm">きゅうり　収穫</div><div class="mt">東の畑 ・ 12kg</div></div><span class="wtag" style="margin-left:auto;background:var(--warnBg);color:var(--warn)">収穫</span></div>
-              <div class="li"><span class="dot" style="background:#7E57C2"></span><div><div class="nm">なす　散布</div><div class="mt">東の畑 ・ 1000倍</div></div><span class="wtag" style="margin-left:auto;background:#F3E9F8;color:#7B1FA2">防除</span></div>
+              <div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト　誘引</div><div class="mt">ハウス1・写真1枚</div></div><span class="wtag">管理</span></div>
+              <div class="li"><span class="dot" style="background:#4CAF50"></span><div><div class="nm">きゅうり　収穫</div><div class="mt">東の畑・12kg</div></div><span class="wtag" style="background:var(--warnBg);color:#9A5E00">収穫</span></div>
+              <div class="li"><span class="dot" style="background:#7E57C2"></span><div><div class="nm">なす　散布</div><div class="mt">東の畑・1000倍</div></div><span class="wtag" style="background:#F3E9F8;color:#7B1FA2">防除</span></div>
             </div>
-            <div class="tip up" style="left:22px;top:196px;width:220px;z-index:3"><b>見本を開く</b>記録を押すと、中身と使い方が見られます<div class="row"><span>1 / 3</span><button class="btn soft sm">わかった</button></div></div>
+            <div class="hint" style="margin-top:12px">
+              <div class="ico i"><i data-i="info" data-s="18"></i></div>
+              <div class="tx"><b>見本の記録</b><p>記録を押すと中身が見られます。</p></div>
+            </div>
           </div>
-          <div class="nav"><div class="on"><i data-i="home" data-s="19"></i>ホーム</div><div><i data-i="cal" data-s="19"></i>カレンダー</div><div><i data-i="message" data-s="19"></i>相談</div><div><i data-i="chart" data-s="19"></i>分析</div><div><i data-i="menu" data-s="19"></i>メニュー</div></div>
+          <div class="nav"><div class="on"><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
         </div>
-        <div class="cap">③ 見本入りのホーム<small>「見本」バッジと琥珀の帯で実データと区別。</small></div>
+        <div class="cap">③ 見本入りのホーム<small>「見本」バッジと琥珀の帯で実データと区別。説明はリストの下に置き、記録を隠さない。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
           <div class="appbar"><div class="t">トマト　誘引</div><span class="demo">見本</span></div>
           <div class="body">
-            <div style="height:130px;border-radius:16px;background:linear-gradient(135deg,#8FB56A,#5C8A3C 60%,#436B2C)"></div>
+            <div style="height:120px;border-radius:16px;background:linear-gradient(135deg,#8FB56A,#5C8A3C 60%,#436B2C)"></div>
             <div class="well">
               <div class="wrow"><div class="l">圃場</div><div class="v">ハウス1</div></div>
-              <div class="wrow"><div class="l">作業時間</div><div class="v">1時間</div></div>
-              <div class="wrow"><div class="l">メモ</div><div class="v" style="font-size:14px;font-weight:600">3段目まで誘引。葉が少し黄色い</div></div>
+              <div class="wrow"><div class="l">メモ</div><div class="v" style="font-size:16px">3段目まで誘引。葉が少し黄色い</div></div>
             </div>
-            <div class="spot" style="left:12px;top:2px;width:calc(100% - 24px);height:130px;border-radius:16px"></div>
-            <div class="tip up" style="left:22px;top:146px;width:220px"><b>写真で調べる</b>写真を長押しすると、病害虫の見当をつけられます<div class="row"><span>2 / 3</span><button class="btn soft sm">わかった</button></div></div>
+            <div class="hint" style="margin-top:12px">
+              <div class="ico i"><i data-i="bug" data-s="18"></i></div>
+              <div class="tx"><b>写真での病害虫診断</b><p>気になる葉は、右下「＋記録」→「写真で調べる」で見当をつけられます。</p></div>
+            </div>
           </div>
         </div>
-        <div class="cap">④ 見本を開くとその場ヒント<small>吹き出しは画面ごとに1つだけ。</small></div>
+        <div class="cap">④ 見本を開くと説明カード<small>今ある導線（＋記録 → 写真で調べる）を案内するだけ。1画面に1枚。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="appbar"><div class="t">分析</div><span class="demo">見本</span></div>
+          <div class="appbar"><div class="t">分析<span class="demo">見本</span></div></div>
           <div class="body">
-            <div class="card" style="padding:14px"><div class="lbl">今月の作業時間</div><div style="font-size:26px;font-weight:700;margin-top:2px">42<span style="font-size:13px;color:var(--sub)"> 時間</span></div>
-              <div style="display:flex;align-items:flex-end;gap:6px;height:70px;margin-top:10px">
+            <div class="hint" style="margin-bottom:12px">
+              <div class="ico i"><i data-i="chart" data-s="18"></i></div>
+              <div class="tx"><b>分析</b><p>記録がたまると、作物ごとの作業時間や収穫量がここにまとまります。</p><span class="x">閉じる</span></div>
+            </div>
+            <div class="card" style="padding:14px"><div style="font-size:13px;font-weight:700;color:var(--sub)">今月の作業時間</div><div style="font-size:30px;font-weight:700;margin-top:2px">42<span style="font-size:15px;color:var(--sub)"> 時間</span></div>
+              <div style="display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:10px">
                 <i style="flex:1;height:40%;background:var(--inkSoft);border-radius:6px"></i><i style="flex:1;height:65%;background:var(--inkSoft);border-radius:6px"></i><i style="flex:1;height:50%;background:var(--inkSoft);border-radius:6px"></i><i style="flex:1;height:90%;background:var(--ink);border-radius:6px"></i></div></div>
-            <div class="dim"></div>
-            <div class="sheet"><div class="grab"></div>
-              <div class="ico g" style="width:48px;height:48px"><i data-i="chart" data-s="24"></i></div>
-              <div style="font-size:18px;font-weight:700;margin-top:10px">分析</div>
-              <div style="font-size:13px;color:var(--sub);line-height:1.6;margin-top:4px">記録がたまると、作物ごとの作業時間や収穫量がここにまとまります。</div>
-              <button class="btn pri" style="margin-top:14px">見てみる</button>
-            </div>
           </div>
-          <div class="nav"><div><i data-i="home" data-s="19"></i>ホーム</div><div><i data-i="cal" data-s="19"></i>カレンダー</div><div><i data-i="message" data-s="19"></i>相談</div><div class="on"><i data-i="chart" data-s="19"></i>分析</div><div><i data-i="menu" data-s="19"></i>メニュー</div></div>
+          <div class="nav"><div><i data-i="home" data-s="20"></i>ホーム</div><div><i data-i="cal" data-s="20"></i>カレンダー</div><div><i data-i="message" data-s="20"></i>相談</div><div class="on"><i data-i="chart" data-s="20"></i>分析</div><div><i data-i="menu" data-s="20"></i>メニュー</div></div>
         </div>
-        <div class="cap">⑤ タブ初回だけ説明1枚<small>まとめて見せず、使う瞬間に1つずつ。</small></div>
+        <div class="cap">⑤ タブ初回だけ説明カード<small>画面の先頭に置き、グラフは見えたまま。閉じたら二度と出さない。</small></div>
       </div>
 
       <div class="col">
         <div class="phone"><div class="sb"></div>
-          <div class="appbar"><div class="t" style="display:flex;align-items:center;gap:6px">見本農園<span class="demo">見本</span></div></div>
-          <div class="body">
-            <div class="card list" style="opacity:.6"><div class="li"><span class="dot" style="background:#E0533D"></span><div><div class="nm">トマト　誘引</div></div></div><div class="li"><span class="dot" style="background:#4CAF50"></span><div><div class="nm">きゅうり　収穫</div></div></div></div>
-            <div class="dim"></div>
-            <div class="sheet"><div class="grab"></div>
-              <div style="font-size:18px;font-weight:700">自分の農園を始める</div>
-              <div style="font-size:13px;color:var(--sub);line-height:1.6;margin-top:4px">見本のデータはすべて消えます。続けて農園名と作物を登録します。</div>
-              <div class="well" style="margin-top:12px"><div class="wrow"><div class="l">農園名</div><div class="v">みどり農園<span class="caret"></span></div></div></div>
-              <button class="btn pri" style="margin-top:14px">見本を消して始める</button>
-              <button class="btn ter" style="margin-top:4px">もう少し見本を見る</button>
-            </div>
+          <div class="appbar"><div class="t">見本農園<span class="demo">見本</span></div></div>
+          <div class="body" style="opacity:.5"><div class="card list"><div class="li"><span class="dot" style="background:#E0533D"></span><div class="nm">トマト　誘引</div></div><div class="li"><span class="dot" style="background:#4CAF50"></span><div class="nm">きゅうり　収穫</div></div></div></div>
+          <div class="scrim"></div>
+          <div class="sheet"><div class="grab"></div>
+            <div style="font-size:20px;font-weight:700">見本から本番への切り替え</div>
+            <div style="font-size:15px;color:var(--sub);line-height:1.6;margin-top:4px">見本のデータはすべて消えます。続けて農園名と作物を登録します。</div>
+            <button class="btn pri" style="margin-top:16px">見本を消して始める</button>
+            <button class="btn ter" style="margin-top:4px">もう少し見本を見る</button>
           </div>
         </div>
-        <div class="cap">⑥ 見本を消して本番へ<small>ここから案A の②〜③を短く続けてもよい。</small></div>
+        <div class="cap">⑥ 見本を消して本番へ<small>この後は案A の②③（農園名・作物）を続ける。</small></div>
       </div>
 
     </div>
     <div class="pros">
-      <div><b>良い点</b>入力ゼロで完成形が見える。デモモードの偽データ・バッジの仕組みを流用できる。</div>
-      <div><b>注意点</b>見本と実データの混在防止が要（別テナント扱い推奨）。吹き出しを出しすぎない。</div>
+      <div><b>良い点</b>入力ゼロで完成形が見える。デモモードの偽データ・バッジの仕組みを流用でき、登録前でも見せられる。</div>
+      <div><b>注意点</b>見本と実データの混在防止が要（見本は端末内だけで持ち、DB に書かないのが安全）。説明カードは1画面1枚まで。</div>
     </div>
   </section>
 </div>
@@ -529,8 +550,10 @@ const P={
   check:'<path d="M20 6 9 17l-5-5"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   chev:'<path d="m9 18 6-6-6-6"/>',
-  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
   mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/>',
+  bug:'<path d="m8 2 1.9 1.9M14.1 3.9 16 2"/><path d="M9 7.1v-1a3 3 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6M12 20v-9"/><path d="M6.5 13H3M21 13h-3.5M6 9 3.5 7.5M18 9l2.5-1.5M6 17l-3 1.5M18 17l3 1.5"/>',
+  pencil:'<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>',
   home:'<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
   cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   message:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
