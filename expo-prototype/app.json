@@ -47,7 +47,8 @@
           "color": "#2E7D32"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "./plugins/withPodsDeploymentTarget"
     ]
   }
 }
