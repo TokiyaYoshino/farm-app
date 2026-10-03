@@ -127,6 +127,31 @@
 
 ---
 
+## 組織分離（kishu / asuka の同居解消）進行状況（2026-10-03）
+
+一般公開で見知らぬ組織が入ってくる前提のため、組織間で絶対に読めない状態にする。経緯は `docs/decisions/20261001-account-model-self-signup.md` B1。
+
+- [x] 移行SQLを作成（**未実行・本番未適用**）: `scripts/migrations/2026-10-03-asuka-organization-split.sql`。`device_tokens` も付け替え対象（`user_id` が asuka の行）
+- [x] クライアントの絞り込みを `org` 文字列 → `organization_id` に変更（Web `src/App.tsx` 7箇所、Expo `expo-prototype/lib/store.tsx` 6箇所）。型チェックは両方通過。**画面での確認は未実施**
+- [x] 新規テーブルのひな形とチェックリスト（`scripts/migrations/_template-new-table.sql`、`docs/supabase-ops.md`）
+- [x] 移行SQLの 0) 事前確認（2026-10-03・オーナー承認）。移す行は users 1・crops 2・fields 1・reports 3・pesticides 1、残りは0。持ち主不明で残る行0
+- [x] バックアップ `~/backups/farm-app/pre-rls_20261003_163006.dump` → 1) を psql で実行 → 3) で確認（2026-10-03）。asuka の新しい organization_id は `13a3a722-b0c2-44b2-ae80-e368b5926678`。3-2 は 0-3 と一致、3-3 は 0 行
+  - 実行前に SQL の誤りを2件直した: `crop_advice_actions` に `created_by` が無い（→ message_id で判定）、`pesticides.id` は uuid（`v_pest` を `uuid[]` に）。どちらも1トランザクション内で失敗し、本番は変わらなかったことを確認済み
+- [ ] asuka の利用者にログインし直してもらう（JWT の organization_id を発行し直すため）
+- [x] 越境テスト（2026-10-03）。トークンを使わずに次の3通りで確認した:
+  - DB 内で `set local role authenticated` ＋ `request.jwt.claims` を切り替え、読み取り専用トランザクションで各組織になりきって全17表＋organizations を数えた。asuka は自組織の行だけ（users 1・crops 2・fields 1・reports 3・pesticides 1）、kishu も自組織の行だけで、**他組織の行は全表で0**。クレーム無し（users 行へのフォールバック）でも asuka に解決
+  - `custom_access_token_hook` を直接呼び、asuka の利用者に新しい organization_id、kishu に従来の id が入ることを確認（＝再ログインすれば正しい札になる）
+  - RLS は全表で有効。ポリシーはすべて `organization_id = jwt_organization_id()`（`organizations` は `id =`、`device_tokens` は本人限定も追加）。書き込みも同じ条件の ALL ポリシーで縛られている。`users_select_login_lookup`（`true`）は anon 向けだが、anon に users の SELECT 権限が無く実際には拒否される
+  - 外から匿名キーで `node scripts/check-org-isolation.mjs --anon-only` → 18表すべて0行
+  - **ただし漏れが1件見つかった（未修正・一般公開前に必須）**: anon に `users` の `login_id`・`email` 列の SELECT が列単位で許可され、ポリシー `users_select_login_lookup`（anon・`true`）と合わせて**全組織の利用者のログインIDと仮メールが外から一覧できる**（2026-10-03 に 5件取得できることを確認・中身は未表示）。ログイン画面が login_id → email を未ログインで引くために入れたもの。最初の匿名テストは `select=*` で叩いたため列単位の許可を見逃した → スクリプトを列ごとに叩くよう直し、今は2件 ✗ で検出される。直し方は「login_id を受けて email を1件だけ返す security definer の RPC に置き換え、anon の列権限とポリシーを外す」。順序は RPC 追加 → クライアント（Web・Expo のログイン）切り替えをデプロイ → 権限を外す
+  - 実際のトークンでの確認（同スクリプトの全体）は未実施。オーナーが再ログインのテストをするときに使える: `KISHU_JWT=… ASUKA_JWT=… node scripts/check-org-isolation.mjs`（トークンの取り方は先頭コメント）。書き込みの越境は `--write-probe` を付けたときだけ（本番への更新要求になるので承認後）。ローカルのモックで「分離時は全件通過・漏れ時は ✗」を確認済み（2026-10-03）
+- [ ] **デプロイは移行の後**（先に新クライアントを出すと、同居中の組織の行が画面にまじる）
+- [ ] `work_categories`（全組織共有・`organization_id` 列なし）を共有マスタとして残すか、組織ごとに分けるかの判断
+- [ ] Storage `report-images`（`public=true`）の非公開化・署名付きURL化・EXIF除去（一般公開の前）
+- [ ] セルフサインアップ実装時: `api/set-user-auth.ts:68` は新規利用者の `org` を `org ?? "kishu"` で入れる。新しい組織では `organizations.org_key` を入れる（旧 `org` 列はクライアントがもう参照しないが、検証SQLや戻す版が `org` を使うため）
+
+---
+
 ## 品質ゲート実行結果
 
 - `npm run build`: 実施予定（マージ後に再実行して確認する。下部「最終確認」参照）

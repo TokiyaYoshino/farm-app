@@ -172,13 +172,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const results = await Promise.all([
       supabase.from("users").select("*").eq("organization_id", organizationId).order("id"),
-      supabase.from("crops").select("*").eq("org", org).order("id"),
-      supabase.from("fields").select("*").eq("org", org).order("id"),
-      supabase.from("reports").select("*").eq("org", org).order("date", { ascending: false }),
-      supabase.from("settings").select("*").eq("org", org).maybeSingle(),
+      supabase.from("crops").select("*").eq("organization_id", organizationId).order("id"),
+      supabase.from("fields").select("*").eq("organization_id", organizationId).order("id"),
+      supabase.from("reports").select("*").eq("organization_id", organizationId).order("date", { ascending: false }),
+      supabase.from("settings").select("*").eq("organization_id", organizationId).maybeSingle(),
       supabase.from("schedules").select("*").eq("organization_id", organizationId).order("date"),
-      supabase.from("pesticides").select("*").eq("org", org).order("name"),
-      supabase.from("projects").select("*").eq("org", org).order("created_at", { ascending: false }),
+      supabase.from("pesticides").select("*").eq("organization_id", organizationId).order("name"),
+      supabase.from("projects").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
       supabase.from("work_categories").select("*").order("id"),
       supabase.from("comments").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
     ]);

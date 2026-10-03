@@ -7,8 +7,17 @@ Supabaseダッシュボード → Table Editor → users → Insert row → name
 - 画像は Storage の `report-images` バケット
 
 ## セキュリティ
-- RLS は全テーブルで有効（allow_all ポリシー）
+- RLS は全テーブルで有効。ポリシーは `<表名>_all_own_org`（`organization_id = jwt_organization_id()`）で、`allow_all` は残っていない（`docs/db-schema.md`）
 - API キー・URL は `.env` / `.env.local` のみに置く。設定ファイルやドキュメントに平文で書かない
+
+### 新しいテーブルを作るとき（組織が増える前提のチェックリスト）
+ひな形は `scripts/migrations/_template-new-table.sql`。過去2回、新設テーブルが RLS 無効・ポリシー無しのまま残り、匿名に漏れた（`2026-09-12-rls-anon-leaks.sql`）。
+- [ ] 組織のデータなら `organization_id uuid not null references organizations(id)` を持たせた（持たせない共有マスタなら、理由をマイグレーションのコメントに書いた）
+- [ ] `enable row level security` を `create table` と同じファイルで実行した（無効だとポリシーは無視される）
+- [ ] ポリシーは `organization_id = jwt_organization_id()`。`using (true)` や `allow_all` を使っていない
+- [ ] 流した後に `pg_class.relrowsecurity` と `pg_policies` を実際に見て確認した（「Success」表示だけで終わらせない）
+- [ ] anon キーで直接 REST を叩いて 0 件になることを確かめた
+- [ ] クライアントは `organization_id` で絞り込む（旧 `org` 文字列では絞らない。`org` は同居する組織を区別できない）
 
 ---
 

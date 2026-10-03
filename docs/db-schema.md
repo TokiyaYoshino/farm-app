@@ -18,7 +18,7 @@
 | daily_weather | organization_id(FK, not null), date, temp_max, temp_min, rain_sum, wind_max, gdd(有効積算温度・基準10℃), fetched_at ／ PK(organization_id, date) |
 | pesticide_registrations | id(uuid), organization_id(FK, not null), pesticide_id(→pesticides), registration_no, product_name, crop_name, pest_name, dilution, usage_timing, usage_count, total_count, application, raw(jsonb), fetched_at |
 | crop_advice_messages | id(uuid), organization_id(FK, not null), crop_id(→crops, nullable), role('user'/'assistant'), content, sources(jsonb), limits(jsonb), watch_points(jsonb), unknowns(jsonb), registration_facts(jsonb), model, usage(jsonb), cost_usd, created_by(→users), created_at |
-| crop_advice_actions | id(uuid), organization_id(FK, not null), crop_id(→crops, nullable), message_id(→crop_advice_messages), title, work_type, due_from, due_to, when_text, why, sort_order, dismissed_at, created_by(→users), created_at |
+| crop_advice_actions | id(uuid), organization_id(FK, not null), crop_id(→crops, nullable), message_id(→crop_advice_messages), title, work_type, due_from, due_to, when_text, why, sort_order, dismissed_at, thread_id(→advice_threads), created_at（**created_by は無い**。2026-10-03 に本番で確認。持ち主は message_id の発言で決まる） |
 
 - RLS は全テーブルで有効。**実ポリシー適用済み**（2026-09-06 に本番で確認）。`allow_all` は全テーブルから消えており、`<table>_all_own_org`（`organization_id = jwt_organization_id()`）が入っている。**anon キーでは1行も読めない**ので、CLI から本番を読むスクリプトは `SUPABASE_DB_PASSWORD` 経由で直接続する（`scripts/backup-db.sh` / `scripts/check-crop-links.mjs`）。テーブル変更時は RLS ポリシーも確認すること
 - マルチテナント化ステップ1〜2（`organizations`テーブル作成・`users.login_id`一意制約・各テーブルへの`organization_id`列追加とクライアントクエリ対応）は完了。SQLは`scripts/migrations/`参照。RLS実ポリシー化は未着手（`docs/adr-001-multitenancy-and-ai.md`参照）
