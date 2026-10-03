@@ -1,6 +1,6 @@
 # 農場管理アプリ（farm-app）
 
-React + TypeScript + Supabase の農場作業記録アプリ。本番: https://kishu-farm.vercel.app（kishufarm.com）
+React + TypeScript + Supabase の農場作業記録アプリ。本番: https://kishu-farm.vercel.app（`kishufarm.com` は農園のホームページで別サイト。アプリのページは無い）
 
 ## 構成
 - `src/App.tsx` にほぼ全機能（タブ state 切替、ページルーターなし）

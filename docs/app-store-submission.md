@@ -96,9 +96,13 @@ npx eas-cli submit --platform ios --latest
 | サブタイトル（30字） | 農場の作業記録をチームで共有 | 14 |
 | プライマリカテゴリ | ビジネス | — |
 | セカンダリカテゴリ | 仕事効率化 | — |
-| サポートURL | `https://kishufarm.com/support`（`public/support.html`） | — |
-| プライバシーポリシーURL | `https://kishufarm.com/privacy` | — |
-| 著作権 | 2026 【オーナー記入: 運営者名】 | — |
+| サポートURL | `https://kishu-farm.vercel.app/support`（`public/support.html`） | — |
+| プライバシーポリシーURL | `https://kishu-farm.vercel.app/privacy` | — |
+| 著作権 | 2026 吉野 斗貴哉 | — |
+
+**`kishufarm.com` を使わない（2026-10-04 確認）。** `kishufarm.com` は農園のホームページ（別サイト）で、
+`/support` は 404、`/privacy` は農園のプライバシーポリシーが出る。アプリのページは `kishu-farm.vercel.app` にしかない。
+製品用のドメインを決めたら（`docs/owner-decisions.md` C4）、ここと `expo-prototype/App.tsx` のサポートリンクを差し替える。
 
 ### プロモーション用テキスト（170字）
 
@@ -268,3 +272,10 @@ This is a business app for farm staff to record field work (tasks, pesticide use
 
 - 2026-08-04: 申請準備の実装完了（プッシュ通知・EAS設定・プライバシーポリシー）。
   Apple Developer 未登録のため、ここから先はユーザー作業待ち
+- 2026-10-03: ローカルの Xcode（iOS 26.5 シミュレータ）で `app` スキームのビルドが失敗。
+  Pods の一部ターゲット（`react-native-maps-ReactNativeMapsPrivacy` 11.0 / `RNCAsyncStorage-RNCAsyncStorage_resources` 13.4 /
+  `RNSVG-RNSVGFilters` 12.4）の `IPHONEOS_DEPLOYMENT_TARGET` が、今の Xcode の下限 15.0 を下回るため。
+  **EAS の本番ビルドでも同じ Xcode なら同じく落ちる可能性がある。** 申請用ビルドの前に、Podfile の `post_install` で
+  Pods の deployment target を 15.0 以上にそろえる（または該当ライブラリを更新する）。
+  あわせて `npx expo run:ios` は「Simulator app の id が取れない」で止まった（LaunchServices が Simulator.app を見つけられない）。
+  当日は 2026-09-13 のビルド済み .app を起動し、Metro から最新の JS を読ませて確認した
