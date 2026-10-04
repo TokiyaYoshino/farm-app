@@ -871,10 +871,12 @@ export default function App() {
     setLoginBusy(true);
     setLoginError("");
     try {
-      const { data: ud, error: ue } = await supabase
-        .from("users").select("email").eq("login_id", loginId.trim()).maybeSingle();
-      if (ue || !ud?.email) { setLoginError("ユーザーIDが見つかりません"); return; }
-      const { error: ae } = await supabase.auth.signInWithPassword({ email: ud.email, password: loginPass });
+      // 未ログインでは users を読めない。ID を知っている1件の email だけ返す RPC で引く
+      // （scripts/migrations/2026-10-03-login-email-rpc.sql）
+      const { data: email, error: ue } = await supabase
+        .rpc("login_email_for", { p_login_id: loginId.trim() });
+      if (ue || typeof email !== "string" || !email) { setLoginError("ユーザーIDが見つかりません"); return; }
+      const { error: ae } = await supabase.auth.signInWithPassword({ email, password: loginPass });
       if (ae) { setLoginError("パスワードが正しくありません"); return; }
     } catch { setLoginError("ログインに失敗しました"); }
     finally   { setLoginBusy(false); }

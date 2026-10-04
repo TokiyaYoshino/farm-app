@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite --preview",
     "typecheck": "tsc -b --noEmit && tsc --noEmit -p tsconfig.api.json",
-    "test": "node scripts/test-advise.mjs && node scripts/test-search-chat.mjs && node scripts/test-advice-match.mjs && node scripts/test-crop-alias.mjs && node scripts/test-spray-history.mjs && node scripts/test-maff-ipm.mjs && node scripts/test-api-auth-boundaries.mjs && node scripts/test-org-quota.mjs && node scripts/test-delete-account.mjs && node scripts/test-purge-deleted.mjs",
+    "test": "node scripts/test-advise.mjs && node scripts/test-search-chat.mjs && node scripts/test-advice-match.mjs && node scripts/test-crop-alias.mjs && node scripts/test-spray-history.mjs && node scripts/test-maff-ipm.mjs && node scripts/test-api-auth-boundaries.mjs && node scripts/test-org-quota.mjs && node scripts/test-delete-account.mjs && node scripts/test-purge-deleted.mjs && node scripts/test-login-lookup.mjs",
     "demo": "VITE_DEMO_MODE=1 vite"
   },
   "dependencies": {

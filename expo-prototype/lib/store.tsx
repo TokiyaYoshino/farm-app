@@ -273,10 +273,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ── ログイン（Web版 handleLogin と同一: login_id → email 解決 → password auth） ──
   const login = useCallback(async (loginId: string, password: string): Promise<string | null> => {
     try {
-      const { data: ud, error: ue } = await supabase
-        .from("users").select("email").eq("login_id", loginId.trim()).maybeSingle();
-      if (ue || !ud?.email) return "ユーザーIDが見つかりません";
-      const { error: ae } = await supabase.auth.signInWithPassword({ email: ud.email, password });
+      // 未ログインでは users を読めない。ID を知っている1件の email だけ返す RPC で引く
+      // （scripts/migrations/2026-10-03-login-email-rpc.sql）
+      const { data: email, error: ue } = await supabase
+        .rpc("login_email_for", { p_login_id: loginId.trim() });
+      if (ue || typeof email !== "string" || !email) return "ユーザーIDが見つかりません";
+      const { error: ae } = await supabase.auth.signInWithPassword({ email, password });
       if (ae) return "パスワードが正しくありません";
       return null;
     } catch {
