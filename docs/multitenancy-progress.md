@@ -146,8 +146,14 @@
   - **ただし漏れが1件見つかった（未修正・一般公開前に必須）**: anon に `users` の `login_id`・`email` 列の SELECT が列単位で許可され、ポリシー `users_select_login_lookup`（anon・`true`）と合わせて**全組織の利用者のログインIDと仮メールが外から一覧できる**（2026-10-03 に 5件取得できることを確認・中身は未表示）。ログイン画面が login_id → email を未ログインで引くために入れたもの。最初の匿名テストは `select=*` で叩いたため列単位の許可を見逃した → スクリプトを列ごとに叩くよう直し、今は2件 ✗ で検出される。直し方は「login_id を受けて email を1件だけ返す security definer の RPC に置き換え、anon の列権限とポリシーを外す」。順序は RPC 追加 → クライアント（Web・Expo のログイン）切り替えをデプロイ → 権限を外す
   - 実際のトークンでの確認（同スクリプトの全体）は未実施。オーナーが再ログインのテストをするときに使える: `KISHU_JWT=… ASUKA_JWT=… node scripts/check-org-isolation.mjs`（トークンの取り方は先頭コメント）。書き込みの越境は `--write-probe` を付けたときだけ（本番への更新要求になるので承認後）。ローカルのモックで「分離時は全件通過・漏れ時は ✗」を確認済み（2026-10-03）
 - [ ] **デプロイは移行の後**（先に新クライアントを出すと、同居中の組織の行が画面にまじる）
-- [ ] `work_categories`（全組織共有・`organization_id` 列なし）を共有マスタとして残すか、組織ごとに分けるかの判断
-- [ ] Storage `report-images`（`public=true`）の非公開化・署名付きURL化・EXIF除去（一般公開の前）
+- [x] `work_categories` は**共有マスタとして残す**（2026-10-04）。中身は「施肥・農薬散布・収穫・整枝・剪定・草刈り・その他」の汎用6件で農場固有の情報を含まず、クライアントからは読むだけ（RLS は authenticated の SELECT のみで書き込み経路なし）。農場ごとに独自の分類が要るという声が出たら、そのとき `organization_id` を足す
+- [ ] Storage `report-images`（`public=true`・19件・2026-10-04）の非公開化・署名付きURL化・EXIF除去（一般公開の前）。一覧の取得は 2026-09-13 に塞いだが、URL を知れば誰でも見られる。手順案:
+  1. 保存先を `<organization_id>/<ファイル名>` に変え、Storage のポリシーを「先頭のフォルダ＝自分の組織」に限る（今は直下に全組織の写真が混在）
+  2. 表示を `getPublicUrl` から `createSignedUrl` に切り替える（Web `src/App.tsx`・`CalendarView`、Expo `store.tsx`・`ReportDetailSheet`・`AiSheets`・`CalendarView` など8ファイル・28か所）。`reports.image_url` には URL ではなくパスを保存する
+  3. 既存の19件を新しいパスへ移し、`image_url` を書き換える（本番書き込み・承認が要る）
+  4. `diagnose-image` は自分の Storage の公開／署名付き URL だけを受ける作りなので、署名付き URL を通すことを確認
+  5. 撮影位置（EXIF）をアップロード前に落とす（Expo は ImagePicker の `exif: false`、Web は canvas で再エンコード）
+  6. バケットを `public=false` にして、匿名で 0 件・他組織の写真が見えないことを外から確かめる
 - [ ] セルフサインアップ実装時: `api/set-user-auth.ts:68` は新規利用者の `org` を `org ?? "kishu"` で入れる。新しい組織では `organizations.org_key` を入れる（旧 `org` 列はクライアントがもう参照しないが、検証SQLや戻す版が `org` を使うため）
 
 ---
