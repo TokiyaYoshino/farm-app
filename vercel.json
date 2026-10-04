@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/purge-deleted", "schedule": "0 18 * * *" }
+  ],
   "rewrites": [
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/support", "destination": "/support.html" },

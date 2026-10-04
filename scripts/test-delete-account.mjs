@@ -9,7 +9,10 @@
 //   - 他に利用者がいる農場の唯一の管理者は、本人だけは消せない（409 last_admin）
 //   - 農場に1人だけなら、本人だけでなく農場ごと消す必要がある（409 sole_member）
 //   - 農場ごと消す: 管理者のみ・confirm が "delete-farm" のときだけ。
-//     行の削除はDB関数 delete_organization_data で1トランザクション。その後に写真と全員のログインを消す
+//     行の削除はDB関数 delete_organization_data で1トランザクション。その後に全員のログインを消す
+//   - **消した内容は控えの表 deleted_data_archive に30日残す**（2026-10-04 オーナー決定。
+//     「間違えて消した」に対応するため）。ログインはすぐ消す。写真は30日後の完全削除で消す
+//     （api/purge-deleted.ts。ここでは消さない）
 import { pathToFileURL } from "node:url";
 import { registerHooks } from "node:module";
 
@@ -37,7 +40,7 @@ const t = (name, cond, note = "") => { cond ? (pass++, console.log("  ✓", name
  * 偽の Supabase。me = 呼び出した本人の users 行、members = 同じ農場の users 行（本人を含む）。
  * 叩かれた要求をすべて calls に控える。
  */
-function fakeSupabase({ me, members, reports = [], rpcOk = true }) {
+function fakeSupabase({ me, members, reports = [], rpcOk = true, archiveOk = true }) {
   const calls = [];
   globalThis.fetch = async (u, opts = {}) => {
     const url = decodeURIComponent(String(u));
@@ -47,6 +50,10 @@ function fakeSupabase({ me, members, reports = [], rpcOk = true }) {
     if (url.endsWith("/auth/v1/user")) return json(200, { id: ME_AUTH, email: "me@example.com" });
     if (url.includes("/rest/v1/users?auth_id=eq.") && method === "GET") return json(200, [me]);
     if (url.includes("/rest/v1/users?organization_id=eq.") && method === "GET") return json(200, members);
+    if (url.includes("/rest/v1/users?id=eq.") && method === "GET") {
+      return json(200, [{ id: me.id, login_id: "login-me", email: "login-me@kishu-farm.system", auth_id: me.auth_id }]);
+    }
+    if (url.includes("/rest/v1/deleted_data_archive") && method === "POST") return json(archiveOk ? 201 : 500, null);
     if (url.includes("/rest/v1/reports?") && method === "GET") return json(200, reports);
     if (url.includes("/rest/v1/rpc/delete_organization_data")) return json(rpcOk ? 200 : 500, rpcOk ? null : { message: "boom" });
     return json(200, []);
@@ -83,6 +90,20 @@ console.log("\n1. 作業者が自分を消す:");
   t("Auth ユーザーは本人だけ消す", calls.some(c => c.method === "DELETE" && c.url.endsWith(`/auth/v1/admin/users/${ME_AUTH}`)));
   t("他の組織には一切触れない", !calls.some(c => c.url.includes(OTHER_ORG)));
   t("農場のデータは消さない（関数を呼ばない）", !calls.some(c => c.url.includes("delete_organization_data")));
+  const arc = calls.find(c => c.method === "POST" && c.url.includes("/rest/v1/deleted_data_archive"));
+  t("消す前に、空にする login_id・email・auth_id を控えに残す",
+    arc?.body?.scope === "self" && arc.body.organization_id === MY_ORG
+    && arc.body.payload?.user_id === 10 && arc.body.payload?.login_id === "login-me"
+    && arc.body.payload?.email === "login-me@kishu-farm.system" && arc.body.payload?.auth_id === ME_AUTH,
+    JSON.stringify(arc?.body));
+  const arcIdx = calls.indexOf(arc), patchIdx = calls.indexOf(patch);
+  t("控えを残してから書き換える", arcIdx >= 0 && patchIdx > arcIdx);
+}
+{
+  const calls = fakeSupabase({ me: meWorker, members: [otherAdmin, meWorker], archiveOk: false });
+  const r = await call({ scope: "self" });
+  t("控えを残せなかったら 500 で止める", r?.code === 500);
+  t("その場合は何も消さない", !calls.some(c => c.method === "PATCH" || (c.method === "DELETE")));
 }
 
 // ── 2. 唯一の管理者は自分だけ消せない ─────────────────────────
@@ -134,9 +155,10 @@ console.log("\n4. 農場ごと消す:");
   const rpc = calls.find(c => c.url.includes("/rest/v1/rpc/delete_organization_data"));
   t("行の削除はDB関数に本人の組織を渡す（body の組織は無視）", rpc?.body?.p_org === MY_ORG, JSON.stringify(rpc?.body));
   t("他の組織には一切触れない", !calls.some(c => c.url.includes(OTHER_ORG) || JSON.stringify(c.body ?? "").includes(OTHER_ORG)));
-  const rm = calls.find(c => c.method === "DELETE" && c.url.includes("/storage/v1/object/report-images"));
-  t("自分の Storage の写真だけ消す（外部URLは対象外）",
-    JSON.stringify(rm?.body?.prefixes) === JSON.stringify(["170-abc.jpg"]), JSON.stringify(rm?.body));
+  t("写真のパスを控えに渡す（自分の Storage のものだけ・外部URLは対象外）",
+    JSON.stringify(rpc?.body?.p_storage_paths) === JSON.stringify(["170-abc.jpg"]), JSON.stringify(rpc?.body));
+  t("写真はここでは消さない（30日後の完全削除で消す）",
+    !calls.some(c => c.method === "DELETE" && c.url.includes("/storage/v1/object/")));
   const authDeletes = calls.filter(c => c.method === "DELETE" && c.url.includes("/auth/v1/admin/users/")).map(c => c.url.split("/").pop());
   t("農場の全員のログインを消す", authDeletes.includes(ME_AUTH) && authDeletes.includes("bbbb") && authDeletes.length === 2, JSON.stringify(authDeletes));
   const rpcIdx = calls.indexOf(rpc), firstAuth = calls.findIndex(c => c.url.includes("/auth/v1/admin/users/"));
@@ -146,8 +168,7 @@ console.log("\n4. 農場ごと消す:");
   const calls = fakeSupabase({ me: meAdmin, members: [meAdmin], rpcOk: false });
   const r = await call({ scope: "farm", confirm: "delete-farm" });
   t("DB関数が失敗したら 500 で止める", r?.code === 500);
-  t("その場合ログインも写真も消さない",
-    !calls.some(c => c.url.includes("/auth/v1/admin/users/") || c.url.includes("/storage/v1/object/")));
+  t("その場合ログインも消さない", !calls.some(c => c.url.includes("/auth/v1/admin/users/")));
 }
 
 // ── 5. 認証 ───────────────────────────────────────────────────

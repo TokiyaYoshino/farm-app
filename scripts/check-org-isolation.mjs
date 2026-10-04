@@ -93,6 +93,17 @@ for (const col of ["id", "name", "login_id", "email", "role", "organization_id"]
   const { status, rows } = await get(`users?select=${col}&limit=1`, null);
   t(`users.${col}: 匿名で読めない`, rows.length === 0, `(status ${status}, ${rows.length} 行読めた)`);
 }
+// 削除の控え（2026-10-04・service_role 専用）と、農場を消す関数が外から触れないこと。
+// 関数は存在しない組織IDで叩く（万一呼べても「見つからない」で何も消えない）
+{
+  const { status, rows } = await get("deleted_data_archive?select=id&limit=1", null);
+  t("deleted_data_archive: 匿名で読めない", rows.length === 0, `(status ${status})`);
+  const r = await fetch(`${URL_}/rest/v1/rpc/delete_organization_data`, {
+    method: "POST", headers: headers(null),
+    body: JSON.stringify({ p_org: "00000000-0000-0000-0000-000000000000", p_storage_paths: [] }),
+  });
+  t("delete_organization_data: 匿名で呼べない", [401, 403, 404].includes(r.status), `(status ${r.status})`);
+}
 if (ANON_ONLY) {
   console.log(`\n${pass} 通過 / ${fail} 失敗`);
   process.exit(fail ? 1 : 0);

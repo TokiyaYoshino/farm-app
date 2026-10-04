@@ -15,24 +15,36 @@
 type Fail = { ok: false; status: number; error: string };
 
 export type Plan = "free" | "paid";
-export type QuotaGroup = "consult" | "photo";
+export type QuotaGroup = "consult" | "photo" | "report" | "spray" | "voice";
 type Period = "day" | "week";
 
+// consult / photo は料金の決定（2026-10-01）。report / spray / voice は 2026-10-04 のオーナー決定
+// 「従量課金がかかるものは無制限にしない。1日1回くらい」。音声の整理は記録の入口なので
+// 1回では2件目の記録から声で入れられなくなる → 無料5回は提案値（オーナー確認待ち）。
+// 有料の report / spray / voice の数字も提案値。
 export const QUOTA: Record<QuotaGroup, Record<Plan, { limit: number; period: Period }>> = {
   consult: { free: { limit: 3, period: "week" }, paid: { limit: 8, period: "day" } },
   photo:   { free: { limit: 1, period: "week" }, paid: { limit: 3, period: "day" } },
+  report:  { free: { limit: 1, period: "day" },  paid: { limit: 3, period: "day" } },
+  spray:   { free: { limit: 1, period: "day" },  paid: { limit: 3, period: "day" } },
+  voice:   { free: { limit: 5, period: "day" },  paid: { limit: 30, period: "day" } },
 };
 
 /** 枠ごとに数える ai_outputs.kind。「記録に聞く」（search_chat）は相談に含める（料金の決定） */
 const KINDS: Record<QuotaGroup, string[]> = {
   consult: ["advice", "search_chat"],
   photo: ["diagnosis"],
+  report: ["daily_report"],
+  spray: ["pest_advice"],
+  voice: ["voice_structure"],
 };
 
-const LABEL: Record<QuotaGroup, string> = { consult: "相談", photo: "写真で調べる" };
-const UNIT: Record<QuotaGroup, string> = { consult: "件", photo: "回" };
+const LABEL: Record<QuotaGroup, string> = {
+  consult: "相談", photo: "写真で調べる", report: "日報にまとめる", spray: "次の散布時期", voice: "話して記録",
+};
+const UNIT: Record<QuotaGroup, string> = { consult: "件", photo: "回", report: "回", spray: "回", voice: "回" };
 
-/** 枠の対象外（日報・次の散布時期・音声の整理など）は null。それらは料金の差を付けない */
+/** 知らない種類は null（ここでは止めない） */
 export function groupOfKind(kind: string): QuotaGroup | null {
   for (const g of Object.keys(KINDS) as QuotaGroup[]) {
     if (KINDS[g].includes(kind)) return g;
@@ -103,9 +115,11 @@ export async function checkOrgQuota(
     if (total < limit) return null;
 
     const label = LABEL[group], unit = UNIT[group];
-    const error = period === "week"
-      ? `今週の${label}の回数（${limit}${unit}）に達しました。毎週月曜に戻ります。有料プランでは1日${QUOTA[group].paid.limit}${unit}まで使えます。`
-      : `今日の${label}の回数（${limit}${unit}）に達しました。明日また使えます。`;
+    const reached = period === "week"
+      ? `今週の「${label}」の回数（${limit}${unit}）に達しました。毎週月曜に戻ります。`
+      : `今日の「${label}」の回数（${limit}${unit}）に達しました。明日また使えます。`;
+    const upsell = plan === "free" ? `有料プランでは1日${QUOTA[group].paid.limit}${unit}まで使えます。` : "";
+    const error = reached + upsell;
     return { ok: false, status: 429, error };
   } catch (e) {
     console.error("_quota: count threw", e);

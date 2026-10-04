@@ -9,7 +9,8 @@
 //   - 「記録に聞く」（search_chat）は相談に含める
 //   - 週は日本時間の月曜0時、日は日本時間の0時で切る
 //   - 数えられなかったときは通す（fail-open）
-//   - 枠の対象外の種類（日報など）はここでは止めない（暴走止めは checkDailyLimit が担当）
+//   - 日報・次の散布時期・音声の整理も従量課金なので枠を持つ（2026-10-04 オーナー決定）
+//   - 知らない種類はここでは止めない（暴走止めは checkDailyLimit が担当）
 import { pathToFileURL } from "node:url";
 import { registerHooks } from "node:module";
 
@@ -49,15 +50,24 @@ t("無料の相談は週3件", q.QUOTA.consult.free.limit === 3 && q.QUOTA.consu
 t("無料の写真は週1回", q.QUOTA.photo.free.limit === 1 && q.QUOTA.photo.free.period === "week");
 t("有料の相談は1日8件", q.QUOTA.consult.paid.limit === 8 && q.QUOTA.consult.paid.period === "day");
 t("有料の写真は1日3回", q.QUOTA.photo.paid.limit === 3 && q.QUOTA.photo.paid.period === "day");
+// 2026-10-04 オーナー決定「従量課金がかかるものは無制限にしない。1日1回くらい」
+t("無料の日報は1日1回", q.QUOTA.report.free.limit === 1 && q.QUOTA.report.free.period === "day");
+t("無料の次の散布時期は1日1回", q.QUOTA.spray.free.limit === 1 && q.QUOTA.spray.free.period === "day");
+// 音声の整理は記録の入口なので1回では足りない（提案値・オーナー確認待ち）
+t("無料の音声の整理は1日5回", q.QUOTA.voice.free.limit === 5 && q.QUOTA.voice.free.period === "day");
+for (const g of ["report", "spray", "voice"]) {
+  t(`${g}: 有料は無料より多い`, q.QUOTA[g].paid.limit > q.QUOTA[g].free.limit);
+}
 
 // ── 2. 種類 → 枠 ─────────────────────────────────────────────
 console.log("\n2. どの種類をどの枠で数えるか:");
 t("advice は相談", q.groupOfKind("advice") === "consult");
 t("search_chat（記録に聞く）も相談", q.groupOfKind("search_chat") === "consult");
 t("diagnosis は写真", q.groupOfKind("diagnosis") === "photo");
-for (const k of ["daily_report", "pest_advice", "voice_structure", "unknown_kind"]) {
-  t(`${k} は枠の対象外`, q.groupOfKind(k) === null);
-}
+t("daily_report は日報", q.groupOfKind("daily_report") === "report");
+t("pest_advice は次の散布時期", q.groupOfKind("pest_advice") === "spray");
+t("voice_structure は音声の整理", q.groupOfKind("voice_structure") === "voice");
+t("知らない種類は枠の対象外", q.groupOfKind("unknown_kind") === null);
 
 // ── 3. 区切り（日本時間） ─────────────────────────────────────
 console.log("\n3. 区切りは日本時間:");
@@ -103,8 +113,16 @@ r = await q.checkOrgQuota(ORG, "diagnosis", "free", sunday);
 t("無料・写真は1回で止める", r?.ok === false);
 
 mockCount(999);
-r = await q.checkOrgQuota(ORG, "daily_report", "free", sunday);
+r = await q.checkOrgQuota(ORG, "unknown_kind", "free", sunday);
 t("枠の対象外は件数に関係なく通す", r === null);
+
+mockCount(1);
+r = await q.checkOrgQuota(ORG, "daily_report", "free", sunday);
+t("無料・日報は1日1回で止める", r?.ok === false && /明日/.test(r.error), r?.error);
+t("日報は日の始まり（日本時間0時）から数える",
+  decodeURIComponent(lastUrl).includes("created_at=gte.2026-10-03T15:00:00.000Z"), decodeURIComponent(lastUrl));
+t("日報は daily_report だけを数える（相談とは別の枠）", decodeURIComponent(lastUrl).includes("kind=in.(daily_report)"));
+t("無料の文言は有料の回数も案内する", /有料プラン/.test(r?.error ?? ""), r?.error);
 
 // ── 5. 数えられないとき ───────────────────────────────────────
 console.log("\n5. 数えられないときは通す（fail-open）:");

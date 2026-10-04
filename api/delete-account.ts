@@ -16,8 +16,13 @@
 // scope=farm: 農場ごと消す（管理者のみ・confirm 必須）
 //   - 行の削除は DB 関数 delete_organization_data で1トランザクション
 //     （scripts/migrations/2026-10-04-delete-organization-data.sql。途中で失敗して半分だけ残るのを防ぐ）
-//   - 行を消せてから、写真（Storage）と全員の Auth ユーザーを消す。順序を逆にすると、
+//   - 行を消せてから、全員の Auth ユーザーを消す。順序を逆にすると、
 //     ログインできないのに記録が残る農場ができてしまう
+//
+// 控え（2026-10-04 オーナー決定）: 消した内容は deleted_data_archive に30日残す。
+//   「間違えて消した」と言われたときに手で戻すため。ログインはすぐ消す（削除を求めた人が使えなくなる）。
+//   写真は控えの期間中は Storage に残し、30日後に api/purge-deleted.ts が控えと一緒に消す。
+//   privacy.html に「削除後30日で完全に消去」を書くこと。
 //
 // 購読（App Store の定期購読）はここでは止まらない。止められるのは本人の App Store の設定だけなので、
 // アプリの削除画面で解約の案内を出す。
@@ -71,6 +76,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       });
     }
 
+    // 空にする前の値を控えに残す。残せなければ何も消さない
+    const curRes = await rest(`users?id=eq.${me.userId}&select=login_id,email,auth_id`);
+    const cur = curRes.ok ? ((await curRes.json()) as { login_id: string | null; email: string | null; auth_id: string | null }[])[0] : null;
+    if (!cur) return res.status(500).json({ error: "削除できませんでした。時間をおいてお試しください。" });
+    const arc = await rest("deleted_data_archive", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        organization_id: org,
+        scope: "self",
+        payload: { user_id: me.userId, name: me.name, login_id: cur.login_id, email: cur.email, auth_id: cur.auth_id },
+      }),
+    });
+    if (!arc.ok) {
+      console.error("delete-account(self): archive failed", arc.status);
+      return res.status(500).json({ error: "削除できませんでした。時間をおいてお試しください。" });
+    }
+
     try {
       const tok = await rest(`device_tokens?user_id=eq.${me.userId}`, { method: "DELETE" });
       if (!tok.ok) throw new Error(`device_tokens delete failed: ${tok.status}`);
@@ -101,7 +124,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       .filter((u): u is string => !!u && u.startsWith(prefix))
       .map(u => decodeURIComponent(u.slice(prefix.length)));
 
-    const rpc = await rest("rpc/delete_organization_data", { method: "POST", body: JSON.stringify({ p_org: org }) });
+    // 行は控えに移してから消す（関数の中で1トランザクション）。写真のパスも控えに渡し、30日後に消す
+    const rpc = await rest("rpc/delete_organization_data", {
+      method: "POST", body: JSON.stringify({ p_org: org, p_storage_paths: images }),
+    });
     if (!rpc.ok) {
       console.error("delete-account(farm): rpc failed", rpc.status, await rpc.text().catch(() => ""));
       return res.status(500).json({ error: "削除できませんでした。記録は残っています。時間をおいてお試しください。" });
@@ -109,12 +135,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // ここから先は行がもう無いので、失敗しても止めずに残りを続け、記録だけ残す
     const leftovers: string[] = [];
-    if (images.length > 0) {
-      const rm = await fetch(`${PROJECT_URL}/storage/v1/object/${BUCKET}`, {
-        method: "DELETE", headers, body: JSON.stringify({ prefixes: images }),
-      }).catch(() => null);
-      if (!rm?.ok) leftovers.push(`storage:${images.length}`);
-    }
     for (const m of members) {
       if (!m.auth_id) continue;
       try { await deleteAuthUser(m.auth_id); } catch { leftovers.push(`auth:${m.auth_id}`); }
