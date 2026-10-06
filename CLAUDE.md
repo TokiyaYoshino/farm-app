@@ -2,6 +2,8 @@
 
 React + TypeScript + Supabase の農場作業記録アプリ。本番: https://kishu-farm.vercel.app（`kishufarm.com` は農園のホームページで別サイト。アプリのページは無い）
 
+**事業定義**: ベテランの記憶違いも、新人の「分からない」も、畑の記録が答える（経験の違う人で畑を回す農家が対象。`docs/business-definition.md`）。機能・文言・優先順位で迷ったらここに当てる。
+
 ## 構成
 - `src/App.tsx` にほぼ全機能（タブ state 切替、ページルーターなし）
 - `src/components/` CalendarView.tsx, DatePicker.tsx
