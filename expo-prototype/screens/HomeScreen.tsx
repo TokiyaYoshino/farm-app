@@ -52,7 +52,7 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
 
   const today = new Date();
   const todayStr = toDateStr(today);
-  // 「直近7日の作業」「今週の収穫」は記録タブへ移した（docs/decisions/20261004-home-declutter.md）
+  // 「直近7日の作業」「今週の収穫」の統計カードは外した（収穫は分析タブで見る。docs/decisions/20261004-home-declutter.md）
   const todayScheds = schedules.filter(s => s.date === todayStr);
 
   const scheduleTitle = (s: typeof schedules[number]) => (s.title && s.title !== s.work_type ? s.title : "");
