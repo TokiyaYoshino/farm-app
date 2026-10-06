@@ -114,5 +114,7 @@ export const calcWorkMinutes = (start: string | null | undefined, end: string | 
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = end.split(":").map(Number);
   const diff = (eh * 60 + em) - (sh * 60 + sm);
-  return diff > 0 ? diff : null;
+  // 開始と終了が同じ分なら 0 分として残す（null にすると「未入力」と区別できない）。
+  // 終了が開始より前（日をまたぐ入力など）は判定できないので null
+  return diff >= 0 ? diff : null;
 };
