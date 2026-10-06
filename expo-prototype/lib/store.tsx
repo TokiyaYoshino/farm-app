@@ -94,6 +94,7 @@ interface Store {
   loadComments: (targetType: string, targetId: string) => Promise<Comment[]>;
   addComment: (targetType: string, targetId: string, message: string) => Promise<boolean>;
   editComment: (id: string, message: string) => Promise<boolean>;
+  deleteComment: (id: string) => Promise<boolean>;
   // 作物ごとの相談スレッド（農業エージェント）。
   // 全件を fetchAll に積まないのは、作物を開いたときだけ必要で件数が伸び続けるため。
   /** cropId が null なら畑全体のスレッド（crop_id is null）を引く */
@@ -654,6 +655,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return !error;
   }, [currentOrganizationId]);
 
+  // 自分のコメントを消す。編集だけだと投稿を取り消せず、審査ガイドライン 1.2
+  // （利用者が作った内容を自分で扱えること）に対して説明が立たない
+  const deleteComment = useCallback(async (id: string): Promise<boolean> => {
+    const { error } = await supabase.from("comments").delete()
+      .eq("id", id).eq("organization_id", currentOrganizationId);
+    if (!error) setComments(prev => prev.filter(cm => cm.id !== id));
+    return !error;
+  }, [currentOrganizationId]);
+
   // ── 作物ごとの相談スレッド（農業エージェント） ──
   // 発言（crop_advice_messages）と、そこから切り出したやること（crop_advice_actions）。
   // **照合結果は保存しない**。作業記録は後から追加・修正されるので、実施済みを
@@ -833,7 +843,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addCrop, updateFamicCropName, deleteCrop, addField, deleteField, setFieldLocation,
     addPesticide, deletePesticide, searchPesticideMaster,
     pRegs, loadSavedRegistrations, prefetchAllRegistrations, openRegistrations, saveRegistrationsFor,
-    loadComments, addComment, editComment,
+    loadComments, addComment, editComment, deleteComment,
     loadCropAdvice, saveCropAdviceTurn, dismissAdviceAction, adviceCounts, reloadAdviceCounts,
   };
 

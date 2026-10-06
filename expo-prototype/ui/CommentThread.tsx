@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, Pressable, ActivityIndicator, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C } from "./tokens";
 import { useStore } from "../lib/store";
@@ -20,7 +20,7 @@ const fmtTime = (iso: string) => {
 };
 
 export default function CommentThread({ targetType, targetId }: Props) {
-  const { currentUser, users, userName, loadComments, addComment, editComment } = useStore();
+  const { currentUser, users, userName, loadComments, addComment, editComment, deleteComment } = useStore();
   const currentUserId = currentUser?.id ?? 0;
 
   const [comments, setComments] = useState<Comment[]>([]);
@@ -58,6 +58,18 @@ export default function CommentThread({ targetType, targetId }: Props) {
       setEditingId(null);
       setEditingText("");
     }
+  };
+
+  // 自分のコメントの取り消し。消したら戻せないので確認を挟む
+  const confirmDelete = (id: string) => {
+    Alert.alert("確認", "このコメントを削除しますか？", [
+      { text: "キャンセル", style: "cancel" },
+      { text: "削除", style: "destructive", onPress: async () => {
+        const ok = await deleteComment(id);
+        if (ok) setComments(prev => prev.filter(cm => cm.id !== id));
+        else Alert.alert("削除に失敗しました");
+      } },
+    ]);
   };
 
   // ── @メンション（入力補完＋吹き出し内ハイライト）──
@@ -139,9 +151,14 @@ export default function CommentThread({ targetType, targetId }: Props) {
                         </Text>
                       </View>
                       {isMe && (
-                        <Pressable onPress={() => { setEditingId(cm.id); setEditingText(cm.message); }} style={{ padding: 2 }}>
-                          <Feather name="edit-2" size={12} color={C.textMuted} />
-                        </Pressable>
+                        <View style={{ flexDirection: "row", gap: 6 }}>
+                          <Pressable onPress={() => { setEditingId(cm.id); setEditingText(cm.message); }} style={{ padding: 2 }}>
+                            <Feather name="edit-2" size={12} color={C.textMuted} />
+                          </Pressable>
+                          <Pressable onPress={() => confirmDelete(cm.id)} style={{ padding: 2 }}>
+                            <Feather name="trash-2" size={12} color={C.danger} />
+                          </Pressable>
+                        </View>
                       )}
                     </View>
                   )}
