@@ -1013,7 +1013,8 @@ export default function App() {
           ? `${r.work_start} 〜 ${r.work_end}`
           : r.work_time ? `${r.work_time}h` : null;
         const pesticideLines: string[] = [];
-        if (r.work_type === "防除") {
+        // 「農薬散布」で記録した場合も農薬名を載せる（「防除」だけだと通知から農薬が抜けていた）
+        if (isPesticideWorkType(r.work_type)) {
           const usedList = r.pesticides_used && r.pesticides_used.length > 0
             ? r.pesticides_used
             : r.pesticide_id ? [{ id: r.pesticide_id, amount: r.pesticide_amount ?? null }] : [];

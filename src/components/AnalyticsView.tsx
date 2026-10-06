@@ -82,6 +82,12 @@ const KIND_LABEL: Record<AiOutputRow["kind"], string> = {
   advice:          "相談",
 };
 
+/** 散布の記録は「防除」（画面のテンプレート）と「農薬散布」（work_categories マスタ）の
+ *  2系統の言葉で入っている。片方だけ数えると回数が実態より少なく出る（2026-09-16 実測：
+ *  3件あるのに「1回」）。App.tsx の isPesticideWorkType と同じ判定 */
+const isSprayWorkType = (workType: string | null | undefined) =>
+  workType === "防除" || workType === "農薬散布";
+
 /**
  * daily_weather の同期。分析タブを開いたときに、未取得の日付ぶんだけ Open-Meteo の
  * アーカイブ（無料・キー不要）から取得して upsert する。Cron は立てない。
@@ -272,8 +278,8 @@ export default function AnalyticsView({
   const curHours  = toHours(cur.reduce((s, r) => s + workMinutes(r), 0));
   const prevHours = toHours(prev.reduce((s, r) => s + workMinutes(r), 0));
 
-  const curSpray  = cur.filter(r => r.work_type === "防除").length;
-  const prevSpray = prev.filter(r => r.work_type === "防除").length;
+  const curSpray  = cur.filter(r => isSprayWorkType(r.work_type)).length;
+  const prevSpray = prev.filter(r => isSprayWorkType(r.work_type)).length;
 
   const pctLabel = (v: number | null) =>
     v === null ? "前年データなし" : `前年${truncate ? "同時期" : ""}比 ${v >= 0 ? "+" : ""}${v}%`;
@@ -735,7 +741,7 @@ function DeepDive({ reports, crops, pesticides }: {
   const [d3WorkType, setD3WorkType] = useState("all");
 
   const harvestRows = reports.filter(isCountableHarvest);
-  const sprayRows   = reports.filter(r => r.work_type === "防除");
+  const sprayRows   = reports.filter(r => isSprayWorkType(r.work_type));
 
   // ① 圃場×作物別 収穫量推移
   const allFields  = Array.from(new Set(harvestRows.map(r => r.field).filter(Boolean)));
