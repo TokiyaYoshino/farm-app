@@ -13,6 +13,8 @@ import { fetchWeatherForPeriod, type PeriodWeather } from "../lib/weather";
 import { canUseAiFeature, structureVoiceApi, saveAiOutput } from "../lib/ai";
 import { summarizeUsageByCrop } from "../lib/pesticideUsage";
 import { WORK_TEMPLATES, isPesticideWorkType, calcWorkMinutes } from "../lib/types";
+import { toDateStr } from "../lib/date";
+import { dispName } from "../lib/text";
 
 // ─── クイック作業記録（src/App.tsx showQuickReport + addReport の移植・実データ）─
 // 灰well+白rowのグループ入力。作物/圃場/作業種別は BottomSheet ピッカー、
@@ -26,7 +28,6 @@ interface Props {
   onGoManageCrops?: () => void;
 }
 
-const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
 const toTimeStr = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
 export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Props) {
@@ -81,7 +82,8 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
       setWorkEnd(d.work_end ?? "");
       setExpanded(true); // 時刻が入っているので詳細を開いて見せる
     }
-    setDate(toDateStr(new Date())); // コピー時は日付を今日に（Web版と同一）
+    // コピー時は日付を今日に（Web版と同一）。予定・未報告から記録するときはその予定の日付
+    setDate(d.date ?? toDateStr(new Date()));
   }, [open, quickReportDraft]);
 
   // 農薬を選んだら保存済みの適用情報を引いて使用回数の判定に使う（Web版と同一）。
@@ -179,10 +181,11 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
       field: fieldName,
       date,
       work_type: workType,
-      work_category_id: workCategoryId || null,
+      // 種類を触らなかったときも、名前が一致するマスタに紐付ける（集計と単位のため）
+      work_category_id: workCategoryId || selectedCat?.id || null,
       quantity: quantity,
       quantity_value: quantity ? parseFloat(quantity) : null,
-      quantity_unit: quantityUnit || null,
+      quantity_unit: quantityUnit || selectedCat?.unit || null,
       work_time: "",
       note,
       weather: pw?.weather ?? w?.label ?? "",
@@ -221,7 +224,10 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
   };
 
   const workers = users.filter(u => u.role !== "viewer");
-  const selectedCat = workCategories.find(c => c.id === workCategoryId);
+  // 作業の種類を触らずに保存すると workCategoryId が 0 のままで、単位（kg など）が
+  // 引けず数量欄も出なかった。初期値の「収穫」は名前でマスタに当てて紐付ける
+  const selectedCat = workCategories.find(c => c.id === workCategoryId)
+    ?? workCategories.find(c => c.name === workType);
   const showQuantity = workCategories.length === 0 || !!quantityUnit || !!selectedCat?.unit;
 
   return (
@@ -408,7 +414,7 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
                             <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: checked ? C.ink : C.border, backgroundColor: checked ? C.ink : "#fff", alignItems: "center", justifyContent: "center" }}>
                               {checked && <Feather name="check" size={12} color="#fff" />}
                             </View>
-                            <Text style={{ fontSize: 14, color: C.text, flex: 1 }}>{p.name}</Text>
+                            <Text style={{ fontSize: 14, color: C.text, flex: 1 }}>{dispName(p.name)}</Text>
                             {!!p.type && <Text style={{ fontSize: 11, color: C.textMuted }}>{p.type}</Text>}
                           </Pressable>
                           {checked && (
@@ -498,7 +504,7 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
                 onPress={structureNote}
                 icon={<Feather name="star" size={13} color={C.ink} />}
               >
-                {aiStructuring ? "整理中..." : "メモをAIでフォームに反映"}
+                {aiStructuring ? "整理中..." : "メモを項目に振り分け"}
               </Btn>
             )}
           </>

@@ -8,6 +8,7 @@ import CommentThread from "../ui/CommentThread";
 import Picker from "../ui/Picker";
 import { useStore } from "../lib/store";
 import { WORK_TEMPLATES, type Report, type Schedule } from "../lib/types";
+import { todayStr, toDateStr } from "../lib/date";
 
 // ─── カレンダー（src/components/CalendarView.tsx の移植・実データ）───────
 // 月/週グリッド・フィルタ/並替・日別ボトムシート・詳細ビュー・予定CRUD。
@@ -24,7 +25,7 @@ export default function CalendarView() {
   } = useStore();
   const currentUserId = currentUser?.id ?? 0;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStr();
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export default function CalendarView() {
     const dow = d.getDay();
     const mon = new Date(d);
     mon.setDate(d.getDate() - ((dow + 6) % 7));
-    return mon.toISOString().slice(0, 10);
+    return toDateStr(mon);
   });
   const [pickerFor, setPickerFor] = useState<"formWorker" | "formWork" | "formCrop" | "editWorker" | "editWork" | "editCrop" | null>(null);
 
@@ -57,7 +58,7 @@ export default function CalendarView() {
     if (calView === "week") {
       const d = new Date(weekStart + "T00:00:00");
       d.setDate(d.getDate() - 7);
-      setWeekStart(d.toISOString().slice(0, 10));
+      setWeekStart(toDateStr(d));
     } else if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
     else setViewMonth(m => m - 1);
   };
@@ -65,7 +66,7 @@ export default function CalendarView() {
     if (calView === "week") {
       const d = new Date(weekStart + "T00:00:00");
       d.setDate(d.getDate() + 7);
-      setWeekStart(d.toISOString().slice(0, 10));
+      setWeekStart(toDateStr(d));
     } else if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
     else setViewMonth(m => m + 1);
   };
@@ -76,7 +77,7 @@ export default function CalendarView() {
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
-      days.push(d.toISOString().slice(0, 10));
+      days.push(toDateStr(d));
     }
     return days;
   }, [weekStart]);
@@ -475,10 +476,11 @@ export default function CalendarView() {
                     style={{ backgroundColor: C.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, fontSize: 16, color: C.text, marginBottom: 10 }}
                   />
                   <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Pressable onPress={() => setEditingSchedule(false)} style={{ flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: C.card, alignItems: "center" }}>
+                    <Pressable onPress={() => setEditingSchedule(false)} style={{ flex: 1, paddingVertical: 11, borderRadius: 999, backgroundColor: C.card, alignItems: "center" }}>
                       <Text style={{ color: C.textSub, fontSize: 14, fontWeight: "700" }}>キャンセル</Text>
                     </Pressable>
-                    <Pressable onPress={saveEdit} style={{ flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: savingEdit ? C.border : C.info, alignItems: "center" }}>
+                    {/* 主操作は ink 塗りの完全ピル（info の青は中立の強調用で、ボタンには使わない） */}
+                    <Pressable onPress={saveEdit} style={{ flex: 1, paddingVertical: 11, borderRadius: 999, backgroundColor: savingEdit ? C.border : C.ink, alignItems: "center" }}>
                       <Text style={{ color: savingEdit ? C.textMuted : "#fff", fontSize: 14, fontWeight: "700" }}>{savingEdit ? "保存中..." : "保存"}</Text>
                     </Pressable>
                   </View>
@@ -563,7 +565,7 @@ export default function CalendarView() {
                     style={{ backgroundColor: C.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, fontSize: 16, color: C.text, marginBottom: 10 }}
                   />
                   {!!addError && <Text style={{ color: C.danger, fontSize: 12, marginBottom: 8 }}>{addError}</Text>}
-                  <Pressable onPress={handleAdd} style={{ paddingVertical: 11, borderRadius: 8, backgroundColor: adding ? C.border : C.info, alignItems: "center" }}>
+                  <Pressable onPress={handleAdd} style={{ paddingVertical: 11, borderRadius: 999, backgroundColor: adding ? C.border : C.ink, alignItems: "center" }}>
                     <Text style={{ color: adding ? C.textMuted : "#fff", fontSize: 14, fontWeight: "700" }}>{adding ? "追加中..." : "追加する"}</Text>
                   </Pressable>
                 </View>
@@ -715,7 +717,7 @@ export default function CalendarView() {
             onChange={(event, selected) => {
               setShowEditDatePicker(false);
               if (event.type === "dismissed" || !selected) return;
-              setEditForm(f => ({ ...f, date: selected.toISOString().slice(0, 10) }));
+              setEditForm(f => ({ ...f, date: toDateStr(selected) }));
             }}
           />
         )}

@@ -6,7 +6,10 @@ import { harvestQty, isCountableHarvest, excludedHarvestCount, workMinutes, toHo
 import { ComboChart, HBarChart, ScatterPlot, Legend } from "../ui/charts";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
-import type { Report } from "../lib/types";
+import { isPesticideWorkType, type Report } from "../lib/types";
+import { todayMmDd } from "../lib/date";
+import { dispName } from "../lib/text";
+import Picker from "../ui/Picker";
 
 // ─── 分析（src/components/AnalyticsView.tsx の移植・実データ）───────────
 // 年/作物切替 → KPI → 収穫グラフ → 作業時間内訳 → さらに掘る（散布図）
@@ -21,11 +24,13 @@ interface DiagnosisJson {
 }
 interface AiOutputRow {
   id: string;
-  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure";
+  // advice（相談）と search_chat（記録に聞く）も ai_outputs に入る。ラベルが無いと
+  // 履歴の行が種類なしで表示され、絞り込みの選択肢にも出なかった
+  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice" | "search_chat";
   created_at: string;
   target_date: string | null;
   field: string | null;
-  output_json: DiagnosisJson | null;
+  output_json: (DiagnosisJson & { advice?: { reply?: string } }) | null;
   output_text: string | null;
 }
 const KIND_LABEL: Record<AiOutputRow["kind"], string> = {
@@ -33,6 +38,8 @@ const KIND_LABEL: Record<AiOutputRow["kind"], string> = {
   pest_advice: "防除助言",
   daily_report: "日報",
   voice_structure: "音声整理",
+  advice: "相談",
+  search_chat: "記録に聞く",
 };
 const summarize = (o: AiOutputRow): string => {
   if (o.kind === "diagnosis" && o.output_json) {
@@ -40,6 +47,19 @@ const summarize = (o: AiOutputRow): string => {
     if (j.inconclusive) return "判断できず";
     const names = (j.possibilities ?? []).map(p => `${p.name}(${p.confidence})`).join("、");
     return names || j.note || "—";
+  }
+  // 相談は回答本文が output_json.advice.reply にある。JSON のまま出さない
+  if (o.kind === "advice" && o.output_json?.advice?.reply) return o.output_json.advice.reply;
+  // 音声整理は振り分けた結果の要点だけ出す（JSON をそのまま見せても読めない）
+  if (o.kind === "voice_structure" && o.output_json) {
+    const v = o.output_json as unknown as { note?: string; work_category?: string; field?: string; pesticide_names?: string[] };
+    const parts = [
+      v.work_category && `作業:${v.work_category}`,
+      v.field && `圃場:${v.field}`,
+      v.pesticide_names?.length ? `農薬:${v.pesticide_names.map(dispName).join("、")}` : "",
+      v.note && `メモ:${v.note}`,
+    ].filter(Boolean);
+    return parts.join(" / ") || "—";
   }
   if (o.output_text) return o.output_text;
   if (o.output_json) return JSON.stringify(o.output_json);
@@ -96,6 +116,7 @@ export default function AnalyticsScreen() {
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  const [showYearPicker, setShowYearPicker] = useState(false);
   const [cropId, setCropId] = useState<number | "all">("all");
   const [showDeep, setShowDeep] = useState(false);
   const [d2Axis, setD2Axis] = useState<"temp" | "rain">("temp");
@@ -125,7 +146,7 @@ export default function AnalyticsScreen() {
   const yearOptions = dataYears.includes(currentYear) ? dataYears : [currentYear, ...dataYears];
   const safeYear = yearOptions.includes(year) ? year : yearOptions[0];
 
-  const todayMmdd = new Date().toISOString().slice(5, 10);
+  const todayMmdd = todayMmDd();
   const truncate = safeYear === currentYear;
   const inCrop = (r: Report) => cropId === "all" || r.crop_id === cropId;
   const inYear = (r: Report, y: number) =>
@@ -147,8 +168,10 @@ export default function AnalyticsScreen() {
   const curHours = toHours(cur.reduce((s, r) => s + workMinutes(r), 0));
   const prevHours = toHours(prev.reduce((s, r) => s + workMinutes(r), 0));
 
-  const curSpray = cur.filter(r => r.work_type === "防除").length;
-  const prevSpray = prev.filter(r => r.work_type === "防除").length;
+  // 散布の記録は「防除」と「農薬散布」の2系統で入っている（画面のテンプレートと
+  // work_categories マスタで言葉が違うため）。片方だけ数えると実態より少なく出る
+  const curSpray = cur.filter(r => isPesticideWorkType(r.work_type)).length;
+  const prevSpray = prev.filter(r => isPesticideWorkType(r.work_type)).length;
 
   const pctLabel = (v: number | null) =>
     v === null ? "前年データなし" : `前年${truncate ? "同時期" : ""}比 ${v >= 0 ? "+" : ""}${v}%`;
@@ -215,13 +238,16 @@ export default function AnalyticsScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 }}>
-      {/* ── 対象年・作物の切り替え ── */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }} contentContainerStyle={{ paddingBottom: 8 }}>
-        {yearOptions.map(y => (
-          <Pressable key={y} onPress={() => setYear(y)} style={chip(safeYear === y)}>
-            <Text style={chipText(safeYear === y)}>{y}年</Text>
-          </Pressable>
-        ))}
+      {/* ── 対象年・作物の切り替え ──
+          年はプルダウン（年が増えるとチップが横に伸び、作物のチップと見分けにくかった。オーナー 2026-10-04）。
+          作物はチップのまま。年は白地＋▼で「選ぶもの」に見せ、作物の淡緑の選択チップと区別する */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }} contentContainerStyle={{ paddingBottom: 8, alignItems: "center" }}>
+        <Pressable onPress={() => setShowYearPicker(true)} accessibilityLabel="対象年を選ぶ"
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.card, borderWidth: 1, borderColor: C.hairline, borderRadius: RADIUS.pill, paddingVertical: 7, paddingHorizontal: 14, marginRight: 8 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: C.text }}>{safeYear}年</Text>
+          <Feather name="chevron-down" size={14} color={C.textSub} />
+        </Pressable>
+        <View style={{ width: 1, height: 20, backgroundColor: C.hairline, marginRight: 8 }} />
         <Pressable onPress={() => setCropId("all")} style={chip(cropId === "all")}>
           <Text style={chipText(cropId === "all")}>すべての作物</Text>
         </Pressable>
@@ -231,6 +257,15 @@ export default function AnalyticsScreen() {
           </Pressable>
         ))}
       </ScrollView>
+
+      <Picker
+        open={showYearPicker}
+        title="対象年"
+        options={yearOptions.map(y => ({ key: String(y), label: `${y}年` }))}
+        value={String(safeYear)}
+        onSelect={v => setYear(Number(v))}
+        onClose={() => setShowYearPicker(false)}
+      />
 
       {/* ── KPI ── */}
       <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 8, marginBottom: 12 }}>

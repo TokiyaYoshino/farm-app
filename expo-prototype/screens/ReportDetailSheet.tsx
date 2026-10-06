@@ -8,6 +8,7 @@ import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 import { canUseAiFeature, diagnoseImageApi, saveAiOutput, type DiagnosisResult } from "../lib/ai";
 import type { Report } from "../lib/types";
+import { dispName } from "../lib/text";
 
 // ─── 記録詳細シート（src/App.tsx selectedReport ボトムシートの移植・実データ）─
 interface Props {
@@ -144,7 +145,7 @@ export default function ReportDetailSheet({ report, onClose, onAdvise }: Props) 
               <View key={pu.id} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.pesticideBg, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 8, alignSelf: "flex-start" }}>
                 <Feather name="droplet" size={12} color={C.pesticide} />
                 <Text style={{ fontSize: 12, color: C.pesticide }}>
-                  {pesticides.find(p => p.id === pu.id)?.name ?? ""}{pu.amount ? ` / ${pu.amount}` : ""}
+                  {dispName(pesticides.find(p => p.id === pu.id)?.name)}{pu.amount ? ` / ${pu.amount}` : ""}
                 </Text>
               </View>
             ))}

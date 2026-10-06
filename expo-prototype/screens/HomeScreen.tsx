@@ -8,11 +8,15 @@ import { canUseAiFeature } from "../lib/ai";
 import { lastSpray } from "../lib/pesticideUsage";
 import FieldMapSheet from "./FieldMapSheet";
 import { PestAdviceSheet, AdviseSheet, SearchChatSheet, PhotoDiagnosisSheet, diagnosisForAdvise } from "./AiSheets";
+import { todayStr, toDateStr, shiftDays } from "../lib/date";
+import { dispName } from "../lib/text";
 
 // ─── ダッシュボード（src/App.tsx tab==="home" ブロックの移植・実データ）───
 interface Props {
   onGoReport: () => void;
   onQuickReport: () => void;
+  /** 「作業を選ぶ」シートを開く（App が持つ。＋記録と同じもの） */
+  onOpenEntry: (mode: "record" | "plan") => void;
 }
 
 const fmtElapsed = (s: number) => {
@@ -20,13 +24,15 @@ const fmtElapsed = (s: number) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 };
 
-export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
+export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: Props) {
   const {
     reports, schedules, comments, wxAuto, wxLoading, weatherCoords, cropName, userName,
     crops, pesticides,
-    workStartedAt, startWork, stopWork, refreshing, refresh,
+    workStartedAt, startWork, stopWork, refreshing, refresh, openQuickReport,
   } = useStore();
   const [showMap, setShowMap] = useState(false);
+  // 今日の一手の詳細（農薬名）は押すと開く。ふだんは「日付 · 場所」の1行だけ
+  const [showSprayDetail, setShowSprayDetail] = useState(false);
   const [showPestAdvice, setShowPestAdvice] = useState(false);
   const [showAdvise, setShowAdvise] = useState(false);
   // 相談から開く先（橋渡し）。docs/decisions/20260908-advice-handoff.md
@@ -45,18 +51,19 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
   }, [workStartedAt]);
 
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const sevenAgo = new Date(today.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-  // 今週の開始(日曜)
-  const weekStartDate = new Date(today);
-  weekStartDate.setDate(today.getDate() - today.getDay());
-  const weekStart = weekStartDate.toISOString().slice(0, 10);
-
-  const workCount7d = reports.filter(r => r.date >= sevenAgo).length;
-  const weekHarvest = reports.filter(r => r.date >= weekStart).reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  const todayStr = toDateStr(today);
+  // 「直近7日の作業」「今週の収穫」は記録タブへ移した（docs/decisions/20261004-home-declutter.md）
   const todayScheds = schedules.filter(s => s.date === todayStr);
 
   const scheduleTitle = (s: typeof schedules[number]) => (s.title && s.title !== s.work_type ? s.title : "");
+  // 予定から記録を始める（記録タブと同じ。予定の日付・作業・作物・圃場・担当を入れて入力シートを開く）
+  const recordFromSchedule = (s: typeof schedules[number]) => openQuickReport({
+    date: s.date,
+    work_type: s.work_type || undefined,
+    crop_id: crops.find(c => c.name === s.crop)?.id,
+    field: s.field || undefined,
+    user_id: s.assigned_user_id ?? s.user_id,
+  });
 
   const feed = comments.slice(0, 3).map(cm => {
     if (cm.target_type === "report") {
@@ -66,6 +73,38 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
     const sc = schedules.find(x => x.id === cm.target_id);
     return sc ? { cm, label: `${sc.work_type || sc.title} · ${sc.date}` } : null;
   }).filter((x): x is NonNullable<typeof x> => x !== null);
+
+  // 天気は単独カードにせず、今日の一手の1行目に入れる（散布判断に効く情報なので同じカードで読む）。
+  // docs/decisions/20261004-home-declutter.md
+  const weatherRow = !wxLoading && wxAuto ? (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+        <Text style={{ fontSize: 17, fontWeight: "700", color: C.text }}>{wxAuto.temp}°</Text>
+        <Text numberOfLines={1} style={{ fontSize: 12, color: C.textSub, flexShrink: 1 }}>
+          {wxAuto.label}{weatherCoords?.name ? ` · ${weatherCoords.name}` : ""}
+        </Text>
+      </View>
+      {wxAuto.humidity !== undefined && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Feather name="droplet" size={12} color={C.info} />
+          <Text style={{ fontSize: 12, color: C.textSub }}>{wxAuto.humidity}%</Text>
+        </View>
+      )}
+      {wxAuto.rain !== undefined && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Feather name="cloud-rain" size={12} color={C.rain} />
+          <Text style={{ fontSize: 12, color: C.textSub }}>{wxAuto.rain}mm</Text>
+        </View>
+      )}
+    </View>
+  ) : null;
+
+  // 相談・記録一覧・圃場マップを1枚に並べる行（hairline 区切り）
+  const linkRow = (first: boolean) => ({
+    flexDirection: "row" as const, alignItems: "center" as const, gap: 10,
+    paddingVertical: 13,
+    borderTopWidth: first ? 0 : 1, borderTopColor: C.hairline,
+  });
 
   return (
     <ScrollView
@@ -87,34 +126,6 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
         </View>
       )}
 
-      {/* 天気カード */}
-      {!wxLoading && wxAuto && (
-        <View style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12, ...SHADOW.card }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
-              <Text style={{ fontSize: 30, fontWeight: "700", color: C.text, lineHeight: 30 }}>{wxAuto.temp}°</Text>
-              <Text style={{ fontSize: 13, color: C.textSub }}>
-                {wxAuto.label}{weatherCoords?.name ? ` · ${weatherCoords.name}` : ""}
-              </Text>
-            </View>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              {wxAuto.humidity !== undefined && (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Feather name="droplet" size={13} color={C.info} />
-                  <Text style={{ fontSize: 12, color: C.textSub }}>{wxAuto.humidity}%</Text>
-                </View>
-              )}
-              {wxAuto.rain !== undefined && (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Feather name="cloud-rain" size={13} color={C.rain} />
-                  <Text style={{ fontSize: 12, color: C.textSub }}>{wxAuto.rain}mm</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      )}
-
       {/* ── 今日の一手（Web版 src/App.tsx と同一の設計）──────────────
           競合調査で残った差別化は「記録する場所とAIに聞く場所が同一プロダクト内に
           ある」の一点だけ（docs/decisions/20260823-pest-advice-history.md）。
@@ -127,6 +138,11 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
         const ls = lastSpray({ reports, crops, pesticides });
         return (
           <View style={{ backgroundColor: C.card, ...SHADOW.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12 }}>
+            {weatherRow && (
+              <View style={{ paddingBottom: 10, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: C.hairline }}>
+                {weatherRow}
+              </View>
+            )}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 }}>
               <Feather name="wind" size={12} color={C.textMuted} />
               <Text style={{ fontSize: 11, color: C.textMuted }}>今日の一手</Text>
@@ -138,53 +154,54 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
                   <Text style={{ fontSize: 22 }}> {ls.daysSince ?? "—"} </Text>
                   日
                 </Text>
-                <Text style={{ fontSize: 12, color: C.textSub, marginTop: 3, lineHeight: 19 }}>
-                  {ls.date} · {ls.where}
-                  {ls.products.length > 0 ? ` · ${ls.products.join("、")}` : " · 農薬の記録なし"}
-                </Text>
+                {/* 常に出す説明は1行まで（オーナー 2026-10-04）。農薬名は押すと開く */}
+                <Pressable onPress={() => setShowSprayDetail(v => !v)} accessibilityLabel="前回の散布の詳細"
+                  style={showSprayDetail ? { marginTop: 6, backgroundColor: C.well, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12 } : { marginTop: 3 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 12, color: C.textSub, flexShrink: 1 }}>
+                      {`${Number(ls.date.slice(5, 7))}/${Number(ls.date.slice(8, 10))}`} · {ls.where}
+                    </Text>
+                    <Feather name={showSprayDetail ? "chevron-up" : "chevron-down"} size={13} color={C.textSub} />
+                  </View>
+                  {showSprayDetail && (
+                    <View style={{ marginTop: 8, gap: 2 }}>
+                      {ls.products.length > 0
+                        ? ls.products.map(p => <Text key={p} style={{ fontSize: 13, color: C.text, lineHeight: 21 }}>{dispName(p)}</Text>)
+                        : <Text style={{ fontSize: 13, color: C.textSub }}>農薬の記録なし</Text>}
+                    </View>
+                  )}
+                </Pressable>
               </>
             ) : (
               <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 20 }}>
-                まだ防除の記録がありません。記録すると、天気とこれまでの散布実績をあわせて次の散布時期を提案できます。
+                防除を記録すると、次の散布時期を出せます
               </Text>
             )}
             <Btn variant="soft" size="md" style={{ alignSelf: "stretch", marginTop: 12 }}
               onPress={() => setShowPestAdvice(true)}
               icon={<Feather name="wind" size={14} color={C.ink} />}>
-              次の散布はいつ？
+              次の散布時期
             </Btn>
           </View>
         );
       })()}
-
-      {/* 統計カードグリッド */}
-      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-        <View style={{ flex: 1, backgroundColor: C.card, ...SHADOW.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16 }}>
-          <Text style={{ fontSize: 11, color: C.textSub, marginBottom: 4 }}>直近7日の作業</Text>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: C.text }}>
-            {workCount7d}<Text style={{ fontSize: 12, fontWeight: "400", color: C.textMuted }}> 件</Text>
-          </Text>
+      {/* 相談機能が使えない環境では天気だけを1行のカードで出す */}
+      {!canUseAiFeature("pestControlAdvice") && weatherRow && (
+        <View style={{ backgroundColor: C.card, ...SHADOW.card, borderRadius: RADIUS.card, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 12 }}>
+          {weatherRow}
         </View>
-        <View style={{ flex: 1, backgroundColor: C.card, ...SHADOW.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16 }}>
-          <Text style={{ fontSize: 11, color: C.textSub, marginBottom: 4 }}>今週の収穫</Text>
-          {weekHarvest > 0 ? (
-            <Text style={{ fontSize: 22, fontWeight: "700", color: C.text }}>
-              {weekHarvest}<Text style={{ fontSize: 12, fontWeight: "400", color: C.textMuted }}> kg</Text>
-            </Text>
-          ) : (
-            <Text style={{ fontSize: 13, color: C.textMuted, paddingTop: 6 }}>記録なし</Text>
-          )}
-        </View>
-      </View>
+      )}
 
       {/* 今日の予定 */}
       <View style={{ backgroundColor: C.card, ...SHADOW.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12 }}>
         <Text style={{ fontSize: 11, fontWeight: "500", color: C.textMuted, marginBottom: 8 }}>今日の予定</Text>
         {todayScheds.length === 0 ? (
+          // 空のときは何の欄かと、入れると何が起きるかを書く（記録タブの「今日」と同じ。オーナー 2026-10-04）。
+          // 以前の「作業を追加」は予定ではなく作業記録を開いていた。記録は右下の「＋記録」、ここは予定を入れる入口にする
           <View>
-            <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 8 }}>予定はありません</Text>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Btn variant="secondary" size="sm" onPress={onQuickReport} icon={<Feather name="plus" size={13} color={C.text} />}>作業を追加</Btn>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: C.textSub }}>今日の予定はまだありません</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              <Btn variant="secondary" size="sm" onPress={() => onOpenEntry("plan")} icon={<Feather name="calendar" size={13} color={C.text} />}>予定を入れる</Btn>
               {!workStartedAt && (
                 <Btn variant="soft" size="sm" onPress={startWork} icon={<Feather name="play" size={13} color={C.ink} />}>作業を開始</Btn>
               )}
@@ -194,54 +211,72 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
           const wc = s.work_type ? workTypeColor(s.work_type) : null;
           return (
             <View key={s.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.border }}>
-              {wc && (
-                <View style={{ backgroundColor: wc.bg, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: wc.fg }}>{s.work_type}</Text>
-                </View>
-              )}
+              {/* 作業名を太字の主見出しにし、作業の色は小さな点で示す（印だけだと行の真ん中が空いた。オーナー 2026-10-04） */}
+              <View style={{ width: 9, height: 9, borderRadius: 999, backgroundColor: wc?.fg ?? C.textMuted }} />
               <View style={{ flex: 1, minWidth: 0 }}>
-                {!!scheduleTitle(s) && (
-                  <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "600", color: C.text }}>{scheduleTitle(s)}</Text>
-                )}
-                {(s.crop || s.field) && (
-                  <Text style={{
-                    fontSize: scheduleTitle(s) ? 11 : 14,
-                    fontWeight: scheduleTitle(s) ? "400" : "600",
-                    color: scheduleTitle(s) ? C.textMuted : C.text,
-                    marginTop: scheduleTitle(s) ? 2 : 0,
-                  }}>
-                    {[s.crop, s.field].filter(Boolean).join(" · ")}
-                  </Text>
-                )}
+                <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "700", color: C.text }}>
+                  {scheduleTitle(s) || [s.work_type, s.crop].filter(Boolean).join(" · ") || "予定"}
+                </Text>
+                {(() => {
+                  const sub = (scheduleTitle(s) ? [s.work_type, s.crop, s.field] : [s.field]).filter(Boolean).join(" · ");
+                  return sub ? <Text numberOfLines={1} style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>{sub}</Text> : null;
+                })()}
               </View>
-              <Btn variant="secondary" size="sm" onPress={onQuickReport} icon={<Feather name="clipboard" size={13} color={C.text} />}>実績にする</Btn>
+              <Btn variant="secondary" size="sm" onPress={() => recordFromSchedule(s)} icon={<Feather name="clipboard" size={13} color={C.text} />}>記録にする</Btn>
             </View>
           );
         })}
-        {todayScheds.length > 0 && !workStartedAt && (
-          <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 4 }}>
-            <Btn variant="soft" size="sm" onPress={startWork} icon={<Feather name="play" size={13} color={C.ink} />}>作業を開始（タイマー）</Btn>
+        {todayScheds.length > 0 && (
+          <View style={{ borderTopWidth: 1, borderTopColor: C.hairline, paddingTop: 9, marginTop: 4, flexDirection: "row", gap: 8 }}>
+            {!workStartedAt && (
+              <Btn variant="soft" size="sm" onPress={startWork} icon={<Feather name="play" size={13} color={C.ink} />}>作業を開始（タイマー）</Btn>
+            )}
+            <Btn variant="tertiary" size="sm" onPress={() => onOpenEntry("plan")} icon={<Feather name="plus" size={13} color={C.textSub} />}>予定を入れる</Btn>
           </View>
         )}
       </View>
 
-      {/* 作物の相談（予定が空でも・記録が無くても使える導線）。
+      {/* 相談・記録一覧・圃場マップを1枚のカードに行で並べる（docs/decisions/20261004-home-declutter.md）。
+          相談の行は「今日の予定」の直後・先頭行のまま。文言と開く先も変えない
+          （entry_point の比較を壊さないため。docs/decisions/20260912-release-line.md の凍結）。
+
+          作物の相談（予定が空でも・記録が無くても使える導線）。
           「今日の予定」の直後に置く：予定が無いときにここで詰まるのが本来の課題。
           やりとりは作付けごとに残り、助言した作業は作業記録と照合される */}
-      {canUseAiFeature("nextActionAdvice") && (
-        <Pressable onPress={() => setShowAdvise(true)} style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Feather name="message-circle" size={16} color={C.ink} />
+      <View style={{ backgroundColor: C.card, ...SHADOW.card, borderRadius: RADIUS.card, paddingVertical: 1, paddingHorizontal: 16, marginBottom: 12 }}>
+        {canUseAiFeature("nextActionAdvice") && (
+          <Pressable onPress={() => setShowAdvise(true)} style={linkRow(true)}>
+            <Feather name="message-circle" size={16} color={C.ink} />
+            {/* 補足文（灰色の小さな2行）はオーナー判断で外した（2026-10-04「美しくない」）。
+                見出し・位置・開く先は変えていない（entry_point の比較は位置と導線で見る） */}
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>
+                {crops.length === 1 ? `${crops[0].name}のことを相談する` : "相談する"}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={C.textMuted} />
+          </Pressable>
+        )}
+
+        {/* 記録一覧への導線 */}
+        <Pressable onPress={onGoReport} style={linkRow(!canUseAiFeature("nextActionAdvice"))}>
+          <Feather name="clipboard" size={16} color={C.textMuted} />
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>
-              {crops.length === 1 ? `${crops[0].name}のことを相談する` : "相談する"}
-            </Text>
-            <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
-              「これどうしたらいい？」に答えます。相談は対象ごとに残り、やることは記録と照合されます
-            </Text>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>記録一覧</Text>
+            <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{reports.length}件の作業記録</Text>
           </View>
           <Feather name="chevron-right" size={16} color={C.textMuted} />
         </Pressable>
-      )}
+
+        {/* 圃場マップ */}
+        <Pressable onPress={() => setShowMap(true)} style={linkRow(false)}>
+          <Feather name="map-pin" size={16} color={C.textMuted} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>圃場マップ</Text>
+          </View>
+          <Feather name="chevron-right" size={16} color={C.textMuted} />
+        </Pressable>
+      </View>
 
       {/* 新着コメント */}
       {feed.length > 0 && (
@@ -265,25 +300,6 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
         </View>
       )}
 
-      {/* 記録一覧への導線 */}
-      <Pressable onPress={onGoReport} style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Feather name="clipboard" size={16} color={C.textMuted} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>記録一覧を見る</Text>
-          <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{reports.length}件の作業記録</Text>
-        </View>
-        <Feather name="chevron-right" size={16} color={C.textMuted} />
-      </Pressable>
-
-      {/* マップカード */}
-      <Pressable onPress={() => setShowMap(true)} style={{ backgroundColor: C.card, borderRadius: RADIUS.card, paddingVertical: 14, paddingHorizontal: 16, marginTop: 4, ...SHADOW.card, flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Feather name="map-pin" size={16} color={C.textMuted} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>圃場マップ</Text>
-        </View>
-        <Feather name="chevron-right" size={16} color={C.textMuted} />
-      </Pressable>
-
       <FieldMapSheet open={showMap} onClose={() => setShowMap(false)} />
       <PestAdviceSheet open={showPestAdvice} onClose={() => setShowPestAdvice(false)} entryPoint="home" />
       {/* 作物が1件ならその作付け、0件・複数なら畑全体。目立つ入口を常に畑全体
@@ -298,7 +314,7 @@ export default function HomeScreen({ onGoReport, onQuickReport }: Props) {
         onAskRecords={q => { setRecordQuery(q); setShowAdvise(false); setHomeSheet("chat"); }}
         onAskPhoto={() => { setShowAdvise(false); setHomeSheet("diag"); }}
       />
-      <SearchChatSheet open={homeSheet === "chat"} onClose={() => setHomeSheet(null)} initialQuestion={recordQuery} />
+      <SearchChatSheet open={homeSheet === "chat"} onClose={() => setHomeSheet(null)} entryPoint="home" initialQuestion={recordQuery} />
       <PhotoDiagnosisSheet
         open={homeSheet === "diag"}
         onClose={() => setHomeSheet(null)}

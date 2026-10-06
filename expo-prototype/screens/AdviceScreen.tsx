@@ -14,6 +14,7 @@ import { useStore } from "../lib/store";
 import { matchActions, countMatches } from "../lib/adviceMatch";
 import { AdviseSheet, SearchChatSheet, PhotoDiagnosisSheet, diagnosisForAdvise } from "./AiSheets";
 import { C, RADIUS, SHADOW } from "../ui/tokens";
+import { todayStr } from "../lib/date";
 
 /** 相談の対象。畑全体は cropId=null で、一覧では先頭に固定する */
 interface Target {
@@ -50,7 +51,7 @@ export default function AdviceScreen() {
       build(null, "畑全体", "作物を指定しない相談"),
       ...crops.map(c => {
         const days = c.start_date
-          ? Math.round((Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`) - Date.parse(`${c.start_date}T00:00:00Z`)) / 86400000)
+          ? Math.round((Date.parse(`${todayStr()}T00:00:00Z`) - Date.parse(`${c.start_date}T00:00:00Z`)) / 86400000)
           : null;
         return build(c.id, c.name, days != null ? `作付けから${days}日` : "作付け日は未設定");
       }),
@@ -110,7 +111,7 @@ export default function AdviceScreen() {
         onAskRecords={q => { setRecordQuery(q); setOpenCropId(undefined); setSheet("chat"); }}
         onAskPhoto={() => { setOpenCropId(undefined); setSheet("diag"); }}
       />
-      <SearchChatSheet open={sheet === "chat"} onClose={() => setSheet(null)} initialQuestion={recordQuery} />
+      <SearchChatSheet open={sheet === "chat"} onClose={() => setSheet(null)} entryPoint="thread_tool" initialQuestion={recordQuery} />
       <PhotoDiagnosisSheet
         open={sheet === "diag"}
         onClose={() => setSheet(null)}

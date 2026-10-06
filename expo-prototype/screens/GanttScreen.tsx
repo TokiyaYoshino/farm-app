@@ -63,6 +63,8 @@ export default function GanttScreen() {
 
   const activeProjects = projects.filter(p => p.status === "active");
   const todayIdx = diffDays(viewStart, today);
+  // 表示期間の外にある計画は行だけ出てバーが引かれない。空に見えるので件数を伝える
+  // （実測: 3件すべて期間外で、理由が画面に出ていなかった）
 
   // 今日が表示期間内なら、開いた時に今日が画面中央付近に来るよう自動スクロール
   const gridRef = useRef<ScrollView>(null);
@@ -89,6 +91,8 @@ export default function GanttScreen() {
       clippedEnd: endIdx > totalDays - 1,
     };
   };
+
+  const offRangeCount = activeProjects.filter(p => !bar(p)).length;
 
   const shiftMonth = (n: number) =>
     setViewStart(d => new Date(d.getFullYear(), d.getMonth() + n, 1));
@@ -228,6 +232,7 @@ export default function GanttScreen() {
 
           <Text style={{ fontSize: 11, color: C.textMuted, paddingHorizontal: 16, marginTop: 10 }}>
             バーをタップすると詳細を表示します。計画の追加・編集はWeb版から行えます
+            {offRangeCount > 0 ? `\nこの期間の外に${offRangeCount}件あります（< > で期間を動かせます）` : ""}
           </Text>
         </ScrollView>
       )}

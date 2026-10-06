@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Alert, Linking } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -13,11 +13,15 @@ import GanttScreen from "./screens/GanttScreen";
 import AdviceScreen from "./screens/AdviceScreen";
 import ManageScreen from "./screens/ManageScreen";
 import QuickReportSheet from "./screens/QuickReportSheet";
+import EntrySheet from "./screens/EntrySheet";
+import ScheduleAddSheet from "./screens/ScheduleAddSheet";
+import type { EntryMode } from "./ui/WorkTiles";
 import NotificationsSheet from "./screens/NotificationsSheet";
 import ReportDetailSheet from "./screens/ReportDetailSheet";
 import ScheduleDetailSheet from "./screens/ScheduleDetailSheet";
 import BottomSheet from "./ui/BottomSheet";
 import Btn from "./ui/Btn";
+import Segmented from "./ui/Segmented";
 import { addPushListeners, getInitialPushPayload, type PushPayload } from "./lib/push";
 import type { Report, Schedule } from "./lib/types";
 
@@ -49,20 +53,10 @@ function SubTabBar<T extends string>({ tabs, value, onChange }: {
   value: T;
   onChange: (v: T) => void;
 }) {
+  // 記録タブの切替と同じ見た目（灰の受け皿＋白いピル）。下線タブはやめた（docs/decisions/20261004-home-declutter.md）
   return (
-    <View style={{ flexDirection: "row", backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: C.border, paddingHorizontal: 4 }}>
-      {tabs.map(t => {
-        const active = value === t.key;
-        return (
-          <Pressable
-            key={t.key}
-            onPress={() => onChange(t.key)}
-            style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2.5, borderBottomColor: active ? C.primary : "transparent" }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: active ? "700" : "600", color: active ? C.primary : C.textMuted }}>{t.label}</Text>
-          </Pressable>
-        );
-      })}
+    <View style={{ backgroundColor: C.bg, paddingHorizontal: 16, paddingTop: 16 }}>
+      <Segmented options={tabs} value={value} onChange={onChange} />
     </View>
   );
 }
@@ -78,6 +72,18 @@ function Root() {
   const [analyticsSubTab, setAnalyticsSubTab] = useState<AnalyticsSubTab>("report");
   const [manageSubTab, setManageSubTab] = useState<ManageSubTab>("crops");
   const [showUserSheet, setShowUserSheet] = useState(false);
+  // 「作業を選ぶ」シート（＋記録・ホームの予定カードから）と、そこから開く予定シート。
+  // iOS は Modal を重ねて出せないので、選んだら閉じてから次を開く。閉じアニメ（200ms）の後に
+  // Modal 自体の片付けが続くため 260ms では次が無視された（2026-10-04 シミュレータで確認）。余裕をみて 600ms
+  const [entryMode, setEntryMode] = useState<EntryMode | null>(null);
+  const [planWorkType, setPlanWorkType] = useState<string | null>(null);
+  const pickEntry = (mode: EntryMode, workType: string) => {
+    setEntryMode(null);
+    setTimeout(() => {
+      if (mode === "plan") setPlanWorkType(workType);
+      else openQuickReport({ work_type: workType });
+    }, 600);
+  };
   const [showNotifs, setShowNotifs] = useState(false);
   // 通知タップからの直接遷移用
   const [notifReport, setNotifReport] = useState<Report | null>(null);
@@ -213,15 +219,16 @@ function Root() {
       )}
 
       {/* コンテンツ */}
-      {tab === "home" && <HomeScreen onGoReport={() => setTab("report")} onQuickReport={() => openQuickReport()} />}
+      {tab === "home" && <HomeScreen onGoReport={() => setTab("report")} onQuickReport={() => openQuickReport()} onOpenEntry={m => setEntryMode(m)} />}
       {tab === "report" && <ReportScreen />}
       {tab === "advice" && <AdviceScreen />}
       {tab === "analytics" && (analyticsSubTab === "report" ? <AnalyticsScreen /> : <GanttScreen />)}
       {tab === "manage" && <ManageScreen subTab={manageSubTab} onGoCrops={() => setManageSubTab("crops")} />}
 
-      {/* FAB（記録） */}
-      <Pressable
-        onPress={() => openQuickReport()}
+      {/* FAB（記録）。押すと記録タブの先頭と同じ「作業を選ぶ」シート（記録｜予定）。
+          記録タブでは同じ部品が画面にあるので出さない（docs/decisions/20261004-home-declutter.md） */}
+      {tab !== "report" && <Pressable
+        onPress={() => setEntryMode("record")}
         style={{
           position: "absolute", right: 16, bottom: 86 + insets.bottom,
           flexDirection: "row", alignItems: "center", gap: 7,
@@ -232,7 +239,7 @@ function Root() {
       >
         <Feather name="plus" size={20} color="#fff" />
         <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>記録</Text>
-      </Pressable>
+      </Pressable>}
 
       {/* ボトムナビ */}
       <View style={{ flexDirection: "row", backgroundColor: C.navBg, borderTopWidth: 1, borderTopColor: C.border, paddingBottom: insets.bottom }}>
@@ -247,6 +254,8 @@ function Root() {
         })}
       </View>
 
+      <EntrySheet open={entryMode !== null} initialMode={entryMode ?? "record"} onClose={() => setEntryMode(null)} onPick={pickEntry} />
+      <ScheduleAddSheet open={planWorkType !== null} onClose={() => setPlanWorkType(null)} initialWorkType={planWorkType ?? undefined} />
       <QuickReportSheet
         open={quickReportOpen}
         onClose={closeQuickReport}
@@ -257,15 +266,18 @@ function Root() {
         onClose={() => setShowNotifs(false)}
         onOpenTarget={cm => {
           // 通知タップで対象の記録・予定の詳細シートを直接開く。
-          // 対象が見つからない場合(削除済み等)は記録タブへ
-          if (!openTarget(cm.target_type, cm.target_id)) setTab("report");
+          // 対象が見つからないとき（削除済み等）は、黙って別画面へ飛ばさず理由を伝える
+          if (!openTarget(cm.target_type, cm.target_id)) {
+            setTab("report");
+            Alert.alert("対象が見つかりません", "この通知の対象は削除されたか、表示できる範囲にありません。記録タブを開きます。");
+          }
         }}
       />
       <ReportDetailSheet report={notifReport} onClose={() => setNotifReport(null)} />
       <ScheduleDetailSheet schedule={notifSchedule} onClose={() => setNotifSchedule(null)} />
 
-      {/* ユーザーシート（ログアウト） */}
-      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.4}>
+      {/* ユーザーシート（ログアウト・アカウントの削除） */}
+      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.5}>
         <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
           <Text style={{ fontWeight: "700", fontSize: 17, color: C.text, marginBottom: 4 }}>{currentUser?.name ?? ""}</Text>
           <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
@@ -275,6 +287,24 @@ function Root() {
             icon={<Feather name="log-out" size={16} color={C.text} />}>
             ログアウト
           </Btn>
+
+          {/* アカウントの削除。アプリ内で作成できない代わりに、依頼先をアプリから示す
+              （審査ガイドライン 5.1.1(v) で削除の導線を求められたときの受け皿） */}
+          <Pressable
+            onPress={() => {
+              Alert.alert(
+                "アカウントの削除",
+                "アカウントは農場の管理者が発行しています。削除は管理者、またはサポートページの問い合わせ先へお申し出ください。アカウント情報とプッシュ通知トークンを削除します。作業記録は農場の業務記録として組織に帰属します。",
+                [
+                  { text: "閉じる", style: "cancel" },
+                  { text: "サポートを開く", onPress: () => { void Linking.openURL("https://kishu-farm.vercel.app/support"); } },
+                ],
+              );
+            }}
+            style={{ marginTop: 18, paddingVertical: 12, alignItems: "center" }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: C.danger }}>アカウントの削除</Text>
+          </Pressable>
         </View>
       </BottomSheet>
     </View>

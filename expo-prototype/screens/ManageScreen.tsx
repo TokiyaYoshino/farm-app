@@ -12,6 +12,8 @@ import { summarizeUsageByCrop } from "../lib/pesticideUsage";
 import { canUseAiFeature } from "../lib/ai";
 import { AdviseSheet } from "./AiSheets";
 import type { PesticideMaster } from "../lib/types";
+import { todayStr as todayStrFn, toDateStr } from "../lib/date";
+import { dispName } from "../lib/text";
 
 // ─── 管理（src/App.tsx tab==="manage" ブロックの移植・実データ）──────────
 // 作物: 追加+展開式統計+FAMIC作物名の紐付け / 圃場: 追加+GPS位置設定+作付け履歴 /
@@ -45,7 +47,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
     refreshing, refresh,
   } = useStore();
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayStrFn();
   const [showCropAddForm, setShowCropAddForm] = useState(false);
   const [cForm, setCForm] = useState({ name: "", start_date: todayStr, target_yield: "", famic_crop_name: "" });
   // FAMIC 作物名のインライン編集（Web版 editingFamicCropId と同一）
@@ -268,7 +270,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                       <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
                         {c.start_date}{stat?.growDays != null ? ` · ${stat.growDays}日目` : ""}
                         {c.famic_crop_name
-                          ? ` · 農薬の数え方「${c.famic_crop_name}」`
+                          ? ` · 農薬の数え方「${dispName(c.famic_crop_name)}」`
                           : null}
                       </Text>
                     </View>
@@ -535,7 +537,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                       <Feather name="droplet" size={14} color={C.pesticide} />
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ fontWeight: "700", fontSize: 14, color: C.text }}>{p.name}</Text>
+                      <Text style={{ fontWeight: "700", fontSize: 14, color: C.text }}>{dispName(p.name)}</Text>
                       <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
                         {[p.type, p.dilution_rate].filter(Boolean).join(" · ") || "詳細未設定"}
                       </Text>
@@ -652,7 +654,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
           onChange={(event, selected) => {
             setShowDatePicker(false);
             if (event.type === "dismissed" || !selected) return;
-            setCForm(f => ({ ...f, start_date: selected.toISOString().slice(0, 10) }));
+            setCForm(f => ({ ...f, start_date: toDateStr(selected) }));
           }}
         />
       )}

@@ -21,6 +21,7 @@ import {
   type AdviceAction, type ActionMatch, type MatchStatus,
 } from "../lib/adviceMatch";
 import { WORK_TEMPLATES, type CropAdviceMessage } from "../lib/types";
+import { todayStr, toDateStr } from "../lib/date";
 
 // ─── AI機能シート群（src/App.tsx のAI系ボトムシートの移植）────────────────
 // AI日報生成 / 記録検索チャット / 防除タイミング助言 / 画像診断（単体）。
@@ -28,11 +29,13 @@ import { WORK_TEMPLATES, type CropAdviceMessage } from "../lib/types";
 
 const lbl = { fontSize: 12, fontWeight: "600" as const, color: C.textSub, marginBottom: 5 };
 
-function SheetHeader({ title, onClose }: { title: string; onClose: () => void }) {
+// 見出しのアイコンは機能の実体を指す（CLAUDE.md「AI機能の見せ方」: ✨/☆をAIの記号に使わない）。
+// 以前は全シート共通で star だった
+function SheetHeader({ title, icon, onClose }: { title: string; icon: keyof typeof Feather.glyphMap; onClose: () => void }) {
   return (
     <View style={{ paddingTop: 6, paddingHorizontal: 16, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <Feather name="star" size={16} color={C.ink} />
+        <Feather name={icon} size={16} color={C.ink} />
         <Text style={{ fontWeight: "700", fontSize: 17, color: C.text }}>{title}</Text>
       </View>
       <Pressable onPress={onClose} style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: C.well, alignItems: "center", justifyContent: "center" }}>
@@ -85,7 +88,7 @@ function ErrorText({ msg }: { msg: string }) {
 export function DailyReportSheet({ open, onClose, entryPoint }: { open: boolean; onClose: () => void; entryPoint: AiEntryPoint }) {
   const { reports, pesticides, cropName, userName, currentUser } = useStore();
   const organizationId = currentUser?.organization_id ?? null;
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
@@ -110,7 +113,7 @@ export function DailyReportSheet({ open, onClose, entryPoint }: { open: boolean;
 
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <SheetHeader title="その日の作業を日報にまとめる" onClose={onClose} />
+      <SheetHeader title="その日の作業を日報にまとめる" icon="file-text" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         <Text style={lbl}>対象日</Text>
         <Pressable onPress={() => setShowDatePicker(true)} style={{ backgroundColor: C.well, borderRadius: RADIUS.row, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
@@ -131,7 +134,7 @@ export function DailyReportSheet({ open, onClose, entryPoint }: { open: boolean;
           onChange={(event, selected) => {
             setShowDatePicker(false);
             if (event.type === "dismissed" || !selected) return;
-            setDate(selected.toISOString().slice(0, 10));
+            setDate(toDateStr(selected));
             setResult(""); setError("");
           }}
         />
@@ -141,13 +144,15 @@ export function DailyReportSheet({ open, onClose, entryPoint }: { open: boolean;
 }
 
 // ── ② 記録検索チャット ──
-export function SearchChatSheet({ open, onClose, initialQuestion }: {
+export function SearchChatSheet({ open, onClose, entryPoint, initialQuestion }: {
   open: boolean; onClose: () => void;
+  /** どの画面から開いたか。この機能だけ利用ログを残しておらず、撤退条件の集計から漏れていた */
+  entryPoint: AiEntryPoint;
   /** 相談から「記録を調べる」で渡された検索語。入力欄に入れるだけで自動送信はしない
    *  —— 利用者が押していない課金呼び出しを起こさないため */
   initialQuestion?: string;
 }) {
-  const { reports, crops, pesticides, cropName, userName, prefetchAllRegistrations } = useStore();
+  const { reports, crops, pesticides, cropName, userName, prefetchAllRegistrations, currentUser } = useStore();
   // assistant 行は結論（content）と根拠・注意を分けて持つ。api/search-chat.ts が
   // スキーマで分けて返すので、自由文を目視で切っているわけではない（Web版と同一）
   const [messages, setMessages] = useState<{
@@ -184,18 +189,26 @@ export function SearchChatSheet({ open, onClose, initialQuestion }: {
       return;
     }
     const res = await searchChatApi(question, records, count);
-    if (res.ok) setMessages(m => [...m, {
-      role: "assistant", content: res.data.answer,
-      evidence: res.data.evidence ?? [], notes: res.data.notes ?? [],
-      answerable: res.data.answerable !== false,
-    }]);
+    if (res.ok) {
+      setMessages(m => [...m, {
+        role: "assistant", content: res.data.answer,
+        evidence: res.data.evidence ?? [], notes: res.data.notes ?? [],
+        answerable: res.data.answerable !== false,
+      }]);
+      void saveAiOutput(currentUser?.organization_id ?? null, currentUser?.id ?? null, "search_chat", {
+        entryPoint,
+        inputSummary: `質問:${question} / 記録:${count}件`,
+        outputText: res.data.answer,
+        outputJson: { evidence: res.data.evidence ?? [], notes: res.data.notes ?? [], answerable: res.data.answerable !== false },
+      });
+    }
     else setError(res.error);
     setLoading(false);
   };
 
   return (
     <BottomSheet open={open} onClose={onClose} heightRatio={0.85}>
-      <SheetHeader title="記録に聞く" onClose={onClose} />
+      <SheetHeader title="記録に聞く" icon="search" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         {messages.length === 0 && (
           <Text style={{ fontSize: 13, color: C.textMuted, lineHeight: 20, marginBottom: 12 }}>
@@ -281,7 +294,7 @@ export function PestAdviceSheet({ open, onClose, entryPoint }: { open: boolean; 
     let cancelled = false;
     setChecking(true);
     (async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayStr();
       const { data } = await supabase.from("ai_outputs")
         .select("output_text")
         .eq("organization_id", organizationId)
@@ -328,7 +341,7 @@ export function PestAdviceSheet({ open, onClose, entryPoint }: { open: boolean; 
 
   return (
     <BottomSheet open={open} onClose={onClose} heightRatio={0.85}>
-      <SheetHeader title="次の散布はいつ？" onClose={onClose} />
+      <SheetHeader title="次の散布時期" icon="wind" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 19, marginBottom: 12 }}>
           直近7日の実績と今後7日の予報（{weatherCoords?.name ?? ""}）に加えて、この農場の防除記録（前回の散布からの日数・同じ薬剤の繰り返し・昨年同時期）も踏まえて提案します。最終判断は現地の状況と製品ラベルに従ってください。
@@ -644,7 +657,7 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
         crop: crop
           ? { name: crop.name, famic_crop_name: crop.famic_crop_name ?? null, start_date: crop.start_date ?? null }
           : undefined,
-        today: new Date().toISOString().slice(0, 10),
+        today: todayStr(),
         forecast,
         registrations,
         records,
@@ -722,8 +735,13 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
 
   return (
     <BottomSheet open={open} onClose={onClose} heightRatio={0.92}>
-      <SheetHeader title={`${crop ? crop.name : "畑全体"}の相談`} onClose={onClose} />
+      <SheetHeader title={`${crop ? crop.name : "畑全体"}の相談`} icon="message-circle" onClose={onClose} />
       <ScrollView style={{ paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 16 }}>
+        {/* ホームの相談の行から外した説明を、押した先で1行だけ言う（オーナー 2026-10-04。
+            docs/decisions/20261004-home-declutter.md） */}
+        <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 20, marginBottom: 12 }}>
+          畑の記録をもとに答えます。やりとりは作物ごとに残ります。
+        </Text>
         {/* 相談する対象。入口は1つで、対象の選択はシートの中で行う
             （docs/decisions/20260906-general-advice-entry.md）。
             作物を1件も登録していなくても「畑全体」で成立する */}
@@ -964,7 +982,7 @@ export function PhotoDiagnosisSheet({ open, onClose, entryPoint, onAdvise }: {
 
   return (
     <BottomSheet open={open} onClose={onClose} heightRatio={0.85}>
-      <SheetHeader title="写真で病害虫を絞り込む" onClose={onClose} />
+      <SheetHeader title="写真で病害虫を絞り込む" icon="camera" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 19, marginBottom: 12 }}>
           葉や果実の写真から病害虫の可能性をAIが推定します。
