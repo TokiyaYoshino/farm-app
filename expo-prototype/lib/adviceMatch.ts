@@ -21,6 +21,11 @@
 // 4. **照合は作物・作業種別・期間の3条件。** 圃場は見ない（助言は作付け単位で出しており、
 //    圃場を指定していないため。圃場で絞ると別圃場でやった作業を見落とす）。
 import type { Report } from "./types";
+// 現地時間で "YYYY-MM-DD" を作る（UTC の toISOString だと日本時間0〜9時が前日になる）。
+// 実体は lib/date.ts と同じだが、この2ファイルは node で直接読むテストから参照されるため
+// 拡張子なしの相対 import ができず、ここに同じ計算を置いている。
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const localDateStr = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
 /** crop_advice_actions の1行。DBの列名に合わせる（store がそのまま渡す） */
 export interface AdviceAction {
@@ -121,7 +126,7 @@ export function matchAction(a: AdviceAction, reports: Report[], today: string): 
   return { ...base, status: "pending", matchedReports: [] };
 }
 
-export const todayStr = (): string => new Date().toISOString().slice(0, 10);
+export const todayStr = (): string => localDateStr(new Date());
 
 /** 作物の全助言を照合する。並びは sort_order → created_at（新しい助言が先） */
 export function matchActions(actions: AdviceAction[], reports: Report[], today?: string): ActionMatch[] {

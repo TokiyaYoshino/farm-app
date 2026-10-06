@@ -1,3 +1,4 @@
+import { todayStr } from "./date";
 // ─── 天気取得（src/App.tsx の Open-Meteo 連携部の移植）─────────────────
 const WMO_MAP: Record<number, string> = {
   0: "快晴", 1: "晴れ", 2: "一部曇り", 3: "曇り",
@@ -49,7 +50,7 @@ export interface PeriodWeather { temp: string; humidity: string; rain: string; w
 export async function fetchWeatherForPeriod(
   lat: number, lng: number, date: string, startTime: string, endTime: string,
 ): Promise<PeriodWeather> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStr();
   const baseUrl = date < today
     ? "https://archive-api.open-meteo.com/v1/archive"
     : "https://api.open-meteo.com/v1/forecast";

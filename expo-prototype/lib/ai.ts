@@ -5,6 +5,7 @@ import { supabase } from "./supabase";
 import { wmoToLabel } from "./weather";
 import type { Report, Pesticide } from "./types";
 import { formatWorkCountsForPrompt } from "./metrics";
+import { todayStr, toDateStr } from "./date";
 
 // Web版本番（Vercel）。api/ ディレクトリのサーバーレス関数がここに載っている
 export const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://kishu-farm.vercel.app";
@@ -54,9 +55,9 @@ export type AiEntryPoint =
 export async function saveAiOutput(
   organizationId: string | null,
   userId: number | null,
-  // "advice" は api/advise.ts（次にやる作業の助言）。ai_outputs.kind は text で
-  // CHECK 制約が無いのでマイグレーション不要
-  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice",
+  // "advice" は api/advise.ts（次にやる作業の助言）、"search_chat" は api/search-chat.ts（記録に聞く）。
+  // ai_outputs.kind は text で CHECK 制約が無いのでマイグレーション不要
+  kind: "diagnosis" | "pest_advice" | "daily_report" | "voice_structure" | "advice" | "search_chat",
   payload: {
     entryPoint: AiEntryPoint;
     reportId?: number | null;
@@ -76,7 +77,7 @@ export async function saveAiOutput(
     kind,
     entry_point: payload.entryPoint,
     report_id: payload.reportId ?? null,
-    target_date: payload.targetDate ?? new Date().toISOString().slice(0, 10),
+    target_date: payload.targetDate ?? todayStr(),
     field: payload.field ?? null,
     crop_id: payload.cropId ?? null,
     input_summary: payload.inputSummary?.slice(0, 2000) ?? null,
@@ -128,7 +129,7 @@ export function formatDayRecords(reports: Report[], date: string, h: FormatHelpe
 export function formatRecordsForChat(reports: Report[], h: FormatHelpers, limitsBlock = ""): { text: string; count: number } {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 180);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const cutoffStr = toDateStr(cutoff);
   const target = reports.filter(r => r.date >= cutoffStr)
     .slice()
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -179,7 +180,7 @@ export async function fetchPestControlForecast(lat: number, lng: number): Promis
   const rainSum: number[] = data.daily?.precipitation_sum ?? [];
   const rainProb: number[] = data.daily?.precipitation_probability_max ?? [];
   const windMax: number[] = data.daily?.wind_speed_10m_max ?? [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStr();
 
   const line = (d: string, i: number): string => {
     const dt = new Date(d + "T00:00:00+09:00");
@@ -239,7 +240,7 @@ export const searchChatApi = (question: string, records: string, recordCount: nu
     notes?: string[];
   }>("/api/search-chat", {
     question, records, recordCount,
-    today: new Date().toISOString().slice(0, 10),
+    today: todayStr(),
   });
 
 // sprayHistory はその農場自身の防除記録（lib/pesticideUsage.ts の formatSprayHistoryForPrompt の出力）。

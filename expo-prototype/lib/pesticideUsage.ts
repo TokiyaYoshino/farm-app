@@ -1,3 +1,8 @@
+// 現地時間で "YYYY-MM-DD" を作る（UTC の toISOString だと日本時間0〜9時が前日になる）。
+// 実体は lib/date.ts と同じだが、この2ファイルは node で直接読むテストから参照されるため
+// 拡張子なしの相対 import ができず、ここに同じ計算を置いている。
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const localDateStr = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 // 農薬の使用回数の集計・総使用回数（上限）の判定を1箇所に集約する。
 //
 // 収穫量の集計を src/lib/metrics.ts に集約した前例と同じ理由。AI記録検索チャットの
@@ -113,7 +118,7 @@ export function parseTotalCountLimit(totalCount: string | null | undefined): num
 function oneYearBefore(day: string): string {
   const d = new Date(`${day}T00:00:00Z`);
   d.setUTCFullYear(d.getUTCFullYear() - 1);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 /**
@@ -138,7 +143,7 @@ export function reportUsesPesticide(r: UsageReport, pesticideId: string): boolea
   return r.pesticide_id === pesticideId;
 }
 
-export const todayStr = (): string => new Date().toISOString().slice(0, 10);
+export const todayStr = (): string => localDateStr(new Date());
 
 /**
  * 1つの農薬 × 1つの作付けの使用状況をまとめる。
@@ -438,7 +443,7 @@ function sprayedNames(r: SprayReport, pesticides: { id: string; name: string }[]
 function shiftDays(day: string, days: number): string {
   const d = new Date(`${day}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 /** from から to までの日数。パースできなければ null */
