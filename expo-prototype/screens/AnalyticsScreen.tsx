@@ -399,7 +399,7 @@ export default function AnalyticsScreen() {
         </ScrollView>
         {aiRows.length === 0 ? (
           <View style={{ alignItems: "center", paddingVertical: 24, gap: 8 }}>
-            <Feather name="star" size={28} color={C.textMuted} />
+            <Feather name="clock" size={28} color={C.textMuted} />
             <Text style={{ color: C.textMuted, fontSize: 13 }}>AIの出力がまだありません</Text>
           </View>
         ) : (

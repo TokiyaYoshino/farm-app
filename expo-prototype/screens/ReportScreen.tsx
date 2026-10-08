@@ -262,7 +262,7 @@ export default function ReportScreen() {
               <Feather name="search" size={16} color={C.textMuted} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>記録一覧</Text>
-                <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{reports.length}件の作業記録・検索・コピーして作成</Text>
+                <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{reports.length}件の作業記録</Text>
               </View>
               <Feather name="chevron-right" size={16} color={C.textMuted} />
             </Pressable>
@@ -324,7 +324,7 @@ export default function ReportScreen() {
               {filterActive && (
                 <Btn variant="tertiary" size="sm" onPress={() => { setQuery(""); setFilterCrop(0); setFilterField(""); setFilterWorkType(""); setFilterUser(0); }}>条件をクリア</Btn>
               )}
-              <Btn variant="secondary" size="sm" onPress={() => setAiSheet("report")} icon={<Feather name="star" size={13} color={C.text} />}>日報にまとめる</Btn>
+              <Btn variant="secondary" size="sm" onPress={() => setAiSheet("report")} icon={<Feather name="file-text" size={13} color={C.text} />}>日報にまとめる</Btn>
               {canUseAiFeature("recordSearchChat") && (
                 <Btn variant="secondary" size="sm" onPress={() => setAiSheet("chat")} icon={<Feather name="message-square" size={13} color={C.text} />}>記録に聞く</Btn>
               )}

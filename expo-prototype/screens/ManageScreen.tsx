@@ -220,10 +220,8 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                 onPress={() => setShowCropAddForm(p => !p)}
                 style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 20, marginBottom: 8 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Feather name="plus-circle" size={14} color={C.textMuted} />
-                  <Text style={secStyle}>作物を追加</Text>
-                </View>
+                {/* 左の ⊕ と右の ＋ が同じ意味で重なっていたので、印は右の開閉だけにする（2026-10-07） */}
+                <Text style={secStyle}>作物を追加</Text>
                 <Text style={{ fontSize: 16, color: C.primary, fontWeight: "700" }}>{showCropAddForm ? "−" : "+"}</Text>
               </Pressable>
               {showCropAddForm && (
@@ -268,10 +266,8 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                     <View style={{ minWidth: 0, flex: 1 }}>
                       <Text style={{ fontWeight: "700", fontSize: 15, color: C.text }}>{c.name}</Text>
                       <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
+                        {/* 農薬の数え方は開いた中に出ている。閉じた行は日付と日数の1行だけ（常に出す補足は1行まで） */}
                         {c.start_date}{stat?.growDays != null ? ` · ${stat.growDays}日目` : ""}
-                        {c.famic_crop_name
-                          ? ` · 農薬の数え方「${dispName(c.famic_crop_name)}」`
-                          : null}
                       </Text>
                     </View>
                   </View>

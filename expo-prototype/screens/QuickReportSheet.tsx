@@ -502,7 +502,7 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
                 variant="soft" size="sm"
                 style={{ alignSelf: "stretch", marginBottom: 12 }}
                 onPress={structureNote}
-                icon={<Feather name="star" size={13} color={C.ink} />}
+                icon={<Feather name="mic" size={13} color={C.ink} />}
               >
                 {aiStructuring ? "整理中..." : "メモを項目に振り分け"}
               </Btn>

@@ -122,7 +122,7 @@ export function DailyReportSheet({ open, onClose, entryPoint }: { open: boolean;
         </Pressable>
         <ErrorText msg={error} />
         {!!result && <ResultBox text={result} />}
-        <Btn variant="primary" size="lg" onPress={generate} icon={loading ? undefined : <Feather name="star" size={15} color="#fff" />}>
+        <Btn variant="primary" size="lg" onPress={generate} icon={loading ? undefined : <Feather name="file-text" size={15} color="#fff" />}>
           {loading ? "生成中..." : result ? "もう一度生成" : "日報を生成"}
         </Btn>
       </View>
