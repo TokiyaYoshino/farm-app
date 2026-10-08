@@ -1,10 +1,11 @@
-// api/_quota.ts の契約テスト（農場ごとの回数の枠）。
+// api/_quota.ts の契約テスト（1人ごとの回数の枠）。
 //
-//   cd ~/Projects/farm-app && node scripts/test-org-quota.mjs
+//   cd ~/Projects/farm-app && node scripts/test-user-quota.mjs
 //
-// 料金の決定（docs/decisions/20261001-pricing-freemium.md）と
+// 料金の決定（docs/decisions/20261001-pricing-freemium.md → 20261008-pricing-per-person.md）と
 // 作り方の ADR（docs/decisions/20261003-adr-signup-billing-deletion.md 6節）を固定する。
-//   - 数えるのは**人ではなく農場**（organization_id）
+//   - 数えるのは**1人ごと**（ai_outputs.created_by）。2026-10-08 に農場ごとから変えた
+//     （料金が1人ごとになったため。チームは1人の枠 × 人数＝各自が自分の枠を持つ）
 //   - 無料: 相談 週3件・写真で調べる 週1回 ／ 有料: 相談 1日8件・写真で調べる 1日3回
 //   - 「記録に聞く」（search_chat）は相談に含める
 //   - 週は日本時間の月曜0時、日は日本時間の0時で切る
@@ -24,7 +25,7 @@ registerHooks({
 process.env.VITE_SUPABASE_URL = "https://test.supabase.invalid";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 
-const ORG = "11111111-1111-1111-1111-111111111111";
+const USER = "22222222-2222-2222-2222-222222222222";
 const q = await import(pathToFileURL(new URL("../api/_quota.ts", import.meta.url).pathname).href);
 
 let pass = 0, fail = 0;
@@ -87,37 +88,37 @@ t("日の始まりは日本時間の0時",
 // ── 4. 数え方と止め方 ─────────────────────────────────────────
 console.log("\n4. 数え方と止め方:");
 mockCount(2);
-let r = await q.checkOrgQuota(ORG, "advice", "free", sunday);
+let r = await q.checkUserQuota(USER, "advice", "free", sunday);
 t("無料・相談2件目までは通す", r === null);
-t("数える先は organization_id（人ではなく農場）", lastUrl.includes(`organization_id=eq.${ORG}`) && !lastUrl.includes("created_by"));
+t("数える先は created_by（農場ではなく1人ごと）", lastUrl.includes(`created_by=eq.${USER}`) && !lastUrl.includes("organization_id"));
 t("相談は advice と search_chat を合わせて数える",
   decodeURIComponent(lastUrl).includes("kind=in.(advice,search_chat)"), decodeURIComponent(lastUrl));
 t("週の始まり以降だけ数える", decodeURIComponent(lastUrl).includes("created_at=gte.2026-09-27T15:00:00.000Z"));
 
 mockCount(3);
-r = await q.checkOrgQuota(ORG, "search_chat", "free", sunday);
+r = await q.checkUserQuota(USER, "search_chat", "free", sunday);
 t("無料・相談3件に達したら止める（429）", r?.ok === false && r.status === 429);
 t("止めるときの文言に「月曜」がある（いつ戻るか分かる）", /月曜/.test(r?.error ?? ""), r?.error);
 t("文言に「AI」を出さない（CLAUDE.md）", !/AI/.test(r?.error ?? ""));
 
 mockCount(3);
-r = await q.checkOrgQuota(ORG, "advice", "paid", sunday);
+r = await q.checkUserQuota(USER, "advice", "paid", sunday);
 t("有料なら3件では止めない", r === null);
 mockCount(8);
-r = await q.checkOrgQuota(ORG, "advice", "paid", sunday);
+r = await q.checkUserQuota(USER, "advice", "paid", sunday);
 t("有料・相談8件で止める", r?.ok === false && r.status === 429);
 t("有料の文言は「明日」", /明日/.test(r?.error ?? ""), r?.error);
 
 mockCount(1);
-r = await q.checkOrgQuota(ORG, "diagnosis", "free", sunday);
+r = await q.checkUserQuota(USER, "diagnosis", "free", sunday);
 t("無料・写真は1回で止める", r?.ok === false);
 
 mockCount(999);
-r = await q.checkOrgQuota(ORG, "unknown_kind", "free", sunday);
+r = await q.checkUserQuota(USER, "unknown_kind", "free", sunday);
 t("枠の対象外は件数に関係なく通す", r === null);
 
 mockCount(1);
-r = await q.checkOrgQuota(ORG, "daily_report", "free", sunday);
+r = await q.checkUserQuota(USER, "daily_report", "free", sunday);
 t("無料・日報は1日1回で止める", r?.ok === false && /明日/.test(r.error), r?.error);
 t("日報は日の始まり（日本時間0時）から数える",
   decodeURIComponent(lastUrl).includes("created_at=gte.2026-10-03T15:00:00.000Z"), decodeURIComponent(lastUrl));
@@ -127,13 +128,13 @@ t("無料の文言は有料の回数も案内する", /有料プラン/.test(r?.
 // ── 5. 数えられないとき ───────────────────────────────────────
 console.log("\n5. 数えられないときは通す（fail-open）:");
 mockCount(0, false);
-r = await q.checkOrgQuota(ORG, "advice", "free", sunday);
+r = await q.checkUserQuota(USER, "advice", "free", sunday);
 t("件数の取得に失敗したら通す", r === null);
 globalThis.fetch = async () => { throw new Error("network"); };
-r = await q.checkOrgQuota(ORG, "advice", "free", sunday);
+r = await q.checkUserQuota(USER, "advice", "free", sunday);
 t("通信が落ちても通す", r === null);
-r = await q.checkOrgQuota(null, "advice", "free", sunday);
-t("組織が分からないときは通す（数える先が無い）", r === null);
+r = await q.checkUserQuota(null, "advice", "free", sunday);
+t("利用者が分からないときは通す（数える先が無い）", r === null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

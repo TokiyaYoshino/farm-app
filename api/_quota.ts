@@ -1,16 +1,17 @@
-// 農場（organization）ごとの回数の枠。料金の無料／有料の差はここで付ける。
+// 1人ごとの回数の枠。料金の無料／有料の差はここで付ける。
 //
 // 決定: docs/decisions/20261001-pricing-freemium.md（枠の数字）
+//       docs/decisions/20261008-pricing-per-person.md（1人ごとに数える）
 //       docs/decisions/20261003-adr-signup-billing-deletion.md 6節（作り方）
-// 契約: scripts/test-org-quota.mjs
+// 契約: scripts/test-user-quota.mjs
 //
 // _auth.ts の checkDailyLimit（人ごと・1日・暴走止め）とは目的が違う。あちらは支出の歯止めで、
-// こちらは料金の線引き。**数える単位を人ではなく農場にする**のは、売上が農場ごとなので
-// 原価の上限も農場ごとに決めるため。
+// こちらは料金の線引き。**1人ごとに数える**のは、料金が1人ごと（チームは1人 × 人数）に
+// なったため（2026-10-08。以前は農場ごと）。原価は使う人数に比例するので、上限も人で切る。
 //
 // まだどのエンドポイントにもつないでいない（2026-10-04）。購読状態の表
-// （organization_subscriptions）が無いうちにつなぐと、全農場が無料扱いになり
-// 既存の農場の相談が週3件に絞られる。つなぐのは購読の表と同時。
+// （organization_subscriptions）が無いうちにつなぐと、全員が無料扱いになり
+// 既存の利用者の相談が週3件に絞られる。つなぐのは購読の表と同時。
 
 type Fail = { ok: false; status: number; error: string };
 
@@ -69,19 +70,19 @@ export function windowStart(period: Period, now: Date = new Date()): Date {
 }
 
 /**
- * 農場の枠を超えていたら止める。超えていなければ null。
+ * その人の枠を超えていたら止める。超えていなければ null。
  *
  * **数えられなかったときは通す（fail-open）。** 数える側の不調で有料の農場まで
  * 止めるほうが、枠を一時的にすり抜けるより損害が大きい（_auth.ts の方針と同じ）。
  */
-export async function checkOrgQuota(
-  organizationId: string | null,
+export async function checkUserQuota(
+  userId: string | null,
   kind: string,
   plan: Plan,
   now: Date = new Date(),
 ): Promise<Fail | null> {
   const group = groupOfKind(kind);
-  if (!group || !organizationId) return null;
+  if (!group || !userId) return null;
 
   const PROJECT_URL = process.env.VITE_SUPABASE_URL;
   const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -93,7 +94,7 @@ export async function checkOrgQuota(
   try {
     const r = await fetch(
       `${PROJECT_URL}/rest/v1/ai_outputs`
-      + `?organization_id=eq.${encodeURIComponent(organizationId)}`
+      + `?created_by=eq.${encodeURIComponent(userId)}`
       + `&kind=in.(${KINDS[group].join(",")})`
       + `&created_at=gte.${encodeURIComponent(since)}&select=id`,
       {
