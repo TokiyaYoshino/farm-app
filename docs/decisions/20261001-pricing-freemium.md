@@ -2,6 +2,7 @@
 
 - 日付: 2026-10-01
 - 状態: 採用
+- **2026-10-08 一部を覆した**: 単位を農場ごと→1人ごと、通常 月1,480円・先着100人 月980円（`20261008-pricing-per-person.md`）
 - 種別: 仕様変更（料金体系）
 - 関連: `20260823-pricing-plan-review.md`（保留だった論点に答える）、`20260928-business-definition.md`、`docs/owner-decisions.md`
 

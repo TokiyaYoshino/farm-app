@@ -2,6 +2,7 @@
 
 - 日付: 2026-10-01
 - 状態: 採用（0.1.0 に入れる）
+- **2026-10-08 一部を覆した**: アプリから登録できるのは個人（1人の環境）。チームは申請制（`20261008-pricing-per-person.md`）
 - 種別: 仕様変更（認証・組織・権限）
 - 関連: `20261001-pricing-freemium.md`（農場ごとの課金）、`docs/owner-decisions.md` B1・B2、`docs/multitenancy-progress.md`
 
