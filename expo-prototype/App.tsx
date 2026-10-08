@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, Text, Pressable, ActivityIndicator, Alert, Linking } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,6 +7,7 @@ import { Feather } from "@expo/vector-icons";
 import { C } from "./ui/tokens";
 import { StoreProvider, useStore } from "./lib/store";
 import LoginScreen from "./screens/LoginScreen";
+import TutorialScreen from "./screens/TutorialScreen";
 import HomeScreen from "./screens/HomeScreen";
 import ReportScreen from "./screens/ReportScreen";
 import AnalyticsScreen from "./screens/AnalyticsScreen";
@@ -72,6 +74,23 @@ function Root() {
   const [analyticsSubTab, setAnalyticsSubTab] = useState<AnalyticsSubTab>("report");
   const [manageSubTab, setManageSubTab] = useState<ManageSubTab>("crops");
   const [showUserSheet, setShowUserSheet] = useState(false);
+  // はじめの紹介。自分の記録がまだ無い人にだけ、1人1回（端末に既読を残す）。
+  // 農場の記録ではなく本人の記録で見る：記録がたまった農場に後から入った新人にこそ見せたい
+  // ユーザーシートから見直せる。開発ビルドでは「最初の畑」まで必ず出し、登録はしない
+  const [tutorial, setTutorial] = useState<null | "auto" | "again">(null);
+  useEffect(() => {
+    if (!currentUser || loading) return;
+    let alive = true;
+    AsyncStorage.getItem(`tutorialSeen_${currentUser.id}`).then(v => {
+      if (alive && !v && !reports.some(r => r.user_id === currentUser.id)) setTutorial("auto");
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, loading]);
+  const closeTutorial = () => {
+    if (currentUser) AsyncStorage.setItem(`tutorialSeen_${currentUser.id}`, "1").catch(() => {});
+    setTutorial(null);
+  };
   // 「作業を選ぶ」シート（＋記録・ホームの予定カードから）と、そこから開く予定シート。
   // iOS は Modal を重ねて出せないので、選んだら閉じてから次を開く。閉じアニメ（200ms）の後に
   // Modal 自体の片付けが続くため 260ms では次が無視された（2026-10-04 シミュレータで確認）。余裕をみて 600ms
@@ -163,6 +182,15 @@ function Root() {
           再試行
         </Btn>
       </View>
+    );
+  }
+
+  if (tutorial) {
+    return (
+      <>
+        <StatusBar style="dark" />
+        <TutorialScreen onDone={closeTutorial} preview={tutorial === "again" && __DEV__} />
+      </>
     );
   }
 
@@ -283,6 +311,10 @@ function Root() {
           <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
             {currentUser?.role === "admin" ? "管理者" : currentUser?.role === "viewer" ? "閲覧者" : "作業者"}
           </Text>
+          <Btn variant="secondary" size="lg" style={{ marginBottom: 10 }} onPress={() => { setShowUserSheet(false); setTutorial("again"); }}
+            icon={<Feather name="book-open" size={16} color={C.text} />}>
+            使い方の紹介を見る
+          </Btn>
           <Btn variant="secondary" size="lg" onPress={async () => { setShowUserSheet(false); await logout(); }}
             icon={<Feather name="log-out" size={16} color={C.text} />}>
             ログアウト
