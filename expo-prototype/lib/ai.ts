@@ -48,7 +48,8 @@ export type AiEntryPoint =
   | "record_list"    // 記録一覧
   | "calendar"       // カレンダーの日付
   | "report_photo"   // 記録一覧の写真直下
-  | "report_detail"; // 記録詳細シート
+  | "report_detail"  // 記録詳細シート
+  | "work_calendar"; // 分析＞作業暦（去年の記録が無いときの相談の入口）
 
 // ── AI出力の保存（Web版 saveAiOutput と同一） ──
 // entryPoint は必須。任意にすると導線を足したときに書き忘れ、「使われていない」と読めて集計が嘘になる

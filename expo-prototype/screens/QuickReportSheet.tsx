@@ -75,7 +75,11 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
     if (d.work_type != null) setWorkType(d.work_type);
     if (d.work_category_id != null) setWorkCategoryId(d.work_category_id);
     if (d.quantity_unit != null) setQuantityUnit(d.quantity_unit ?? "");
-    if (d.note != null) setNote(d.note);
+    if (d.note != null) {
+      setNote(d.note);
+      // 相談からの判断メモは保存前に本人が読んで直すものなので、畳まずに見せる
+      if (d.note) setExpanded(true);
+    }
     if (d.user_id != null) setUserId(d.user_id);
     if (d.work_start != null || d.work_end != null) {
       setWorkStart(d.work_start ?? "");

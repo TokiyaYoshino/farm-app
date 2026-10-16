@@ -10,11 +10,13 @@ import { isPesticideWorkType, type Report } from "../lib/types";
 import { todayMmDd } from "../lib/date";
 import { dispName } from "../lib/text";
 import Picker from "../ui/Picker";
+import SearchAndShelves from "./SearchAndShelves";
 
 // ─── 分析（src/components/AnalyticsView.tsx の移植・実データ）───────────
-// 年/作物切替 → KPI → 収穫グラフ → 作業時間内訳 → さらに掘る（散布図）
-// → AI出力履歴（ai_outputs・種類フィルタ付き）。
-// GDD・病害虫傾向は daily_weather 連携が必要なためフェーズ2。
+// 言葉で探す → 年/作物切替 → KPI → 収穫グラフ（今年 vs 前年） → AI出力履歴の棚（ai_outputs）。
+// 競合レビュー89件で需要が確認できたのは「振り返り・年次比較（前年同月比）・売上・農薬の使用回数」だけ。
+// 散布図・積算温度（GDD）は言及0件、作業時間の内訳も直接の言及が無いため表示から外した
+// （規約により削除はせず SHOW_UNEVIDENCED で残す。売上は収支タブ、使用回数は農薬タブが持つ）。
 
 // ── AI出力履歴（Web版 AiOutputRow / KIND_LABEL / summarize と同一） ──
 interface DiagnosisJson {
@@ -33,14 +35,17 @@ interface AiOutputRow {
   output_json: (DiagnosisJson & { advice?: { reply?: string } }) | null;
   output_text: string | null;
 }
+// 今の画面の呼び方に揃える（入口は「写真で調べる」なのに履歴だけ「画像診断」だと同じものに見えない）
 const KIND_LABEL: Record<AiOutputRow["kind"], string> = {
-  diagnosis: "画像診断",
-  pest_advice: "防除助言",
+  diagnosis: "写真で調べる",
+  pest_advice: "次の散布時期",
   daily_report: "日報",
-  voice_structure: "音声整理",
+  voice_structure: "話して記録",
   advice: "相談",
   search_chat: "記録に聞く",
 };
+// 需要の根拠が無いグラフ（作業時間の内訳・散布図・積算温度）。表示はしないがコードは残す
+const SHOW_UNEVIDENCED = false;
 const summarize = (o: AiOutputRow): string => {
   if (o.kind === "diagnosis" && o.output_json) {
     const j = o.output_json;
@@ -122,23 +127,28 @@ export default function AnalyticsScreen() {
   const [d2Axis, setD2Axis] = useState<"temp" | "rain">("temp");
 
   // ── AI出力履歴（Web版と同一: organization_id 基準で ai_outputs を取得） ──
+  // 取得に失敗したときは「0件」と見せずに読み込めなかったと出す（2日放置後に空の棚が出た。2026-10-16 の実機確認）
   const [aiOutputs, setAiOutputs] = useState<AiOutputRow[]>([]);
-  const [aiKind, setAiKind] = useState<"all" | AiOutputRow["kind"]>("all");
+  const [aiStatus, setAiStatus] = useState<"loading" | "ok" | "error">("loading");
+  const [aiReload, setAiReload] = useState(0);
   const organizationId = currentUser?.organization_id ?? null;
   useEffect(() => {
     if (!organizationId) return;
     let cancelled = false;
+    setAiStatus("loading");
     (async () => {
-      const { data } = await supabase.from("ai_outputs")
+      const { data, error } = await supabase.from("ai_outputs")
         .select("id,kind,created_at,target_date,field,output_json,output_text")
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false })
         .limit(500);
-      if (!cancelled) setAiOutputs((data ?? []) as AiOutputRow[]);
+      if (cancelled) return;
+      if (error) { setAiStatus("error"); return; }
+      setAiOutputs((data ?? []) as AiOutputRow[]);
+      setAiStatus("ok");
     })();
     return () => { cancelled = true; };
-  }, [organizationId]);
-  const aiRows = aiOutputs.filter(o => aiKind === "all" || o.kind === aiKind).slice(0, 50);
+  }, [organizationId, aiReload]);
 
   const dataYears = Array.from(new Set(reports.map(r => Number(r.date.slice(0, 4)))))
     .filter(y => Number.isFinite(y))
@@ -237,7 +247,9 @@ export default function AnalyticsScreen() {
   );
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 150 }} keyboardShouldPersistTaps="handled">
+      {/* ── 言葉で探す（一番上） ── */}
+      <SearchAndShelves part="search" aiOutputs={aiOutputs} aiStatus={aiStatus} onRetryAi={() => setAiReload(n => n + 1)} kindLabel={KIND_LABEL} summarize={summarize} />
       {/* ── 対象年・作物の切り替え ──
           年はプルダウン（年が増えるとチップが横に伸び、作物のチップと見分けにくかった。オーナー 2026-10-04）。
           作物はチップのまま。年は白地＋▼で「選ぶもの」に見せ、作物の淡緑の選択チップと区別する */}
@@ -327,6 +339,7 @@ export default function AnalyticsScreen() {
         )}
       </View>
 
+      {SHOW_UNEVIDENCED && <>
       {/* ── 作業時間の内訳 ── */}
       <SecTitle icon="clock">作業時間の内訳</SecTitle>
       <View style={cardStyle}>
@@ -384,47 +397,18 @@ export default function AnalyticsScreen() {
         )}
       </View>
 
-      {/* ── AI出力の履歴（Web版と同一: 種類フィルタ+一覧） ── */}
-      <SecTitle icon="star">AIの出力履歴</SecTitle>
-      <View style={[cardStyle, { paddingHorizontal: 0, paddingBottom: 4 }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          <Pressable onPress={() => setAiKind("all")} style={chip(aiKind === "all")}>
-            <Text style={chipText(aiKind === "all")}>すべての種類</Text>
-          </Pressable>
-          {(Object.keys(KIND_LABEL) as AiOutputRow["kind"][]).map(k => (
-            <Pressable key={k} onPress={() => setAiKind(k)} style={chip(aiKind === k)}>
-              <Text style={chipText(aiKind === k)}>{KIND_LABEL[k]}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        {aiRows.length === 0 ? (
-          <View style={{ alignItems: "center", paddingVertical: 24, gap: 8 }}>
-            <Feather name="clock" size={28} color={C.textMuted} />
-            <Text style={{ color: C.textMuted, fontSize: 13 }}>AIの出力がまだありません</Text>
-          </View>
-        ) : (
-          aiRows.map((o, i) => (
-            <View key={o.id} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.hairline }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <View style={{ backgroundColor: C.inkSoft, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: C.ink }}>{KIND_LABEL[o.kind]}</Text>
-                </View>
-                <Text style={{ fontSize: 12, color: C.textMuted }}>{(o.target_date ?? o.created_at).slice(0, 10)}</Text>
-                {!!o.field && <Text style={{ fontSize: 12, color: C.textMuted }}>· {o.field}</Text>}
-              </View>
-              <Text numberOfLines={6} style={{ fontSize: 13, color: C.textSub, lineHeight: 22 }}>
-                {summarize(o)}
-              </Text>
-            </View>
-          ))
-        )}
-      </View>
+      </>}
 
-      {/* ── GDDはフェーズ2で接続 ── */}
+      {/* ── 言葉で探す（記録・相談・AIの出力）＋ AIの出力履歴の棚（docs/decisions/20261012-solo-learning-loop.md） ── */}
+      <SearchAndShelves part="shelves" aiOutputs={aiOutputs} aiStatus={aiStatus} onRetryAi={() => setAiReload(n => n + 1)} kindLabel={KIND_LABEL} summarize={summarize} />
+
+      {/* ── GDDはフェーズ2で接続（需要の根拠が無いため非表示） ── */}
+      {SHOW_UNEVIDENCED && <>
       <SecTitle icon="thermometer">積算温度（GDD）の年次比較</SecTitle>
       <View style={[cardStyle, { marginBottom: 32 }]}>
         {emptyBox("thermometer", "気象データ連携は次フェーズで対応予定です")}
       </View>
+      </>}
     </ScrollView>
   );
 }

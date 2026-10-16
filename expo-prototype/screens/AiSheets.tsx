@@ -22,6 +22,8 @@ import {
 } from "../lib/adviceMatch";
 import { WORK_TEMPLATES, type CropAdviceMessage } from "../lib/types";
 import { todayStr, toDateStr } from "../lib/date";
+import { buildJudgmentMemo } from "../lib/judgmentMemo";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ─── AI機能シート群（src/App.tsx のAI系ボトムシートの移植）────────────────
 // AI日報生成 / 記録検索チャット / 防除タイミング助言 / 画像診断（単体）。
@@ -532,7 +534,7 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
 }) {
   const {
     crops, reports, pesticides, workCategories, cropName, userName, weatherCoords, currentUser,
-    prefetchAllRegistrations, loadCropAdvice, saveCropAdviceTurn, dismissAdviceAction,
+    prefetchAllRegistrations, loadCropAdvice, saveCropAdviceTurn, dismissAdviceAction, openQuickReport,
   } = useStore();
   const organizationId = currentUser?.organization_id ?? null;
   const [selectedCropId, setSelectedCropId] = useState<number | null>(cropId ?? null);
@@ -544,6 +546,12 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
   const [error, setError] = useState("");
   /** 写真診断の結果を相談へ持ち込むときの添付。1ターンだけ送って消す */
   const [photo, setPhoto] = useState<{ text: string; label: string } | null>(null);
+  // 「この判断で記録する」で何が起きるかの一行は、最初の3回押すまでだけ出す（慣れたら邪魔になるため）
+  const MEMO_HINT_KEY = "judgmentMemoUses";
+  const [memoUses, setMemoUses] = useState(0);
+  useEffect(() => {
+    AsyncStorage.getItem(MEMO_HINT_KEY).then(v => setMemoUses(Number(v) || 0)).catch(() => {});
+  }, []);
 
   // 開くたびに呼び出し元の指定に合わせる。未指定は畑全体の相談。
   // 以前は先頭の作付けに寄せていたが、それだと「畑全体で相談する」入口が作れない
@@ -854,6 +862,41 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
                       )}
                       {!!m.registration_facts?.length && <RegistrationFactsBlock facts={m.registration_facts} />}
                       <SourcesBlock sources={m.sources ?? []} limits={m.limits ?? []} />
+                      {/* 相談で決めたことを、その日の記録に「判断メモ」として残す。翌年の自分が
+                          「なぜそうしたか」を引けるようにするため（docs/decisions/20261012-solo-learning-loop.md）。
+                          メモは相談で実際に出た文だけで組み、保存前に記録フォームで本人が直せる */}
+                      {(() => {
+                        const idx = messages.indexOf(m);
+                        const q = [...messages.slice(0, idx)].reverse().find(x => x.role === "user");
+                        const memo = q ? buildJudgmentMemo({
+                          question: q.content, reply: m.content, watchPoints: m.watch_points,
+                          date: m.created_at ? toDateStr(new Date(m.created_at)) : toDateStr(new Date()),
+                        }) : "";
+                        if (!memo) return null;
+                        return (
+                          <>
+                          <Pressable
+                            onPress={() => {
+                              void AsyncStorage.setItem(MEMO_HINT_KEY, String(memoUses + 1)).catch(() => {});
+                              setMemoUses(memoUses + 1);
+                              onClose();
+                              // 相談シートが閉じきってから記録シートを開く（モーダルを2枚同時に出さない）
+                              setTimeout(() => openQuickReport({ ...(selectedCropId != null ? { crop_id: selectedCropId } : {}), note: memo }), 350);
+                            }}
+                            style={{ marginTop: 10, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6,
+                              paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, backgroundColor: C.inkSoft }}
+                          >
+                            <Feather name="edit-3" size={12} color={C.ink} />
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: C.ink }}>この判断で記録する</Text>
+                          </Pressable>
+                          {memoUses < 3 && (
+                            <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 16 }}>
+                              聞いたことと答えが、記録のメモに入ります（保存前に直せます）
+                            </Text>
+                          )}
+                          </>
+                        );
+                      })()}
                     </>
                   )}
                 </View>

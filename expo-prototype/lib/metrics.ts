@@ -1,4 +1,4 @@
-// src/lib/metrics.ts からの移植（純粋TSのため無変更で流用）。
+// src/lib/metrics.ts からの移植（純粋TSのため無変更で流用）。末尾の summarizeAfter のみ Expo 版で追加（Web 未反映）。
 // 収穫量・作業時間の集計ルールを1箇所に集約する。集計は必ずこのモジュールを通す。
 
 /** 集計に必要な最小限のフィールドだけを要求する。 */
@@ -119,4 +119,25 @@ export function formatWorkCountsForPrompt(reports: CountReport[], maxChars?: num
     ...kept,
     ...(dropped > 0 ? [`（文字数の都合でほか${dropped}年分は省略。数えていないだけで、作業が無かったという意味ではない）`] : []),
   ].join("\n");
+}
+
+/**
+ * 判断のあと days 日に、その作物で何が起きたか（記録にある事実だけ）。
+ * 作業暦で「去年の自分の判断」の横に並べ、1人で答え合わせするために使う
+ * （docs/decisions/20261012-solo-learning-loop.md の ③）。判断の当日は数えない（判断そのものの作業のため）。
+ * 散布の判定は呼び出し側から渡す（types.ts の isPesticideWorkType。ここは依存を持たない純粋関数に保つ）。
+ */
+export function summarizeAfter<R extends MetricReport & { date: string; crop_id: number }>(
+  rs: R[], cropId: number, from: string, days: number, isSpray: (workType: string) => boolean,
+): { until: string; works: number; sprays: number; harvestKg: number } {
+  const d = new Date(`${from}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  const until = d.toISOString().slice(0, 10);
+  const after = rs.filter(r => r.crop_id === cropId && r.date > from && r.date <= until);
+  return {
+    until,
+    works: after.length,
+    sprays: after.filter(r => isSpray(r.work_type)).length,
+    harvestKg: Math.round(sumHarvest(after) * 10) / 10,
+  };
 }

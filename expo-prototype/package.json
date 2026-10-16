@@ -8,7 +8,7 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-advice-match.mjs && node scripts/test-maff-ipm.mjs"
+    "test": "node scripts/test-advice-match.mjs && node scripts/test-maff-ipm.mjs && node scripts/test-judgment-memo.mjs && node scripts/test-unified-search.mjs && node scripts/test-after-effect.mjs && node scripts/test-last-year.mjs && node scripts/test-month-digest.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.0",

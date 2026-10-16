@@ -12,6 +12,8 @@ import HomeScreen from "./screens/HomeScreen";
 import ReportScreen from "./screens/ReportScreen";
 import AnalyticsScreen from "./screens/AnalyticsScreen";
 import GanttScreen from "./screens/GanttScreen";
+import WorkCalendarScreen from "./screens/WorkCalendarScreen";
+import CropMoneyScreen from "./screens/CropMoneyScreen";
 import AdviceScreen from "./screens/AdviceScreen";
 import ManageScreen from "./screens/ManageScreen";
 import QuickReportSheet from "./screens/QuickReportSheet";
@@ -29,7 +31,7 @@ import type { Report, Schedule } from "./lib/types";
 
 // ─── ルート（src/App.tsx のヘッダー・サブタブ・ボトムナビ・FAB の移植）────
 type Tab = "home" | "report" | "advice" | "analytics" | "manage";
-type AnalyticsSubTab = "report" | "backlog";
+type AnalyticsSubTab = "report" | "calendar" | "money" | "backlog";
 type ManageSubTab = "crops" | "fields" | "pesticides";
 
 const NAV_ITEMS: { key: Tab; icon: "home" | "edit-3" | "message-circle" | "bar-chart-2" | "settings"; label: string }[] = [
@@ -229,7 +231,14 @@ function Root() {
       {/* サブタブバー（分析・管理のみ） */}
       {tab === "analytics" && (
         <SubTabBar
-          tabs={[{ key: "report" as const, label: "レポート" }, { key: "backlog" as const, label: "計画" }]}
+          // 振り返り（結果）／作業暦（感覚知）／収支（作物ごとの見込み）。計画は既存のまま残す
+          // （docs/decisions/20261011-tacit-knowledge-analytics.md）
+          tabs={[
+            { key: "report" as const, label: "振り返り" },
+            { key: "calendar" as const, label: "作業暦" },
+            { key: "money" as const, label: "収支" },
+            { key: "backlog" as const, label: "計画" },
+          ]}
           value={analyticsSubTab}
           onChange={setAnalyticsSubTab}
         />
@@ -250,7 +259,10 @@ function Root() {
       {tab === "home" && <HomeScreen onGoReport={() => setTab("report")} onQuickReport={() => openQuickReport()} onOpenEntry={m => setEntryMode(m)} />}
       {tab === "report" && <ReportScreen />}
       {tab === "advice" && <AdviceScreen />}
-      {tab === "analytics" && (analyticsSubTab === "report" ? <AnalyticsScreen /> : <GanttScreen />)}
+      {tab === "analytics" && analyticsSubTab === "report" && <AnalyticsScreen />}
+      {tab === "analytics" && analyticsSubTab === "calendar" && <WorkCalendarScreen />}
+      {tab === "analytics" && analyticsSubTab === "money" && <CropMoneyScreen />}
+      {tab === "analytics" && analyticsSubTab === "backlog" && <GanttScreen />}
       {tab === "manage" && <ManageScreen subTab={manageSubTab} onGoCrops={() => setManageSubTab("crops")} />}
 
       {/* FAB（記録）。押すと記録タブの先頭と同じ「作業を選ぶ」シート（記録｜予定）。
