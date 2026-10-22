@@ -259,6 +259,7 @@ This is a business app for farm staff to record field work (tasks, pesticide use
 | 4.2 | 機能が最小限／WebViewラッパー | ネイティブ実装済み（WebView案は不採用: `docs/decisions/20260801-...`） |
 | 5.1.1 | 権限の説明文が不十分 | `app.json` の `infoPlist` に日本語で記載済み |
 | 5.1.1(v) | **アカウント削除をアプリ内で始められること** | 下記。**要注意** |
+| 5.1.2(i) | **個人データを外部のAIに送る前の同意**（2025-11 追加） | 2026-10-17 対応。AI呼び出し（`lib/ai.ts` の `callApi`）の前に1回だけ確認を出し、同意を端末に残す（`lib/aiConsent.ts`）。取り消しは利用者シート「外部のAIへの送信」。審査メモに「初回利用時に同意を取る」と書く |
 | 1.2 | ユーザー生成コンテンツの通報機能 | コメントは同一組織内のみ。閉じた業務利用として説明する |
 | — | サポートURLが無い／連絡先が無い | `public/support.html` を用意。連絡先は【オーナー記入】 |
 

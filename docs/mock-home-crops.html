@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ホーム見本</title>
+<style>
+  :root { --bg:#F5F5F6; --card:#fff; --well:#EFEFF1; --ink:#2E7D32; --inkSoft:#E3F1E4; --text:#1A1C1E; --sub:#66696E; --muted:#9EA1A6; --hair:#EBEBED; --pest:#8E24AA; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:#d9dadc; font-family:-apple-system,"Hiragino Sans",sans-serif; color:var(--text); display:flex; justify-content:center; padding:16px 0; }
+  .phone { width:390px; height:min(844px, calc(100vh - 32px)); background:var(--bg); border-radius:44px; overflow:hidden; position:relative; display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.18); }
+  .status { height:54px; display:flex; align-items:flex-end; justify-content:space-between; padding:0 28px 8px; font-size:15px; font-weight:600; }
+  .header { height:52px; display:flex; align-items:center; padding:0 20px; font-size:20px; font-weight:700; }
+  .header .icons { margin-left:auto; display:flex; gap:10px; }
+  .icon { width:36px; height:36px; border-radius:999px; background:var(--well); display:flex; align-items:center; justify-content:center; color:var(--sub); font-size:15px; }
+  .scroll { flex:1; overflow:auto; padding:4px 16px 16px; display:flex; flex-direction:column; gap:12px; }
+  .meta { font-size:13px; color:var(--sub); padding:0 4px; }
+  .card { background:var(--card); border-radius:20px; box-shadow:0 1px 2px rgba(16,17,20,.04),0 4px 14px rgba(16,17,20,.05); }
+  .hero { padding:18px; }
+  .lbl { font-size:12px; color:var(--sub); }
+  .big { font-size:46px; font-weight:700; line-height:1.05; }
+  .big small { font-size:17px; margin-left:4px; font-weight:600; }
+  .soft { background:var(--inkSoft); color:var(--ink); border-radius:999px; text-align:center; padding:11px; font-size:14px; font-weight:600; margin-top:14px; cursor:pointer; }
+  .sec { font-size:13px; color:var(--sub); padding:4px 4px 0; font-weight:600; }
+  .list { padding:0 16px; }
+  .row { display:flex; align-items:center; gap:12px; padding:14px 0; border-bottom:1px solid var(--hair); cursor:pointer; }
+  .row:last-child { border-bottom:none; }
+  .row:active { background:var(--well); }
+  .row .name { font-size:16px; font-weight:700; }
+  .row .last { font-size:12.5px; color:var(--sub); margin-top:2px; }
+  .plus { width:40px; height:40px; border-radius:999px; background:var(--inkSoft); color:var(--ink); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:500; flex-shrink:0; }
+  .tabbar { height:84px; background:#fff; border-top:1px solid var(--hair); display:flex; padding-top:8px; }
+  .tab { flex:1; text-align:center; font-size:11px; color:var(--muted); }
+  .tab b { display:block; font-size:20px; font-weight:400; }
+  .tab.on { color:var(--ink); }
+  .dim { position:absolute; inset:0; background:rgba(20,21,24,.32); opacity:0; pointer-events:none; transition:opacity .2s; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; height:88%; background:#fff; border-radius:24px 24px 0 0; transform:translateY(100%); transition:transform .25s ease-out; display:flex; flex-direction:column; }
+  .open .dim { opacity:1; pointer-events:auto; }
+  .open .sheet { transform:none; }
+  .grab { width:36px; height:4px; border-radius:999px; background:var(--hair); margin:8px auto 4px; }
+  .shead { display:flex; align-items:center; padding:6px 16px 10px; gap:8px; }
+  .shead .t { flex:1; font-size:20px; font-weight:700; }
+  .pill { font-size:13px; border:1px solid var(--hair); border-radius:999px; padding:5px 12px; font-weight:600; }
+  .x { width:32px; height:32px; border-radius:999px; background:var(--well); display:flex; align-items:center; justify-content:center; color:var(--sub); cursor:pointer; }
+  .months { display:grid; grid-template-columns:repeat(12,1fr); gap:3px; padding:0 16px 10px; }
+  .m { border-radius:7px; text-align:center; font-size:11px; padding:6px 0; background:var(--well); color:var(--muted); }
+  .m.has { background:var(--inkSoft); color:var(--ink); font-weight:700; }
+  .m.now { outline:1.5px solid var(--ink); outline-offset:-1.5px; }
+  .sbody { flex:1; overflow:auto; padding:0 16px 12px; display:flex; flex-direction:column; gap:10px; }
+  .mon { background:var(--bg); border-radius:16px; padding:14px; }
+  .mon h4 { font-size:15px; }
+  .ev { display:flex; gap:8px; margin-top:10px; }
+  .ev .dot { color:var(--pest); font-size:10px; margin-top:4px; }
+  .ev .a { font-size:14px; font-weight:700; }
+  .ev .b { font-size:12px; color:var(--sub); margin-top:1px; }
+  .tag { font-size:11px; color:var(--pest); background:#F3E5F5; border-radius:999px; padding:1px 8px; margin-left:6px; font-weight:700; }
+  .dig { font-size:13px; color:var(--sub); margin-top:8px; display:flex; }
+  .dig span { margin-left:auto; }
+  .mon .dig.first { margin-top:6px; }
+  .sep { border-top:1px solid var(--hair); padding-top:10px; margin-top:10px; }
+  .sfoot { padding:10px 16px 28px; }
+  .primary { background:var(--ink); color:#fff; border-radius:999px; text-align:center; padding:15px; font-size:16px; font-weight:700; }
+  .toast { position:absolute; left:50%; bottom:100px; transform:translateX(-50%); background:#1A1C1E; color:#fff; font-size:13px; padding:9px 14px; border-radius:999px; opacity:0; transition:opacity .2s; pointer-events:none; white-space:nowrap; }
+  .toast.show { opacity:.92; }
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+  <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="header">農作業レポート<div class="icons"><div class="icon">🔔</div><div class="icon">👤</div></div></div>
+  <div class="scroll">
+    <div class="meta">10月17日（金）　21° 快晴　湿度62%</div>
+    <div class="card hero">
+      <div class="lbl">前回の散布から</div>
+      <div class="big">42<small>日</small></div>
+      <div class="lbl" style="margin-top:2px">9/5 ほうれん草・D圃場</div>
+      <div class="soft" onclick="toast('次の散布時期のシートが開きます')">次の散布時期を調べる</div>
+    </div>
+    <div class="sec">作物</div>
+    <div class="card list" id="crops"></div>
+  </div>
+  <div class="tabbar">
+    <div class="tab on"><b>⌂</b>ホーム</div><div class="tab"><b>✎</b>記録</div><div class="tab"><b>◌</b>相談</div><div class="tab"><b>▥</b>分析</div><div class="tab"><b>⚙</b>管理</div>
+  </div>
+  <div class="dim" onclick="closeSheet()"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="shead"><div class="t" id="sTitle"></div><div class="pill">2026年 ▾</div><div class="x" onclick="closeSheet()">✕</div></div>
+    <div class="months" id="months"></div>
+    <div class="sbody" id="sbody"></div>
+    <div class="sfoot"><div class="primary" id="sRec" onclick="toast(this.dataset.msg)"></div></div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+  const crops = [
+    { name:"ほうれん草", last:"収穫 9/24・23日前", has:[1,5,6,7,8,9], months:[
+      { m:"9月", ev:[["9/5 防除（サンケイ石灰硫黄合剤）","D圃場・吉野"]], dig:"収穫 4回（計38kg）・草刈り 1回" },
+      { m:"8月", dig:"収穫 3回（計29kg）・草刈り 2回" },
+      { m:"7月", dig:"収穫 1回" },
+      { m:"6月", ev:[["6/10 防除（サンケイ石灰硫黄合剤）","C圃場・吉野"],["6/13 農薬散布","C圃場・中川・60ml"]], dig:"草刈り 2回・収穫 2回" },
+      { m:"5月", dig:"収穫 3回（計11kg）・草刈り 2回" },
+      { m:"1月", dig:"収穫 1回（計95kg）" } ] },
+    { name:"たまねぎ", last:"定植 10/10・7日前", has:[3,7,9,10], months:[
+      { m:"10月", dig:"定植 1回" }, { m:"9月", dig:"耕うん 1回" }, { m:"7月", dig:"収穫 1回（計40kg）" }, { m:"3月", dig:"施肥 1回" } ] },
+    { name:"キャベツ", last:"防除 9/30・17日前", has:[6,8,9], months:[
+      { m:"9月", ev:[["9/30 防除（丸京印ボルドー液用生石灰）","C圃場・吉野"]], dig:"草刈り 1回" }, { m:"8月", dig:"施肥 1回" }, { m:"6月", dig:"定植 1回" } ] },
+    { name:"にんにく", last:"収穫 7/28・81日前", has:[4,5,7], months:[
+      { m:"7月", dig:"収穫 1回（計22kg）" }, { m:"5月", dig:"草刈り 2回" }, { m:"4月", dig:"施肥 1回" } ] },
+    { name:"ぶどう", last:"施肥 5/20・150日前", has:[5], months:[ { m:"5月", dig:"施肥 1回" } ] },
+  ];
+  const list = document.getElementById("crops");
+  crops.forEach((c, i) => {
+    const r = document.createElement("div");
+    r.className = "row";
+    r.innerHTML = `<div style="flex:1"><div class="name">${c.name}</div><div class="last">最後 ${c.last}</div></div><div class="plus" title="記録する">＋</div>`;
+    r.onclick = () => openSheet(i);
+    r.querySelector(".plus").onclick = e => { e.stopPropagation(); toast(`${c.name}を選んだ状態で、記録画面が開きます`); };
+    list.appendChild(r);
+  });
+  function openSheet(i) {
+    const c = crops[i];
+    document.getElementById("sTitle").textContent = c.name;
+    document.getElementById("months").innerHTML = Array.from({length:12},(_,k)=>k+1)
+      .map(n => `<div class="m ${c.has.includes(n)?"has":""} ${n===10?"now":""}">${n}</div>`).join("");
+    document.getElementById("sbody").innerHTML = c.months.map(mo => `
+      <div class="mon"><h4>${mo.m}</h4>
+        ${(mo.ev||[]).map(e=>`<div class="ev"><span class="dot">●</span><div><div class="a">${e[0]}<span class="tag">散布</span></div><div class="b">${e[1]}</div></div></div>`).join("")}
+        <div class="dig ${mo.ev?"sep":"first"}">${mo.dig}<span>›</span></div>
+      </div>`).join("");
+    const rec = document.getElementById("sRec");
+    rec.textContent = `＋ ${c.name}の作業を記録`;
+    rec.dataset.msg = `${c.name}を選んだ状態で、記録画面が開きます`;
+    document.getElementById("phone").classList.add("open");
+  }
+  function closeSheet() { document.getElementById("phone").classList.remove("open"); }
+  let tt; function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(tt); tt = setTimeout(()=>t.classList.remove("show"), 1600); }
+</script>
+</body>
+</html>
