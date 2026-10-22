@@ -1,0 +1,283 @@
+<title>記録一覧の作り直し</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+
+<style>
+  /* アプリは light 専用のトークン体系なので、このページも単一テーマで組み、色は全て明示的に塗る */
+  :root{
+    --studio:#E5E6E3; --chrome:#2A2D28; --chrome-sub:#63675E; --chrome-mute:#8D9187; --rule:#CBCEC6;
+    /* src/ui/tokens.ts と同値 */
+    --bg:#F5F5F6; --well:#EFEFF1; --card:#FFFFFF;
+    --ink:#2E7D32; --inkSoft:#E4F0E4;
+    --text:#1A1C1E; --textSub:#66696E; --textMuted:#9EA1A6; --hairline:#EBEBED;
+    --danger:#D4453C; --dangerBg:#FBEBEA; --warning:#DD8A0A; --warningBg:#FBF1DF;
+    --info:#3773E1; --infoBg:#E7EEFC; --pest:#7B1FA2; --pestBg:#F3E9F8;
+    --shadow-card:0 1px 2px rgba(16,17,20,.04), 0 8px 24px rgba(16,17,20,.06);
+    --sys:-apple-system,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--studio); color:var(--chrome);
+    font-family:"Noto Sans JP",var(--sys); line-height:1.7; padding:40px 20px 70px;}
+  .wrap{max-width:1120px; margin:0 auto;}
+  .eyebrow{font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--chrome-mute); margin:0 0 10px;}
+  h1{font-size:clamp(25px,4vw,34px); font-weight:700; line-height:1.25; margin:0 0 14px; text-wrap:balance;}
+  .lede{font-size:15px; color:var(--chrome-sub); max-width:60ch; margin:0 0 8px;}
+  .lede b{color:var(--chrome); font-weight:700;}
+
+  /* 実測の対比 */
+  .nums{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:30px 0 6px;}
+  .num{background:rgba(255,255,255,.55); border-radius:14px; padding:14px 16px;}
+  .num .k{font-size:11px; color:var(--chrome-mute); font-weight:700; letter-spacing:.06em;}
+  .num .a{font-size:24px; font-weight:700; color:var(--danger); font-variant-numeric:tabular-nums; line-height:1.3;}
+  .num .b{font-size:24px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; line-height:1.3;}
+  .num .arrow{font-size:12px; color:var(--chrome-mute); margin:0 2px;}
+  .num small{font-size:12px; font-weight:400; color:var(--chrome-sub);}
+
+  h2{font-size:18px; font-weight:700; margin:48px 0 6px; padding-top:20px; border-top:1px solid var(--rule);}
+  .sub{font-size:14px; color:var(--chrome-sub); max-width:60ch; margin:0 0 22px;}
+
+  .boards{display:flex; flex-wrap:wrap; gap:34px; align-items:flex-start;}
+  .board{width:375px; flex:0 0 auto;}
+  .cap{margin:0 0 12px;}
+  .cap h3{font-size:16px; font-weight:700; margin:0 0 6px;}
+  .cap p{font-size:12.5px; color:var(--chrome-sub); margin:0;}
+  .cap p+p{margin-top:5px;}
+  .tag{display:inline-block; font-size:11px; font-weight:700; border-radius:999px; padding:2px 9px; margin-top:8px;}
+  .t-now{background:var(--dangerBg); color:var(--danger);}
+  .t-new{background:var(--inkSoft); color:var(--ink);}
+
+  .phone{background:var(--bg); border-radius:30px; overflow:hidden; border:7px solid #fff;
+    box-shadow:0 18px 44px rgba(20,24,18,.20); font-family:var(--sys); color:var(--text); line-height:1.5;}
+  .appbar{background:#fff; padding:13px 16px; display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--hairline);}
+  .appbar .t{font-size:16px; font-weight:700;}
+  .av{width:26px; height:26px; border-radius:999px; background:var(--well);}
+  .screen{padding:12px; display:flex; flex-direction:column; gap:10px;}
+  .clip{max-height:660px; overflow:hidden; position:relative;}
+  .clip::after{content:""; position:absolute; left:0; right:0; bottom:0; height:70px;
+    background:linear-gradient(to bottom, rgba(245,245,246,0), var(--bg));}
+
+  .search{background:#fff; border-radius:20px; box-shadow:var(--shadow-card); padding:11px 14px;
+    font-size:14px; color:var(--textMuted); display:flex; gap:9px;}
+  .chips{display:flex; gap:7px; overflow:hidden;}
+  .chip{background:var(--well); border-radius:999px; padding:6px 11px; font-size:11.5px; color:var(--textSub); white-space:nowrap;}
+  .util{display:flex; gap:7px; align-items:center; font-size:11.5px; color:var(--textMuted);}
+  .btn-s{background:#fff; border:1px solid var(--hairline); border-radius:999px; padding:7px 12px;
+    font-size:12px; font-weight:700; color:var(--text); margin-left:auto;}
+
+  /* 今：個別カード */
+  .c{background:var(--card); border-radius:20px; box-shadow:var(--shadow-card); padding:14px 16px;}
+  .chead{display:flex; align-items:center; gap:8px;}
+  .dot{width:9px; height:9px; border-radius:999px; flex:0 0 auto;}
+  .nm{font-weight:700; font-size:14px;}
+  .sm{font-size:12px; color:var(--textMuted);}
+  .badge{font-size:11px; font-weight:700; border-radius:999px; padding:3px 9px; white-space:nowrap;}
+  .b-pest{background:var(--infoBg); color:var(--info);}
+  .b-mow{background:#EAF0DD; color:#5C7A2E;}
+  .b-harv{background:var(--inkSoft); color:var(--ink);}
+  .hr{height:1px; background:var(--hairline); margin:11px -16px;}
+  .meta{font-size:12px; color:var(--textMuted);}
+  .acts{display:flex; gap:8px; margin-top:11px;}
+  .acts span{flex:1; text-align:center; border-radius:999px; padding:8px; font-size:12px; font-weight:700;}
+  .a1{background:#fff; border:1px solid var(--hairline); color:var(--text);}
+  .a2{background:var(--inkSoft); color:var(--ink);}
+  .photo{height:88px; border-radius:14px; margin-top:9px;
+    background:linear-gradient(150deg,#7C9A5E,#5E7A44 55%,#48603A);}
+
+  /* 変更後：1枚のカードに行 */
+  .list{background:var(--card); border-radius:20px; box-shadow:var(--shadow-card); padding:0 16px;}
+  .row{display:flex; align-items:center; gap:10px; padding:12px 0;}
+  .row+.row{border-top:1px solid var(--hairline);}
+  .row .body{flex:1; min-width:0;}
+  .row .l1{display:flex; align-items:center; gap:7px;}
+  .row .l2{font-size:11.5px; color:var(--textMuted); margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .thumb{width:38px; height:38px; border-radius:9px; flex:0 0 auto;
+    background:linear-gradient(150deg,#7C9A5E,#5E7A44 55%,#48603A);}
+  .chev{color:var(--textMuted); font-size:15px; flex:0 0 auto;}
+  .dhead{font-size:11px; font-weight:700; color:var(--textMuted); padding:12px 0 4px;
+    letter-spacing:.04em;}
+
+  .note{background:var(--warningBg); border-radius:14px; padding:14px 16px; font-size:13.5px;
+    color:#6B4708; margin:26px 0 0; line-height:1.75;}
+  .note b{color:#503505;}
+  .ol{font-size:14px; color:var(--chrome-sub); padding-left:1.25em; margin:0;}
+  .ol li{margin-bottom:8px;}
+  .ol b{color:var(--chrome);}
+  @media (max-width:820px){ .board{width:100%; max-width:375px;} }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">ノウレコ / 記録一覧</p>
+  <h1>1件ずつのカードをやめて、1枚に行を積む</h1>
+  <p class="lede">
+    記録一覧は<b>1件が1枚のカード</b>になっていて、31件を見るのに<b>画面7個分</b>スクロールする。
+    各カードに「詳細を見る」「コピーして作成」「⋮」が付くので、<b>ボタンが94個</b>並ぶ。
+  </p>
+  <p class="lede">
+    これは <code>CLAUDE.md</code> が既に「理想」と書いている形へ移していないだけ ——
+    <b>「リストは個別カードでなく1枚のカードに hairline 区切りの行、が理想」</b>。
+  </p>
+
+  <div class="nums">
+    <div class="num"><div class="k">スクロール量</div><div class="a">7.0<small> 画面</small></div>
+      <div><span class="arrow">↓</span><span class="b">2.3<small> 画面</small></span></div></div>
+    <div class="num"><div class="k">1件あたりの高さ</div><div class="a">167<small> px</small></div>
+      <div><span class="arrow">↓</span><span class="b">56<small> px</small></span></div></div>
+    <div class="num"><div class="k">画面内に見える件数</div><div class="a">約4<small> 件</small></div>
+      <div><span class="arrow">↓</span><span class="b">約11<small> 件</small></span></div></div>
+    <div class="num"><div class="k">並ぶボタン</div><div class="a">94<small> 個</small></div>
+      <div><span class="arrow">↓</span><span class="b">0<small> 個</small></span></div></div>
+  </div>
+  <p class="sub" style="margin-top:10px;">実測（375px 幅・実データ31件）。変更後は行の高さから算出した見込み。</p>
+
+  <h2>画面</h2>
+  <p class="sub">左が今、右が変更後。どちらも同じ31件を表示している。</p>
+
+  <div class="boards">
+
+    <!-- 今 -->
+    <div class="board">
+      <div class="cap">
+        <h3>今</h3>
+        <p>1件が1枚のカード。作物・圃場・作業・日付に加えて、数量・担当・天気・メモ・写真・ボタン2つが毎回入る。</p>
+        <p><b>どれも同じ見た目なので、目で追う手がかりがない。</b>探しているものが上にあるのか下にあるのか分からないまま、指で送り続けることになる。</p>
+        <p class="tag t-now">画面7.0個分 / ボタン94個</p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">作業記録</span><span class="av"></span></div>
+        <div class="screen clip">
+          <div class="search">◌ メモ・作物・圃場・作業で検索</div>
+          <div class="chips"><span class="chip">作物：すべて</span><span class="chip">圃場：すべて</span><span class="chip">作業：すべて</span></div>
+          <div class="util">31件の記録 <span class="btn-s">日報にまとめる</span></div>
+
+          <div class="c">
+            <div class="chead"><span class="dot" style="background:#C08A2E;"></span>
+              <span class="nm">ほうれん草</span><span class="sm">· C圃場</span>
+              <span class="badge b-pest" style="margin-left:auto;">農薬散布</span><span class="sm">08-20</span></div>
+            <div class="hr"></div>
+            <div class="meta">100kg · 中川 · 晴れ 31℃</div>
+            <div class="acts"><span class="a1">詳細を見る</span><span class="a2">コピーして作成</span></div>
+          </div>
+
+          <div class="c">
+            <div class="chead"><span class="dot" style="background:#C08A2E;"></span>
+              <span class="nm">ほうれん草</span><span class="sm">· C圃場</span>
+              <span class="badge b-mow" style="margin-left:auto;">草刈り</span><span class="sm">08-03</span></div>
+            <div class="hr"></div>
+            <div class="meta">10:30〜14:08 · 泉吹 · 一部曇り 25.7℃</div>
+            <div class="photo"></div>
+            <div class="acts"><span class="a1">詳細を見る</span><span class="a2">コピーして作成</span></div>
+          </div>
+
+          <div class="c">
+            <div class="chead"><span class="dot" style="background:#7B1FA2;"></span>
+              <span class="nm">たまねぎ</span><span class="sm">· D圃場</span>
+              <span class="badge b-harv" style="margin-left:auto;">収穫</span><span class="sm">07-29</span></div>
+            <div class="hr"></div>
+            <div class="meta">12kg · 2h · 中川 · 晴れ 31.5℃</div>
+            <div class="acts"><span class="a1">詳細を見る</span><span class="a2">コピーして作成</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 変更後 -->
+    <div class="board">
+      <div class="cap">
+        <h3>変更後</h3>
+        <p>1枚のカードに区切り線の行を積む。行は<b>作物・圃場・作業・日付</b>だけにし、写真は小さく添える。</p>
+        <p><b>月の見出しで区切るので、どこを見ているかが分かる。</b>「先月の防除」を探すとき、指を送りながら現在地が読める。</p>
+        <p>ボタンは消す。<b>行をタップ＝詳細</b>で、コピーは詳細の中に置く。毎回2つ選ばせる必要はない。</p>
+        <p class="tag t-new">画面2.3個分 / ボタン0個</p>
+      </div>
+      <div class="phone">
+        <div class="appbar"><span class="t">作業記録</span><span class="av"></span></div>
+        <div class="screen clip">
+          <div class="search">◌ メモ・作物・圃場・作業で検索</div>
+          <div class="chips"><span class="chip">作物：すべて</span><span class="chip">圃場：すべて</span><span class="chip">作業：すべて</span></div>
+          <div class="util">31件の記録 <span class="btn-s">日報にまとめる</span></div>
+
+          <div class="dhead">2026年8月</div>
+          <div class="list">
+            <div class="row">
+              <span class="dot" style="background:#C08A2E;"></span>
+              <span class="body">
+                <span class="l1"><b class="nm">ほうれん草</b><span class="badge b-pest">農薬散布</span></span>
+                <span class="l2">08-20 · C圃場 · 100kg · 中川</span>
+              </span><span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background:#C08A2E;"></span>
+              <span class="body">
+                <span class="l1"><b class="nm">ほうれん草</b><span class="badge b-mow">草刈り</span></span>
+                <span class="l2">08-03 · C圃場 · 3時間38分 · 泉吹</span>
+              </span><span class="thumb"></span><span class="chev">›</span>
+            </div>
+          </div>
+
+          <div class="dhead">2026年7月</div>
+          <div class="list">
+            <div class="row">
+              <span class="dot" style="background:#7B1FA2;"></span>
+              <span class="body">
+                <span class="l1"><b class="nm">たまねぎ</b><span class="badge b-harv">収穫</span></span>
+                <span class="l2">07-29 · D圃場 · 12kg · 中川</span>
+              </span><span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background:#B15A2E;"></span>
+              <span class="body">
+                <span class="l1"><b class="nm">にんにく</b><span class="badge b-harv">収穫</span></span>
+                <span class="l2">07-28 · C圃場 · 42kg · 中川</span>
+              </span><span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background:#B15A2E;"></span>
+              <span class="body">
+                <span class="l1"><b class="nm">にんにく</b><span class="badge b-harv">収穫</span></span>
+                <span class="l2">07-15 · C圃場 · 38kg · 泉吹</span>
+              </span><span class="chev">›</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background:#C08A2E;"></span>
+              <span class="body">
+                <span class="l1"><b class="nm">ほうれん草</b><span class="badge b-pest">農薬散布</span></span>
+                <span class="l2">07-02 · C圃場 · 中川</span>
+              </span><span class="chev">›</span>
+            </div>
+          </div>
+
+          <div class="dhead">2026年6月</div>
+          <div class="list">
+            <div class="row">
+              <span class="dot" style="background:#C08A2E;"></span>
+              <span class="body">
+                <span class="l1"><b class="nm">ほうれん草</b><span class="badge b-harv">収穫</span></span>
+                <span class="l2">06-13 · C圃場 · 216kg · 吉野</span>
+              </span><span class="chev">›</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>捨てるものと、捨てないもの。</b>
+    行から落とすのは<b>天気・メモ本文・大きな写真</b>で、どれも詳細を開けば全部ある。
+    <b>作物・圃場・作業・日付・数量・担当は残す</b> ——
+    これは農薬取締法の省令が帳簿に記載するよう求めている5項目にほぼ対応していて、
+    一覧から消すと「求められたら出せる」状態が画面上で確認できなくなる。
+    削るのは見せ方であって、記録そのものではない。
+  </div>
+
+  <h2>変更の中身</h2>
+  <ol class="ol">
+    <li><b>個別カード → 1枚のカードに行</b>。<code>CLAUDE.md</code> のレイアウト規則が既に理想としている形</li>
+    <li><b>月の見出しで区切る</b>。現在地が分かるようになり、目で追う手がかりができる</li>
+    <li><b>行のボタンを外す</b>。行をタップ＝詳細、コピーは詳細の中へ。94個 → 0個</li>
+    <li><b>写真は38pxのサムネイル</b>。あることは分かり、場所は食わない</li>
+  </ol>
+</div>
