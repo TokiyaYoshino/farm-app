@@ -60,11 +60,7 @@ export default function AdviceScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
-      {/* 空状態の一行だけ置き、説明文は書かない（20260824-no-manual-test.md）。
-          汎用AIとの違いはここでしか言えないので、そこだけ明示する */}
-      <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 18, marginBottom: 12 }}>
-        その作付けの記録と農薬の登録内容もふまえて答えます。
-      </Text>
+      {/* 冒頭の説明文は置かない。一覧の行（畑全体・作物ごと）だけで分かる（オーナー 2026-10-17） */}
 
       <View style={{ backgroundColor: C.card, borderRadius: RADIUS.card, ...SHADOW.card, paddingHorizontal: 16 }}>
         {targets.map((t, i) => (

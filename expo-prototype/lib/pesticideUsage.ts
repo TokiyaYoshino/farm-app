@@ -246,6 +246,13 @@ export function summarizeUsageByCrop(params: {
 // ─── 表示文言（画面とAIプロンプトで同じ言い回しを使う）──────────────
 // 「OK」「安全」「使用可能」と読める文言は絶対に置かない。
 
+/** 作物に紐付いた FAMIC 作物名と一致する適用行。summarizeUsage と同じ突き合わせ（NFKC で揃える）を使う */
+export function matchedRegistrations<T extends { crop_name?: string | null }>(registrations: T[], famicCropName: string | null | undefined): T[] {
+  if (!famicCropName) return [];
+  const f = normalize(famicCropName);
+  return registrations.filter(r => normalize(r.crop_name ?? "") === f);
+}
+
 /** 判定に対応する警告・注意の文。"under" は事実だけを出すので文を持たない（null）。
  *
  *  文言は農家が普段使う言葉だけにする。「FAMIC」「照合」「適用行」「紐付け」といった
@@ -257,7 +264,7 @@ export function verdictMessage(s: UsageSummary): string | null {
   if (s.verdict === "under") return null; // 事実のみ提示する。可否の断定はしない
   switch (s.unknownReason) {
     case "no_famic_crop_name":
-      return "作物名が未確定なので、使いすぎを見張れません。";
+      return "作物名がラベルの書き方とまだ合っていないので、使いすぎを見張れません。";
     case "no_registration":
       return "この農薬のラベル情報がまだありません。「ラベルの内容を見る」を一度押してください。";
     case "no_matching_row":

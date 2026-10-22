@@ -176,6 +176,18 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
   // ── 登録（Web版 addReport のペイロード構築と同一） ──
   const submit = async () => {
     if (!date || !workType || submitting) return;
+    // 防除で農薬を選ばずに保存すると、農薬名の無い防除の記録になる（法令の記帳が欠ける）。
+    // 防虫ネットなど農薬を使わない防除もあるので止めはせず、一度だけ確かめる
+    if (isPesticideWorkType(workType) && pesticides.length > 0 && selectedPesticides.length === 0) {
+      Alert.alert("農薬が選ばれていません", "農薬を使っていなければ、このまま記録してください。", [
+        { text: "農薬を選ぶ", style: "cancel" },
+        { text: "このまま記録する", onPress: () => { void save(); } },
+      ]);
+      return;
+    }
+    await save();
+  };
+  const save = async () => {
     setSubmitting(true);
     const pw = periodWeather;
     const w = pw ? null : wxAuto;
@@ -312,6 +324,106 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
           </Pressable>
         </View>
 
+        {/* 数量（収穫量など）。単位のある作業では量が記録の中身なので、「詳細を入力」の中に隠さない。
+            量が抜けると分析の収穫量が実際より少なく出る（2026-10-17 新人の初日をなぞる確認） */}
+        {showQuantity && (
+          <>
+            <Text style={lbl}>{workType === "収穫" ? "収穫量" : "数量"}{(quantityUnit || selectedCat?.unit) ? `（${quantityUnit || selectedCat?.unit}）` : ""}</Text>
+            <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 12 }}>
+              <TextInput
+                value={quantity}
+                onChangeText={setQuantity}
+                placeholder="例: 20"
+                placeholderTextColor={C.textMuted}
+                keyboardType="numeric"
+                style={[underlineInput, { flex: 1, marginBottom: 0 }]}
+              />
+              <TextInput
+                value={quantityUnit}
+                onChangeText={setQuantityUnit}
+                // 未入力でも保存時は作業の種類の単位が入る。空欄の「単位」だと何も入らないように見えた
+                placeholder={selectedCat?.unit || "単位"}
+                placeholderTextColor={C.textMuted}
+                style={[underlineInput, { width: 70, marginBottom: 0, fontSize: 13 }]}
+              />
+            </View>
+          </>
+        )}
+
+        {/* 農薬複数選択（防除のときのみ・Web版と同一の出し分け）。防除の記録で農薬名が抜けないよう、
+            「詳細を入力」の中ではなく常に見える位置に置く（2026-10-17 新人の初日をなぞる確認） */}
+        {isPesticideWorkType(workType) && (
+          <>
+            <Text style={lbl}>使った農薬</Text>
+            {pesticides.length === 0 ? (
+              <View style={{ backgroundColor: C.bg, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, color: C.textMuted }}>登録済みの農薬がありません</Text>
+              </View>
+            ) : (
+              <View style={{ borderWidth: 1.5, borderColor: C.border, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 10, marginBottom: 12, backgroundColor: "#fff" }}>
+                {pesticides.map(p => {
+                  const checked = selectedPesticides.includes(p.id);
+                  return (
+                    <View key={p.id}>
+                      <Pressable
+                        onPress={() => setSelectedPesticides(prev => checked ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 }}
+                      >
+                        <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: checked ? C.ink : C.border, backgroundColor: checked ? C.ink : "#fff", alignItems: "center", justifyContent: "center" }}>
+                          {checked && <Feather name="check" size={12} color="#fff" />}
+                        </View>
+                        <Text style={{ fontSize: 14, color: C.text, flex: 1 }}>{dispName(p.name)}</Text>
+                        {!!p.type && <Text style={{ fontSize: 11, color: C.textMuted }}>{p.type}</Text>}
+                      </Pressable>
+                      {checked && (
+                        <TextInput
+                          value={pesticideAmounts[p.id] ?? ""}
+                          onChangeText={v => setPesticideAmounts(prev => ({ ...prev, [p.id]: v }))}
+                          placeholder="散布量（例: 100L）"
+                          placeholderTextColor={C.textMuted}
+                          style={{ marginLeft: 26, marginBottom: 6, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: C.well, borderRadius: 8, fontSize: 13, color: C.text }}
+                        />
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* 選択中の農薬 × 選択中の作物の使用状況（Web版と同一）。記録は事後入力なので
+                散布前の抑止にはならないが、超過に気づいて出荷判断・次回以降の計画に反映
+                できるようにする。既定は要点のみ（compact）で、詳細は行タップで展開する */}
+            {selectedPesticides.length > 0 && (() => {
+              const crop = crops.find(c => c.id === cropId);
+              if (!crop) {
+                return (
+                  <View style={{ backgroundColor: C.well, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12, color: C.textSub, lineHeight: 18 }}>
+                      作物を選ぶと、使用回数が出ます。
+                    </Text>
+                  </View>
+                );
+              }
+              return selectedPesticides.map(id => {
+                const p = pesticides.find(x => x.id === id);
+                if (!p) return null;
+                return (
+                  <PesticideUsageCard
+                    key={id}
+                    title={`${dispName(p.name)} の使用状況`}
+                    compact
+                    summaries={summarizeUsageByCrop({
+                      pesticideId: id, crops: [crop], reports,
+                      registrations: pRegs[id] ?? [],
+                    })}
+                    onSetupCrop={onGoManageCrops}
+                  />
+                );
+              });
+            })()}
+          </>
+        )}
+
         {/* 詳細アコーディオン */}
         <Btn
           variant="secondary"
@@ -352,30 +464,6 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
               <Feather name="chevron-down" size={14} color={C.textMuted} />
             </Pressable>
 
-            {/* 実績数量 */}
-            {showQuantity && (
-              <>
-                <Text style={lbl}>実績数量{quantityUnit ? `（${quantityUnit}）` : ""}</Text>
-                <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 12 }}>
-                  <TextInput
-                    value={quantity}
-                    onChangeText={setQuantity}
-                    placeholder="例: 20"
-                    placeholderTextColor={C.textMuted}
-                    keyboardType="numeric"
-                    style={[underlineInput, { flex: 1, marginBottom: 0 }]}
-                  />
-                  <TextInput
-                    value={quantityUnit}
-                    onChangeText={setQuantityUnit}
-                    placeholder="単位"
-                    placeholderTextColor={C.textMuted}
-                    style={[underlineInput, { width: 70, marginBottom: 0, fontSize: 13 }]}
-                  />
-                </View>
-              </>
-            )}
-
             {/* 作業時刻 */}
             <Text style={lbl}>作業時刻</Text>
             <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 12 }}>
@@ -395,79 +483,6 @@ export default function QuickReportSheet({ open, onClose, onGoManageCrops }: Pro
                 {parseFloat(periodWeather.rain) > 0 && <Text style={{ fontSize: 12, color: C.textSub }}>雨量{periodWeather.rain}mm</Text>}
                 <Text style={{ fontSize: 11, color: C.textMuted, marginLeft: "auto" }}>自動取得</Text>
               </View>
-            )}
-
-            {/* 農薬複数選択（防除のときのみ・Web版と同一の出し分け） */}
-            {isPesticideWorkType(workType) && (
-              <>
-                <Text style={lbl}>使用農薬（任意）</Text>
-                {pesticides.length === 0 ? (
-                  <View style={{ backgroundColor: C.bg, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 12 }}>
-                    <Text style={{ fontSize: 12, color: C.textMuted }}>登録済みの農薬がありません</Text>
-                  </View>
-                ) : (
-                  <View style={{ borderWidth: 1.5, borderColor: C.border, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 10, marginBottom: 12, backgroundColor: "#fff" }}>
-                    {pesticides.map(p => {
-                      const checked = selectedPesticides.includes(p.id);
-                      return (
-                        <View key={p.id}>
-                          <Pressable
-                            onPress={() => setSelectedPesticides(prev => checked ? prev.filter(x => x !== p.id) : [...prev, p.id])}
-                            style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 }}
-                          >
-                            <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: checked ? C.ink : C.border, backgroundColor: checked ? C.ink : "#fff", alignItems: "center", justifyContent: "center" }}>
-                              {checked && <Feather name="check" size={12} color="#fff" />}
-                            </View>
-                            <Text style={{ fontSize: 14, color: C.text, flex: 1 }}>{dispName(p.name)}</Text>
-                            {!!p.type && <Text style={{ fontSize: 11, color: C.textMuted }}>{p.type}</Text>}
-                          </Pressable>
-                          {checked && (
-                            <TextInput
-                              value={pesticideAmounts[p.id] ?? ""}
-                              onChangeText={v => setPesticideAmounts(prev => ({ ...prev, [p.id]: v }))}
-                              placeholder="散布量（例: 100L）"
-                              placeholderTextColor={C.textMuted}
-                              style={{ marginLeft: 26, marginBottom: 6, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: C.well, borderRadius: 8, fontSize: 13, color: C.text }}
-                            />
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {/* 選択中の農薬 × 選択中の作物の使用状況（Web版と同一）。記録は事後入力なので
-                    散布前の抑止にはならないが、超過に気づいて出荷判断・次回以降の計画に反映
-                    できるようにする。既定は要点のみ（compact）で、詳細は行タップで展開する */}
-                {selectedPesticides.length > 0 && (() => {
-                  const crop = crops.find(c => c.id === cropId);
-                  if (!crop) {
-                    return (
-                      <View style={{ backgroundColor: C.well, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 }}>
-                        <Text style={{ fontSize: 12, color: C.textSub, lineHeight: 18 }}>
-                          作物が未選択のため、農薬の使用回数は判定できません。作物を選ぶと作付けごとの使用実績を表示します。
-                        </Text>
-                      </View>
-                    );
-                  }
-                  return selectedPesticides.map(id => {
-                    const p = pesticides.find(x => x.id === id);
-                    if (!p) return null;
-                    return (
-                      <PesticideUsageCard
-                        key={id}
-                        title={`${p.name} の使用状況`}
-                        compact
-                        summaries={summarizeUsageByCrop({
-                          pesticideId: id, crops: [crop], reports,
-                          registrations: pRegs[id] ?? [],
-                        })}
-                        onSetupCrop={onGoManageCrops}
-                      />
-                    );
-                  });
-                })()}
-              </>
             )}
 
             {/* 土壌pH（施肥のときのみ・Web版と同一の出し分け） */}

@@ -6,6 +6,7 @@ import { wmoToLabel } from "./weather";
 import type { Report, Pesticide } from "./types";
 import { formatWorkCountsForPrompt } from "./metrics";
 import { todayStr, toDateStr } from "./date";
+import { ensureAiConsent } from "./aiConsent";
 
 // Web版本番（Vercel）。api/ ディレクトリのサーバーレス関数がここに載っている
 export const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://kishu-farm.vercel.app";
@@ -215,6 +216,10 @@ async function callApi<T>(path: string, body: unknown): Promise<{ ok: true; data
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) return { ok: false, error: "ログインが必要です。ログインし直してください。" };
+    // 外部のAIに記録を送る前に同意をもらう（審査ガイドライン 5.1.2(i)。lib/aiConsent.ts）
+    if (!(await ensureAiConsent(session.user.id))) {
+      return { ok: false, error: "外部のAIへの送信に同意すると使えます。" };
+    }
     const res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

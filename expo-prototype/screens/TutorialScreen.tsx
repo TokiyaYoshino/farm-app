@@ -105,7 +105,9 @@ export default function TutorialScreen({ onDone, preview = false }: Props) {
             </View>
           </View>
           <View style={{ paddingHorizontal: 28 }}>
-            <Text style={title}>作業を押せば、{"\n"}それで記録になる</Text>
+            {/* 作業を選んで「記録する」を押す、が実際の動き。「押せばそれで記録になる」だと、作業を押しただけで
+                記録したつもりになる（2026-10-17 新人の初日をなぞる確認） */}
+            <Text style={title}>記録は、{"\n"}選んで押すだけ</Text>
             <Text style={body}>日付と天気は自動で入ります。手が汚れていても、声で残せます。</Text>
           </View>
         </View>

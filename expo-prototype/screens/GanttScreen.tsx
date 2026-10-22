@@ -108,6 +108,8 @@ export default function GanttScreen() {
           <Text style={{ fontWeight: "700", fontSize: 15, color: C.text }}>
             {monthGroups[0]?.label} 〜 {monthGroups[monthGroups.length - 1]?.label}
           </Text>
+          {/* 期間の外の件数は、説明文ではなく期間の横に数字だけ出す（2026-10-17） */}
+          {offRangeCount > 0 && <Text style={{ fontSize: 11, color: C.textMuted }}>期間外 {offRangeCount}件</Text>}
           {(todayIdx < 0 || todayIdx >= totalDays) && (
             <Pressable
               onPress={() => setViewStart(new Date(today.getFullYear(), today.getMonth(), 1))}
@@ -230,10 +232,8 @@ export default function GanttScreen() {
             </View>
           </View>
 
-          <Text style={{ fontSize: 11, color: C.textMuted, paddingHorizontal: 16, marginTop: 10 }}>
-            バーをタップすると詳細を表示します。計画の追加・編集はWeb版から行えます
-            {offRangeCount > 0 ? `\nこの期間の外に${offRangeCount}件あります（< > で期間を動かせます）` : ""}
-          </Text>
+          {/* 計画はアプリでは見るだけ。編集の案内もアプリ内では出さない。計画の扱い（アプリで編集できるようにするか）は
+              リリース後に決める（オーナー 2026-10-17・docs/roadmap.md） */}
         </ScrollView>
       )}
 

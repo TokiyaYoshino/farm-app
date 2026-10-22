@@ -6,7 +6,6 @@ import Btn from "../ui/Btn";
 import { useStore } from "../lib/store";
 import { canUseAiFeature } from "../lib/ai";
 import { lastSpray } from "../lib/pesticideUsage";
-import FieldMapSheet from "./FieldMapSheet";
 import { PestAdviceSheet, AdviseSheet, SearchChatSheet, PhotoDiagnosisSheet, diagnosisForAdvise } from "./AiSheets";
 import { todayStr, toDateStr, shiftDays } from "../lib/date";
 import { dispName } from "../lib/text";
@@ -30,7 +29,6 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
     crops, pesticides,
     workStartedAt, startWork, stopWork, refreshing, refresh, openQuickReport,
   } = useStore();
-  const [showMap, setShowMap] = useState(false);
   // 今日の一手の詳細（農薬名）は押すと開く。ふだんは「日付 · 場所」の1行だけ
   const [showSprayDetail, setShowSprayDetail] = useState(false);
   const [showPestAdvice, setShowPestAdvice] = useState(false);
@@ -99,7 +97,7 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
     </View>
   ) : null;
 
-  // 相談・記録一覧・圃場マップを1枚に並べる行（hairline 区切り）
+  // 相談・記録一覧を1枚に並べる行（hairline 区切り）
   const linkRow = (first: boolean) => ({
     flexDirection: "row" as const, alignItems: "center" as const, gap: 10,
     paddingVertical: 13,
@@ -180,7 +178,8 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
             <Btn variant="soft" size="md" style={{ alignSelf: "stretch", marginTop: 12 }}
               onPress={() => setShowPestAdvice(true)}
               icon={<Feather name="wind" size={14} color={C.ink} />}>
-              次の散布時期
+              {/* 押すと処理が走るボタンなので動詞（シートの見出しは「次の散布時期」のまま。2026-10-17） */}
+              次の散布時期を調べる
             </Btn>
           </View>
         );
@@ -251,7 +250,8 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
                 見出し・位置・開く先は変えていない（entry_point の比較は位置と導線で見る） */}
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>
-                {crops.length === 1 ? `${crops[0].name}のことを相談する` : "相談する"}
+                {/* 別画面へ移るだけの行なので体言止め（CLAUDE.md UI文言の語形。2026-10-17） */}
+                {crops.length === 1 ? `${crops[0].name}の相談` : "相談"}
               </Text>
             </View>
             <Feather name="chevron-right" size={16} color={C.textMuted} />
@@ -268,14 +268,8 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
           <Feather name="chevron-right" size={16} color={C.textMuted} />
         </Pressable>
 
-        {/* 圃場マップ */}
-        <Pressable onPress={() => setShowMap(true)} style={linkRow(false)}>
-          <Feather name="map-pin" size={16} color={C.textMuted} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>圃場マップ</Text>
-          </View>
-          <Feather name="chevron-right" size={16} color={C.textMuted} />
-        </Pressable>
+        {/* 圃場マップは 管理＞圃場 へ移した。毎日開くホームに、初日に1回見れば足りる行を置かない
+            （docs/decisions/20261010-feature-inventory.md #14 → 20261017-first-day-walkthrough.md） */}
       </View>
 
       {/* 新着コメント */}
@@ -300,7 +294,6 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
         </View>
       )}
 
-      <FieldMapSheet open={showMap} onClose={() => setShowMap(false)} />
       <PestAdviceSheet open={showPestAdvice} onClose={() => setShowPestAdvice(false)} entryPoint="home" />
       {/* 作物が1件ならその作付け、0件・複数なら畑全体。目立つ入口を常に畑全体
           （＝農薬の登録情報を照合できない側）へ固定しない

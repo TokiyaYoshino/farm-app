@@ -83,7 +83,7 @@ export default function FieldMapSheet({ open, onClose }: Props) {
       </View>
       {located.length === 0 && (
         <Text style={{ fontSize: 12, color: C.textMuted, paddingHorizontal: 16, marginTop: 10, lineHeight: 18 }}>
-          位置が設定された圃場がありません。管理タブ → 圃場 →「現在地」で圃場にいる時に位置を記録できます。
+          畑にいるとき、圃場の「現在地」で位置を登録できます
         </Text>
       )}
     </BottomSheet>

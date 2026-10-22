@@ -57,31 +57,26 @@ const metaText = { fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1
 
 function SummaryRow({ s, compact, onSetupCrop }: { s: UsageSummary; compact: boolean; onSetupCrop?: () => void }) {
   const [open, setOpen] = useState(false);
-  const showDetail = !compact || open;
+  // 管理タブでも作物ごとの説明・集計期間・使用日は押したときだけ出す。印と回数だけで一覧できるようにする。
+  // 超過の疑いの文だけは常に出す（気づいてほしいので隠さない）（オーナー 2026-10-17）
+  void compact;
+  const showDetail = open;
   const message = verdictMessage(s);
 
   return (
     <View style={{ backgroundColor: C.card, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6, shadowColor: "#101114", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2, elevation: 1 }}>
       <Pressable
-        onPress={() => compact && setOpen(o => !o)}
+        onPress={() => setOpen(o => !o)}
         style={{ flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0 }}
       >
-        {compact && (
-          <Feather name={open ? "chevron-down" : "chevron-right"} size={13} color={C.textMuted} />
-        )}
+        <Feather name={open ? "chevron-down" : "chevron-right"} size={13} color={C.textMuted} />
         <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "700", color: C.text, flexShrink: 1 }}>{s.cropName}</Text>
         <VerdictBadge verdict={s.verdict} />
         <Text style={{ fontSize: 13, fontWeight: "700", color: C.text, marginLeft: "auto" }}>{s.usedCount}回使用</Text>
       </Pressable>
 
       {/* "under" でも上限との対比は事実として出す。可否は書かない */}
-      {s.verdict === "under" && s.limit != null && (
-        <Text style={metaText}>
-          総使用回数の上限 {s.limit}回に対して、集計期間の実績 {s.usedCount}回です（使用の可否を示すものではありません）。
-        </Text>
-      )}
-
-      {!!message && (
+      {!!message && (s.verdict === "over" || open) && (
         <Text style={[metaText, s.verdict === "over" ? { color: C.warning, fontWeight: "700" } : { color: C.textSub }]}>
           {message}
         </Text>
@@ -89,15 +84,18 @@ function SummaryRow({ s, compact, onSetupCrop }: { s: UsageSummary; compact: boo
 
       {s.verdict === "unknown" && s.unknownReason === "no_famic_crop_name" && onSetupCrop && (
         <Pressable onPress={onSetupCrop} style={{ paddingTop: 4 }}>
-          <Text style={{ color: C.ink, fontSize: 12, fontWeight: "600" }}>農薬の数え方を選ぶ →</Text>
+          <Text style={{ color: C.ink, fontSize: 12, fontWeight: "600" }}>ラベル上の作物名を選ぶ →</Text>
         </Pressable>
       )}
 
       {showDetail && (
         <View style={{ marginTop: 4 }}>
+          {s.verdict === "under" && s.limit != null && (
+            <Text style={metaText}>ラベルの上限 {s.limit}回（使用の可否を示すものではありません）</Text>
+          )}
           <Text style={metaText}>集計期間: {periodLabel(s)}</Text>
           {!!s.famicCropName && (
-            <Text style={metaText}>農薬の数え方: {s.famicCropName}{s.matchedRows > 0 ? `（適用${s.matchedRows}件）` : ""}</Text>
+            <Text style={metaText}>ラベル上の作物名: {s.famicCropName}{s.matchedRows > 0 ? `（適用${s.matchedRows}件）` : ""}</Text>
           )}
           {s.limitTexts.length > 0 && (
             <Text style={metaText}>使える回数 {limitLabel(s)}（ラベル記載）</Text>

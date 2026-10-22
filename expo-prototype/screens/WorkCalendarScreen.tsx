@@ -119,9 +119,6 @@ export default function WorkCalendarScreen() {
               <Feather name="message-circle" size={14} color={C.ink} />
               <Text style={{ fontSize: 13, fontWeight: "600", color: C.ink }}>この時期にやることを相談する</Text>
             </Pressable>
-            <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 8, lineHeight: 16 }}>
-              相談の答えを「この判断で記録する」で残すと、来年のこの欄に並びます
-            </Text>
           </>
         )}
         {shown.map((r, i) => {
@@ -145,7 +142,7 @@ export default function WorkCalendarScreen() {
         )}
         {around.length > 0 && !around.some(isJudgment) && (
           <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 8, lineHeight: 16 }}>
-            相談の返答の「この判断で記録する」から記録すると、来年のこの欄に、なぜそうしたかとその後が並びます
+            相談から記録した判断は、来年ここに並びます
           </Text>
         )}
       </View>

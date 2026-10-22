@@ -6,11 +6,11 @@ import * as Location from "expo-location";
 import { C, SHADOW, RADIUS, cropColor } from "../ui/tokens";
 import Btn from "../ui/Btn";
 import RowMenu from "../ui/RowMenu";
-import PesticideUsageSummary from "../ui/PesticideUsageSummary";
+import PesticideCropCards from "../ui/PesticideCropCards";
 import { useStore } from "../lib/store";
-import { summarizeUsageByCrop } from "../lib/pesticideUsage";
 import { canUseAiFeature } from "../lib/ai";
 import { AdviseSheet } from "./AiSheets";
+import FieldMapSheet from "./FieldMapSheet";
 import type { PesticideMaster } from "../lib/types";
 import { todayStr as todayStrFn, toDateStr } from "../lib/date";
 import { dispName } from "../lib/text";
@@ -60,6 +60,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
   const [pRegLoading, setPRegLoading] = useState<string | null>(null);
   const [pRegCandidates, setPRegCandidates] = useState<{ pesticideId: string; list: { registration_no: string; product_name: string }[] } | null>(null);
   const [fForm, setFForm] = useState({ name: "" });
+  const [showMap, setShowMap] = useState(false);
   const [pForm, setPForm] = useState({ name: "", type: "", dilution_rate: "" });
   // 農薬マスタ検索（Web版と同一: 300msデバウンス→ilike検索→候補選択で自動入力）
   const [masterSearch, setMasterSearch] = useState("");
@@ -216,38 +217,42 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
         <>
           {isAdmin && (
             <>
-              <Pressable
-                onPress={() => setShowCropAddForm(p => !p)}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 20, marginBottom: 8 }}
-              >
-                {/* 左の ⊕ と右の ＋ が同じ意味で重なっていたので、印は右の開閉だけにする（2026-10-07） */}
-                <Text style={secStyle}>作物を追加</Text>
-                <Text style={{ fontSize: 16, color: C.primary, fontWeight: "700" }}>{showCropAddForm ? "−" : "+"}</Text>
-              </Pressable>
-              {showCropAddForm && (
-                <View style={cardStyle}>
-                  <Text style={lblStyle}>作物名 *</Text>
-                  <TextInput style={underlineInput} placeholder="例: キャベツ" placeholderTextColor={C.textMuted}
-                    value={cForm.name} onChangeText={v => setCForm(f => ({ ...f, name: v }))} />
-                  <Text style={lblStyle}>作付け日</Text>
-                  <Pressable onPress={() => setShowDatePicker(true)} style={[underlineInput, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
-                    <Text style={{ fontSize: 15, color: C.text }}>{cForm.start_date}</Text>
-                    <Feather name="calendar" size={14} color={C.textMuted} />
-                  </Pressable>
-                  <Text style={lblStyle}>目標収穫量（kg/年・任意）</Text>
-                  <TextInput style={underlineInput} placeholder="例: 500" placeholderTextColor={C.textMuted} keyboardType="numeric"
-                    value={cForm.target_yield} onChangeText={v => setCForm(f => ({ ...f, target_yield: v }))} />
-                  <Text style={lblStyle}>農薬の数え方（任意・あとで自動で入ります）</Text>
-                  <TextInput style={[underlineInput, { marginBottom: 6 }]} placeholder="例: うめ（南高梅なら「うめ」）" placeholderTextColor={C.textMuted}
-                    value={cForm.famic_crop_name} onChangeText={v => setCForm(f => ({ ...f, famic_crop_name: v }))} />
-                  <Text style={{ fontSize: 11, color: C.textMuted, lineHeight: 17, marginBottom: 14 }}>
-                    空のままで大丈夫です。農薬を登録すると自動で入ります。
+              {/* 圃場と同じ形にそろえる: 名前の欄＋追加ボタンを常に出し、ほかの項目は「詳細」で開く。
+                  開いた瞬間に4項目が並び、登録済みの作物が画面の下に押し出されていた（オーナー 2026-10-17） */}
+              <Text style={secStyle}>作物を追加</Text>
+              <View style={cardStyle}>
+                <Text style={lblStyle}>作物名 *</Text>
+                <TextInput style={underlineInput} placeholder="例: キャベツ" placeholderTextColor={C.textMuted}
+                  value={cForm.name} onChangeText={v => setCForm(f => ({ ...f, name: v }))} />
+                <Pressable onPress={() => setShowCropAddForm(p => !p)} accessibilityRole="button"
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: -4, marginBottom: 14 }}>
+                  <Feather name={showCropAddForm ? "chevron-up" : "chevron-down"} size={14} color={C.ink} />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: C.ink }}>
+                    {showCropAddForm ? "詳細を閉じる" : `詳細（作付け日 ${cForm.start_date === todayStr ? "今日" : cForm.start_date}・目標収穫量など）`}
                   </Text>
-                  <Btn variant="primary" size="lg" onPress={handleAddCrop} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
-                    {submitting ? "追加中..." : "作物を追加"}
-                  </Btn>
-                </View>
-              )}
+                </Pressable>
+                {showCropAddForm && (
+                  <>
+                    <Text style={lblStyle}>作付け日</Text>
+                    <Pressable onPress={() => setShowDatePicker(true)} style={[underlineInput, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
+                      <Text style={{ fontSize: 15, color: C.text }}>{cForm.start_date}</Text>
+                      <Feather name="calendar" size={14} color={C.textMuted} />
+                    </Pressable>
+                    <Text style={lblStyle}>目標収穫量（kg/年・任意）</Text>
+                    <TextInput style={underlineInput} placeholder="例: 500" placeholderTextColor={C.textMuted} keyboardType="numeric"
+                      value={cForm.target_yield} onChangeText={v => setCForm(f => ({ ...f, target_yield: v }))} />
+                    <Text style={lblStyle}>ラベル上の作物名（任意）</Text>
+                    <TextInput style={[underlineInput, { marginBottom: 6 }]} placeholder="空のままで大丈夫です" placeholderTextColor={C.textMuted}
+                      value={cForm.famic_crop_name} onChangeText={v => setCForm(f => ({ ...f, famic_crop_name: v }))} />
+                    <Text style={{ fontSize: 11, color: C.textMuted, lineHeight: 17, marginBottom: 14 }}>
+                      農薬を登録すると自動で入ります
+                    </Text>
+                  </>
+                )}
+                <Btn variant="primary" size="lg" onPress={handleAddCrop} icon={<Feather name="plus-circle" size={16} color="#fff" />}>
+                  {submitting ? "追加中..." : "作物を追加"}
+                </Btn>
+              </View>
             </>
           )}
           <Text style={secStyle}>登録作物</Text>
@@ -312,7 +317,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                     <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 6, marginTop: 12 }}>
                       <View style={{ backgroundColor: C.card, borderRadius: RADIUS.row, paddingVertical: 10, paddingHorizontal: 12 }}>
                         <Text style={{ fontSize: 11, fontWeight: "500", color: C.textMuted, marginBottom: 2 }}>
-                          農薬の数え方
+                          ラベル上の作物名
                         </Text>
                         {editingFamicCropId === c.id ? (
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
@@ -333,11 +338,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                             </Text>
                           </Pressable>
                         )}
-                        {!c.famic_crop_name && editingFamicCropId !== c.id && (
-                          <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 17 }}>
-                            南高梅なら「うめ」のように、農薬ラベルに書かれている名前を選びます
-                          </Text>
-                        )}
+                        {/* 説明文は置かない。「未設定 — タップして設定」で足りる（2026-10-17） */}
                       </View>
                     </View>
 
@@ -373,6 +374,14 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
               </View>
             </>
           )}
+          {/* 圃場マップ（ホームから移した。新人・手伝いが「その圃場はどこか」を見る場所。2026-10-17） */}
+          <Pressable onPress={() => setShowMap(true)} accessibilityRole="button"
+            style={[cardStyle, { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 }]}>
+            <Feather name="map-pin" size={16} color={C.textMuted} />
+            <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: C.text }}>圃場マップ</Text>
+            <Feather name="chevron-right" size={16} color={C.textMuted} />
+          </Pressable>
+          <FieldMapSheet open={showMap} onClose={() => setShowMap(false)} />
           <Text style={secStyle}>登録圃場</Text>
           {fields.length === 0 ? (
             <View style={cardStyle}>
@@ -581,52 +590,12 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                     </View>
                   )}
 
-                  {/* 自農場の作付けごとの使用状況。適用情報の一覧より先に出す
-                      （撒く前に見るべきなのは「あと何回か」であって登録原文の一覧ではないため） */}
-                  {pRegOpen === p.id && pRegs[p.id] && crops.length > 0 && (
-                    <View style={{ marginBottom: 10 }}>
-                      <PesticideUsageSummary
-                        title="自農場の使用状況（作付けごと）"
-                        summaries={summarizeUsageByCrop({
-                          pesticideId: p.id, crops, reports, registrations: pRegs[p.id],
-                        })}
-                        onSetupCrop={onGoCrops}
-                      />
-                    </View>
-                  )}
-
-                  {/* 適用情報の一覧（FAMIC 原文・Web版と同一の注記と30件上限） */}
+                  {/* 適用情報は作物ごとに1枚（使用時期・回数・希釈・病害虫＋自分の使用回数）。
+                      作っていない作物の登録は下に畳む（オーナー 2026-10-17・ui/PesticideCropCards.tsx） */}
                   {pRegOpen === p.id && pRegs[p.id] && (
-                    <View style={{ backgroundColor: C.well, borderRadius: RADIUS.well, padding: 12, marginBottom: 10 }}>
-                      <Text style={{ fontSize: 11, color: C.textMuted, marginBottom: 10, lineHeight: 17 }}>
-                        {p.registration_no ? `農薬登録第${p.registration_no}号のラベル内容です。` : "農薬ラベルの内容です。"}
-                        <Text style={{ color: C.textSub, fontWeight: "700" }}>実際の使用時は必ず製品ラベルの表示を確認してください。</Text>
-                      </Text>
-                      {pRegs[p.id].length === 0 && (
-                        <Text style={{ fontSize: 12, color: C.textMuted }}>適用情報がありません</Text>
-                      )}
-                      {pRegs[p.id].slice(0, 30).map((r, ri) => (
-                        <View key={r.id ?? ri} style={{ backgroundColor: C.card, borderRadius: RADIUS.row, paddingVertical: 8, paddingHorizontal: 10, marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, fontWeight: "700", color: C.text }}>
-                            {r.crop_name}{r.pest_name ? ` / ${r.pest_name}` : ""}
-                          </Text>
-                          <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 2, lineHeight: 18 }}>
-                            {[
-                              r.dilution && `希釈 ${r.dilution}`,
-                              r.usage_timing && `使用時期 ${r.usage_timing}`,
-                              r.usage_count && `本剤 ${r.usage_count}`,
-                              r.total_count && `総使用回数 ${r.total_count}`,
-                              r.application && `方法 ${r.application}`,
-                            ].filter(Boolean).join(" · ")}
-                          </Text>
-                        </View>
-                      ))}
-                      {pRegs[p.id].length > 30 && (
-                        <Text style={{ fontSize: 11, color: C.textMuted, textAlign: "center", paddingTop: 4 }}>
-                          ほか{pRegs[p.id].length - 30}件（登録内容の全文はラベル・登録情報でご確認ください）
-                        </Text>
-                      )}
-                    </View>
+                    pRegs[p.id].length === 0
+                      ? <Text style={{ fontSize: 13, color: C.textSub, marginBottom: 10 }}>適用情報がありません</Text>
+                      : <PesticideCropCards pesticideId={p.id} crops={crops} reports={reports} registrations={pRegs[p.id]} onSetupCrop={onGoCrops} />
                   )}
                 </View>
               ))}

@@ -24,6 +24,7 @@ import { WORK_TEMPLATES, type CropAdviceMessage } from "../lib/types";
 import { todayStr, toDateStr } from "../lib/date";
 import { buildJudgmentMemo } from "../lib/judgmentMemo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { dispName } from "../lib/text";
 
 // ─── AI機能シート群（src/App.tsx のAI系ボトムシートの移植）────────────────
 // AI日報生成 / 記録検索チャット / 防除タイミング助言 / 画像診断（単体）。
@@ -346,7 +347,8 @@ export function PestAdviceSheet({ open, onClose, entryPoint }: { open: boolean; 
       <SheetHeader title="次の散布時期" icon="wind" onClose={onClose} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         <Text style={{ fontSize: 12, color: C.textMuted, lineHeight: 19, marginBottom: 12 }}>
-          直近7日の実績と今後7日の予報（{weatherCoords?.name ?? ""}）に加えて、この農場の防除記録（前回の散布からの日数・同じ薬剤の繰り返し・昨年同時期）も踏まえて提案します。最終判断は現地の状況と製品ラベルに従ってください。
+          {/* 長い説明は置かない（オーナー 2026-10-17）。法的に要る一言だけ残す */}
+          天気と防除の記録から出します。最終判断は製品ラベルで。
         </Text>
         <ErrorText msg={error} />
         {!!result && <ResultBox text={result} />}
@@ -475,15 +477,15 @@ function RegistrationFactsBlock({ facts }: { facts: NonNullable<CropAdviceMessag
       {facts.map((f, i) => (
         <View key={i} style={{ backgroundColor: C.card, borderRadius: 10, padding: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: C.text, flex: 1 }}>{f.productName}</Text>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: C.text, flex: 1 }}>{dispName(f.productName)}</Text>
             <View style={{ backgroundColor: C.pesticideBg, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
               <Text style={{ fontSize: 10, fontWeight: "700", color: C.pesticide }}>{f.pestName}</Text>
             </View>
           </View>
           <Text style={{ fontSize: 11, color: C.textSub, lineHeight: 18 }}>
-            希釈 {f.dilution} / 使用時期 {f.usageTiming}{"\n"}
+            希釈 {dispName(f.dilution)} / 使用時期 {dispName(f.usageTiming)}{"\n"}
             本剤の使用回数 {f.usageCount} / 総使用回数 {f.totalCount}{"\n"}
-            使用方法 {f.application}
+            使用方法 {dispName(f.application)}
           </Text>
         </View>
       ))}
@@ -592,10 +594,11 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
     return [...new Set(names.filter(n => n && n.trim() !== ""))];
   }, [workCategories]);
 
-  const send = async () => {
+  const send = async (preset?: string) => {
     // 写真を添えたときは、何も打たずに送れる方が自然（屋外・手袋での利用）。
     // API は question を会話の最後の user メッセージとして使うので空にはしない
-    const question = input.trim()
+    // preset は会話が空のときの「聞ける例」を押したとき
+    const question = (preset ?? input).trim()
       || (photo ? "この写真の結果について、次にどうすればいい？" : "");
     // crop が null なら畑全体の相談。作物を1件も登録していなくても成立する
     if (!question || loading) return;
@@ -745,11 +748,7 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
     <BottomSheet open={open} onClose={onClose} heightRatio={0.92}>
       <SheetHeader title={`${crop ? crop.name : "畑全体"}の相談`} icon="message-circle" onClose={onClose} />
       <ScrollView style={{ paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 16 }}>
-        {/* ホームの相談の行から外した説明を、押した先で1行だけ言う（オーナー 2026-10-04。
-            docs/decisions/20261004-home-declutter.md） */}
-        <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 20, marginBottom: 12 }}>
-          畑の記録をもとに答えます。やりとりは作物ごとに残ります。
-        </Text>
+        {/* 冒頭の説明文は置かない。会話が空のときだけ、聞ける例を押せる形で出す（オーナー 2026-10-17） */}
         {/* 相談する対象。入口は1つで、対象の選択はシートの中で行う
             （docs/decisions/20260906-general-advice-entry.md）。
             作物を1件も登録していなくても「畑全体」で成立する */}
@@ -768,7 +767,7 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
         {crop && (
           <Text style={{ fontSize: 11, color: C.textMuted, marginBottom: 12 }}>
             作付け {crop.start_date || "未登録"}
-            {crop.famic_crop_name ? ` / 農薬登録上の作物名「${crop.famic_crop_name}」` : " / 農薬登録上の作物名は未設定"}
+            {crop.famic_crop_name ? ` / ラベル上の作物名「${dispName(crop.famic_crop_name)}」` : " / ラベル上の作物名とまだ合わせていません"}
           </Text>
         )}
 
@@ -789,7 +788,7 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
             </View>
             {counts.unmatchable > 0 && (
               <Text style={{ fontSize: 10, color: C.textMuted, lineHeight: 16, marginTop: 5 }}>
-                「記録と照合できません」は未実施という意味ではありません。作業記録の作業種別に対応しない助言のため、実施したかを判断できないものです。
+                「照合できません」は、未実施という意味ではありません
               </Text>
             )}
           </View>
@@ -799,22 +798,21 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
         {threadLoading ? (
           <ActivityIndicator size="small" color={C.textMuted} style={{ marginVertical: 20 }} />
         ) : messages.length === 0 ? (
-          <Text style={{ fontSize: 13, color: C.textMuted, lineHeight: 20, marginBottom: 12 }}>
-            {crop ? (
-              <>
-                この作付けについて聞いてください。やりとりはこの作付けに残ります。{"\n"}
-                例:「{crop.name}、これどうしたらいい？」「今週やることは？」{"\n\n"}
-              </>
-            ) : (
-              <>
-                畑全体について聞いてください。やりとりは畑全体の相談として残ります。{"\n"}
-                例:「今の時期、畑全体で気をつけることは？」「そろそろ何をすればいい？」{"\n"}
-                農薬を具体的に知りたいときは、上で作物を選んでください。{"\n\n"}
-              </>
-            )}
-            答えは作業の<Text style={{ fontWeight: "700", color: C.textSub }}>目安</Text>です。
-            農薬の使用時期・回数は農薬登録情報の原文をそのまま表示します。
-          </Text>
+          // 会話が空のときは、説明文の代わりに聞ける例を押せる形で出す（ChatGPT 等と同じ見せ方。2026-10-17）。
+          // 押すとそのまま送る。目安である旨と農薬の扱いは、返答の「出典とこの助言の限界」が持つ
+          <View style={{ gap: 8, marginBottom: 12 }}>
+            {(crop
+              ? ["今週やることは？", `${crop.name}で気をつけることは？`, "次の防除はいつがいい？"]
+              : ["今の時期、気をつけることは？", "そろそろ何をすればいい？", "雨の後にやることは？"]
+            ).map(q => (
+              <Pressable key={q} onPress={() => void send(q)} disabled={loading} accessibilityRole="button"
+                style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8,
+                  paddingVertical: 10, paddingHorizontal: 14, borderRadius: 999, backgroundColor: C.well }}>
+                <Feather name="message-circle" size={14} color={C.textSub} />
+                <Text style={{ fontSize: 14, fontWeight: "600", color: C.text }}>{q}</Text>
+              </Pressable>
+            ))}
+          </View>
         ) : (
           <View style={{ gap: 10, marginBottom: 12 }}>
             {messages.map(m => (
@@ -889,11 +887,6 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
                             <Feather name="edit-3" size={12} color={C.ink} />
                             <Text style={{ fontSize: 12, fontWeight: "600", color: C.ink }}>この判断で記録する</Text>
                           </Pressable>
-                          {memoUses < 3 && (
-                            <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 16 }}>
-                              聞いたことと答えが、記録のメモに入ります（保存前に直せます）
-                            </Text>
-                          )}
                           </>
                         );
                       })()}

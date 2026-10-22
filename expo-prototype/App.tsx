@@ -28,6 +28,8 @@ import Btn from "./ui/Btn";
 import Segmented from "./ui/Segmented";
 import { addPushListeners, getInitialPushPayload, type PushPayload } from "./lib/push";
 import type { Report, Schedule } from "./lib/types";
+import { revokeAiConsent, wasAiConsentAsked, setAiConsent } from "./lib/aiConsent";
+import AiConsentScreen from "./screens/AiConsentScreen";
 
 // ─── ルート（src/App.tsx のヘッダー・サブタブ・ボトムナビ・FAB の移植）────
 type Tab = "home" | "report" | "advice" | "analytics" | "manage";
@@ -80,6 +82,15 @@ function Root() {
   // 農場の記録ではなく本人の記録で見る：記録がたまった農場に後から入った新人にこそ見せたい
   // ユーザーシートから見直せる。開発ビルドでは「最初の畑」まで必ず出し、登録はしない
   const [tutorial, setTutorial] = useState<null | "auto" | "again">(null);
+  // 外部のAIへの送信の同意。インストール後に1人1回、紹介より前に聞く（lib/aiConsent.ts・審査 5.1.2(i)）
+  const [askAiConsent, setAskAiConsent] = useState(false);
+  useEffect(() => {
+    const uid = currentUser?.auth_id;
+    if (!uid) return;
+    let alive = true;
+    wasAiConsentAsked(uid).then(asked => { if (alive && !asked) setAskAiConsent(true); });
+    return () => { alive = false; };
+  }, [currentUser?.auth_id]);
   useEffect(() => {
     if (!currentUser || loading) return;
     let alive = true;
@@ -187,6 +198,18 @@ function Root() {
     );
   }
 
+  if (askAiConsent) {
+    return (
+      <>
+        <StatusBar style="dark" />
+        <AiConsentScreen onAnswer={agreed => {
+          if (currentUser?.auth_id) void setAiConsent(currentUser.auth_id, agreed);
+          setAskAiConsent(false);
+        }} />
+      </>
+    );
+  }
+
   if (tutorial) {
     return (
       <>
@@ -266,8 +289,10 @@ function Root() {
       {tab === "manage" && <ManageScreen subTab={manageSubTab} onGoCrops={() => setManageSubTab("crops")} />}
 
       {/* FAB（記録）。押すと記録タブの先頭と同じ「作業を選ぶ」シート（記録｜予定）。
-          記録タブでは同じ部品が画面にあるので出さない（docs/decisions/20261004-home-declutter.md） */}
-      {tab !== "report" && <Pressable
+          記録タブでは同じ部品が画面にあるので出さない（docs/decisions/20261004-home-declutter.md）。
+          ホーム以外（相談・分析・管理）は記録が主な用事ではなく、グラフや入力欄に重なるので出さない。
+          記録へはタブバーから1回で行ける（docs/decisions/20261017-fab-home-only.md） */}
+      {tab === "home" && <Pressable
         onPress={() => setEntryMode("record")}
         style={{
           position: "absolute", right: 16, bottom: 86 + insets.bottom,
@@ -309,7 +334,7 @@ function Root() {
           // 対象が見つからないとき（削除済み等）は、黙って別画面へ飛ばさず理由を伝える
           if (!openTarget(cm.target_type, cm.target_id)) {
             setTab("report");
-            Alert.alert("対象が見つかりません", "この通知の対象は削除されたか、表示できる範囲にありません。記録タブを開きます。");
+            Alert.alert("対象が見つかりません", "削除されたようです。記録タブを開きます。");
           }
         }}
       />
@@ -317,7 +342,7 @@ function Root() {
       <ScheduleDetailSheet schedule={notifSchedule} onClose={() => setNotifSchedule(null)} />
 
       {/* ユーザーシート（ログアウト・アカウントの削除） */}
-      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.5}>
+      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.6}>
         <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
           <Text style={{ fontWeight: "700", fontSize: 17, color: C.text, marginBottom: 4 }}>{currentUser?.name ?? ""}</Text>
           <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
@@ -326,6 +351,19 @@ function Root() {
           <Btn variant="secondary" size="lg" style={{ marginBottom: 10 }} onPress={() => { setShowUserSheet(false); setTutorial("again"); }}
             icon={<Feather name="book-open" size={16} color={C.text} />}>
             使い方の紹介を見る
+          </Btn>
+          {/* 外部のAIへ送る同意の取り消し（同意を取る以上、やめる道も同じ場所に置く。lib/aiConsent.ts） */}
+          <Btn variant="secondary" size="lg" style={{ marginBottom: 10 }}
+            onPress={() => {
+              if (!currentUser?.auth_id) return;
+              const uid = currentUser.auth_id;
+              Alert.alert("外部のAIへの送信", "取り消すと、次に使うときにもう一度聞きます。", [
+                { text: "閉じる", style: "cancel" },
+                { text: "同意を取り消す", style: "destructive", onPress: () => { void revokeAiConsent(uid); setShowUserSheet(false); } },
+              ]);
+            }}
+            icon={<Feather name="shield" size={16} color={C.text} />}>
+            外部のAIへの送信
           </Btn>
           <Btn variant="secondary" size="lg" onPress={async () => { setShowUserSheet(false); await logout(); }}
             icon={<Feather name="log-out" size={16} color={C.text} />}>
@@ -338,7 +376,7 @@ function Root() {
             onPress={() => {
               Alert.alert(
                 "アカウントの削除",
-                "アカウントは農場の管理者が発行しています。削除は管理者、またはサポートページの問い合わせ先へお申し出ください。アカウント情報とプッシュ通知トークンを削除します。作業記録は農場の業務記録として組織に帰属します。",
+                "農場の管理者か、サポートに依頼してください。\n作業記録は農場に残ります。",
                 [
                   { text: "閉じる", style: "cancel" },
                   { text: "サポートを開く", onPress: () => { void Linking.openURL("https://kishu-farm.vercel.app/support"); } },

@@ -51,6 +51,11 @@ export default function LoginScreen() {
             placeholderTextColor={C.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
+            // 端末の入力が日本語のままだと「kishu」が「きしゅ」に変換されてログインできない。
+            // IDは英数字だけなので英字キーボードで開く（2026-10-17 シミュレータで確認）
+            keyboardType="ascii-capable"
+            textContentType="username"
+            autoComplete="username"
             value={loginId}
             onChangeText={v => { setLoginId(v); setError(""); }}
           />
@@ -65,6 +70,11 @@ export default function LoginScreen() {
               placeholder="パスワード"
               placeholderTextColor={C.textMuted}
               autoCapitalize="none"
+              autoCorrect={false}
+              // 目のボタンで表示にしたときも日本語に変換されないように
+              keyboardType="ascii-capable"
+              textContentType="password"
+              autoComplete="password"
               value={loginPass}
               onChangeText={v => { setLoginPass(v); setError(""); }}
               onSubmitEditing={handleLogin}

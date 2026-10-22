@@ -236,7 +236,7 @@ export default function CropMoneyScreen() {
         onClose={() => setEditing(null)}
       />
       <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 8, marginHorizontal: 4, lineHeight: 16 }}>
-        見込みは記録と入力した単価・経費からの計算です。天候や相場で変わります。単価と経費は今はこの端末にだけ保存されます。
+        天候や相場で変わります。単価と経費はこの端末にだけ残ります
       </Text>
     </ScrollView>
   );
