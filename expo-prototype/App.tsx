@@ -254,13 +254,13 @@ function Root() {
       {/* サブタブバー（分析・管理のみ） */}
       {tab === "analytics" && (
         <SubTabBar
-          // 振り返り（結果）／作業暦（感覚知）／収支（作物ごとの見込み）。計画は既存のまま残す
-          // （docs/decisions/20261011-tacit-knowledge-analytics.md）
+          // 振り返り（結果）／作業暦（感覚知）／収支（作物ごとの見込み）（docs/decisions/20261011-tacit-knowledge-analytics.md）。
+          // 計画（ガント）はアプリでは見るだけで、日々の段取りが年1回の振り返りと同居していたのでタブから外した。
+          // 画面（GanttScreen）と下の分岐は残す（docs/decisions/20261022-testflight-scope.md）
           tabs={[
             { key: "report" as const, label: "振り返り" },
             { key: "calendar" as const, label: "作業暦" },
             { key: "money" as const, label: "収支" },
-            { key: "backlog" as const, label: "計画" },
           ]}
           value={analyticsSubTab}
           onChange={setAnalyticsSubTab}

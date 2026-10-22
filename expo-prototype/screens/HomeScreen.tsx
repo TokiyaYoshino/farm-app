@@ -27,7 +27,7 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
   const {
     reports, schedules, comments, wxAuto, wxLoading, weatherCoords, cropName, userName,
     crops, pesticides,
-    workStartedAt, startWork, stopWork, refreshing, refresh, openQuickReport,
+    workStartedAt, stopWork, refreshing, refresh, openQuickReport,
   } = useStore();
   // 今日の一手の詳細（農薬名）は押すと開く。ふだんは「日付 · 場所」の1行だけ
   const [showSprayDetail, setShowSprayDetail] = useState(false);
@@ -200,10 +200,9 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
           <View>
             <Text style={{ fontSize: 14, fontWeight: "600", color: C.textSub }}>今日の予定はまだありません</Text>
             <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              {/* 「作業を開始」（タイマー）はホームから外した。押されている証拠が無く、記録の作業時刻欄と重なる。
+                  タイマーの処理（store の startWork/stopWork）と、動作中の表示は残す（docs/decisions/20261022-testflight-scope.md） */}
               <Btn variant="secondary" size="sm" onPress={() => onOpenEntry("plan")} icon={<Feather name="calendar" size={13} color={C.text} />}>予定を入れる</Btn>
-              {!workStartedAt && (
-                <Btn variant="soft" size="sm" onPress={startWork} icon={<Feather name="play" size={13} color={C.ink} />}>作業を開始</Btn>
-              )}
             </View>
           </View>
         ) : todayScheds.map((s, i) => {
@@ -227,9 +226,6 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
         })}
         {todayScheds.length > 0 && (
           <View style={{ borderTopWidth: 1, borderTopColor: C.hairline, paddingTop: 9, marginTop: 4, flexDirection: "row", gap: 8 }}>
-            {!workStartedAt && (
-              <Btn variant="soft" size="sm" onPress={startWork} icon={<Feather name="play" size={13} color={C.ink} />}>作業を開始（タイマー）</Btn>
-            )}
             <Btn variant="tertiary" size="sm" onPress={() => onOpenEntry("plan")} icon={<Feather name="plus" size={13} color={C.textSub} />}>予定を入れる</Btn>
           </View>
         )}
