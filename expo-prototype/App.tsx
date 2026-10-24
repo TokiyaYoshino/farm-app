@@ -28,7 +28,7 @@ import Btn from "./ui/Btn";
 import Segmented from "./ui/Segmented";
 import { addPushListeners, getInitialPushPayload, type PushPayload } from "./lib/push";
 import type { Report, Schedule } from "./lib/types";
-import { revokeAiConsent, wasAiConsentAsked, setAiConsent } from "./lib/aiConsent";
+import { revokeAiConsent, wasAiConsentAsked, setAiConsent, PRIVACY_URL } from "./lib/aiConsent";
 import AiConsentScreen from "./screens/AiConsentScreen";
 
 // ─── ルート（src/App.tsx のヘッダー・サブタブ・ボトムナビ・FAB の移植）────
@@ -342,7 +342,7 @@ function Root() {
       <ScheduleDetailSheet schedule={notifSchedule} onClose={() => setNotifSchedule(null)} />
 
       {/* ユーザーシート（ログアウト・アカウントの削除） */}
-      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.6}>
+      <BottomSheet open={showUserSheet} onClose={() => setShowUserSheet(false)} heightRatio={0.66}>
         <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
           <Text style={{ fontWeight: "700", fontSize: 17, color: C.text, marginBottom: 4 }}>{currentUser?.name ?? ""}</Text>
           <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
@@ -370,6 +370,17 @@ function Root() {
             ログアウト
           </Btn>
 
+          {/* プライバシーポリシー。審査 5.1.1(i) はアプリ内から開けることを求める。
+              同意画面とAIの確認だけでは、答えた後に開く道が無かった（2026-10-24） */}
+          <Pressable
+            onPress={() => { void Linking.openURL(PRIVACY_URL); }}
+            style={{ marginTop: 18, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}
+            accessibilityRole="link"
+          >
+            <Feather name="file-text" size={14} color={C.textSub} />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: C.textSub }}>プライバシーポリシー</Text>
+          </Pressable>
+
           {/* アカウントの削除。アプリ内で作成できない代わりに、依頼先をアプリから示す
               （審査ガイドライン 5.1.1(v) で削除の導線を求められたときの受け皿） */}
           <Pressable
@@ -383,7 +394,7 @@ function Root() {
                 ],
               );
             }}
-            style={{ marginTop: 18, paddingVertical: 12, alignItems: "center" }}
+            style={{ paddingVertical: 12, alignItems: "center" }}
           >
             <Text style={{ fontSize: 13, fontWeight: "600", color: C.danger }}>アカウントの削除</Text>
           </Pressable>

@@ -183,7 +183,7 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
   };
 
   // GPS現在地を圃場位置に設定（Web版 setFieldLocation の RN 版: expo-location）
-  const handleSetLocation = async (fieldId: number) => {
+  const handleSetLocation = async (fieldId: number, fieldName: string) => {
     setLocatingId(fieldId);
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
@@ -191,11 +191,20 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const err = await setFieldLocation(fieldId, pos.coords.latitude, pos.coords.longitude);
       if (err) Alert.alert("設定に失敗しました", err);
+      else Alert.alert("位置を登録しました", `${fieldName}の位置を、今いる場所にしました。`);
     } catch {
       Alert.alert("GPS位置を取得できませんでした");
     } finally {
       setLocatingId(null);
     }
+  };
+  // 登録済みの位置は、押しただけで上書きしない（畑の外で押すと天気の取得先がずれる。2026-10-24）
+  const confirmSetLocation = (f: { id: number; name: string; lat?: number | null }) => {
+    if (!f.lat) { void handleSetLocation(f.id, f.name); return; }
+    Alert.alert("位置を置き換えますか", `${f.name}の位置を、今いる場所に置き換えます。`, [
+      { text: "キャンセル", style: "cancel" },
+      { text: "置き換える", onPress: () => { void handleSetLocation(f.id, f.name); } },
+    ]);
   };
 
   const confirmDelete = (message: string, onConfirm: () => void) => {
@@ -400,9 +409,9 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                   </View>
                   {isAdmin && (
                     <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-                      <Btn variant="soft" size="sm" onPress={() => handleSetLocation(f.id)}
+                      <Btn variant="soft" size="sm" onPress={() => confirmSetLocation(f)}
                         icon={<Feather name="navigation" size={12} color={C.ink} />}>
-                        {locatingId === f.id ? "取得中..." : "現在地"}
+                        {locatingId === f.id ? "取得中..." : f.lat ? "位置を更新" : "現在地を登録"}
                       </Btn>
                       <RowMenu menuKey={`mf${f.id}`} openId={openMenuId} setOpenId={setOpenMenuId}
                         items={[{ label: "削除", icon: <Feather name="trash-2" size={13} color={C.danger} />, danger: true, onClick: () => confirmDelete("この圃場を削除しますか？", async () => {
@@ -562,13 +571,18 @@ export default function ManageScreen({ subTab, onGoCrops }: Props) {
                     disabled={pRegLoading === p.id}
                     style={{ paddingBottom: 10, opacity: pRegLoading === p.id ? 0.6 : 1 }}
                   >
-                    <Text style={{ fontSize: 12, color: C.ink, fontWeight: "600" }}>
-                      {pRegLoading === p.id
-                        ? "適用情報を取得中..."
-                        : pRegOpen === p.id
-                          ? "▲ 適用情報を閉じる"
-                          : `▼ 適用情報${pRegs[p.id]?.length ? `（${pRegs[p.id].length}件）` : "を見る"}`}
-                    </Text>
+                    {/* 読み込み済みかどうかで文言を変えない（「適用情報（41件）」と「適用情報を見る」が並んでいた。2026-10-24）。
+                        件数は分かっているときだけ後ろに添える */}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Feather name={pRegOpen === p.id ? "chevron-up" : "chevron-down"} size={13} color={C.ink} />
+                      <Text style={{ fontSize: 12, color: C.ink, fontWeight: "600" }}>
+                        {pRegLoading === p.id
+                          ? "適用情報を取得中..."
+                          : pRegOpen === p.id
+                            ? "適用情報を閉じる"
+                            : `適用情報を見る${pRegs[p.id]?.length ? `（${pRegs[p.id].length}件）` : ""}`}
+                      </Text>
+                    </View>
                   </Pressable>
 
                   {/* 登録番号の候補が複数ある場合の選択（Web版 pRegCandidates と同一） */}

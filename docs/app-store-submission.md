@@ -219,7 +219,7 @@ This is a business app for farm staff to record field work (tasks, pesticide use
 |---|---|---|---|
 | 連絡先情報 › 名前 | 氏名 | アプリの機能 | `users` 表 |
 | 連絡先情報 › メールアドレス | メール | アプリの機能 | 認証 |
-| 位置情報 › 正確な位置 | 圃場の緯度経度（「現在地から設定」を押したときのみ） | アプリの機能 | `ManageScreen.tsx` / `FieldMapSheet.tsx` |
+| 位置情報 › 正確な位置 | 圃場の緯度経度（「現在地を登録」、圃場の地図の「現在地」を押したときのみ） | アプリの機能 | `ManageScreen.tsx` / `FieldMapSheet.tsx` |
 | ユーザコンテンツ › 写真またはビデオ | 記録の添付写真・診断用の写真 | アプリの機能 | Storage `report-images` |
 | ユーザコンテンツ › その他のユーザコンテンツ | 作業記録・メモ・コメント・相談のやりとり | アプリの機能 | `reports` / `comments` / `crop_advice_messages` |
 | 識別子 › ユーザID | ユーザーID | アプリの機能 | `created_by` 等 |

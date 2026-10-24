@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Image, Platform, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -565,6 +565,12 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
 
   const crop = crops.find(c => c.id === selectedCropId) ?? null;
 
+  // 開いたとき・回答が増えたときは最新の会話まで送る。古い順に並ぶので、送らないと
+  // 最初の質問から読むことになる（2026-10-24 の一巡で確認）。利用者が自分で動かしたら追わない
+  const scrollRef = useRef<ScrollView>(null);
+  const stickToEnd = useRef(true);
+  useEffect(() => { stickToEnd.current = true; }, [open, selectedCropId, messages.length, loading]);
+
   // 作付けを切り替えるたびに、その作付けのスレッドを読み直す（作物ごとに溜まる）
   useEffect(() => {
     if (!open) { setMessages([]); setActions([]); return; }
@@ -745,9 +751,17 @@ export function AdviseSheet({ open, onClose, entryPoint, cropId, photoDiagnosis,
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose} heightRatio={0.92}>
+    <BottomSheet open={open} onClose={onClose} heightRatio={0.92} fill>
       <SheetHeader title={`${crop ? crop.name : "畑全体"}の相談`} icon="message-circle" onClose={onClose} />
-      <ScrollView style={{ paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 16 }}>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1, paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={() => { stickToEnd.current = false; }}
+        onContentSizeChange={() => { if (stickToEnd.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
+        onLayout={() => { if (stickToEnd.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
+      >
         {/* 冒頭の説明文は置かない。会話が空のときだけ、聞ける例を押せる形で出す（オーナー 2026-10-17） */}
         {/* 相談する対象。入口は1つで、対象の選択はシートの中で行う
             （docs/decisions/20260906-general-advice-entry.md）。

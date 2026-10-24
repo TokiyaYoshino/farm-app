@@ -13,10 +13,7 @@ import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { C, SHADOW, RADIUS } from "./tokens";
-import {
-  periodLabel, limitLabel, verdictMessage,
-  PRODUCT_UNIT_NOTE, LABEL_CHECK_NOTE,
-} from "../lib/pesticideUsage";
+import { periodLabel, limitLabel, verdictMessage } from "../lib/pesticideUsage";
 import type { UsageSummary } from "../lib/pesticideUsage";
 
 interface Props {
@@ -46,7 +43,7 @@ function VerdictBadge({ verdict }: { verdict: UsageSummary["verdict"] }) {
     return (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: C.well, borderRadius: RADIUS.pill, paddingVertical: 2, paddingHorizontal: 8 }}>
         <Feather name="help-circle" size={11} color={C.textSub} />
-        <Text style={{ fontSize: 11, fontWeight: "700", color: C.textSub }}>見張れません</Text>
+        <Text style={{ fontSize: 11, fontWeight: "700", color: C.textSub }}>上限不明</Text>
       </View>
     );
   }
@@ -111,7 +108,7 @@ function SummaryRow({ s, compact, onSetupCrop }: { s: UsageSummary; compact: boo
 
 export default function PesticideUsageSummary({ summaries, title, compact = false, onSetupCrop }: Props) {
   if (summaries.length === 0) return null;
-  // 気づいてほしい順に並べる: 超過の疑い → 見張れません → それ以外
+  // 気づいてほしい順に並べる: 超過の疑い → 上限不明 → それ以外
   const order: Record<UsageSummary["verdict"], number> = { over: 0, unknown: 1, under: 2 };
   const sorted = [...summaries].sort((a, b) => order[a.verdict] - order[b.verdict]);
 
@@ -126,8 +123,10 @@ export default function PesticideUsageSummary({ summaries, title, compact = fals
         {sorted.map(s => (
           <SummaryRow key={s.cropId} s={s} compact={compact} onSetupCrop={onSetupCrop} />
         ))}
-        <Text style={{ fontSize: 11, color: C.textMuted, lineHeight: 17, paddingHorizontal: 6, paddingBottom: 6, paddingTop: 2 }}>
-          {PRODUCT_UNIT_NOTE}<Text style={{ color: C.textSub, fontWeight: "700" }}>{LABEL_CHECK_NOTE}</Text>
+        {/* 補足は1行まで（グレーの長文を置かない）。定数 PRODUCT_UNIT_NOTE / LABEL_CHECK_NOTE は
+            AIへ渡す文にも使うので変えず、画面だけ短くする（2026-10-24） */}
+        <Text numberOfLines={1} style={{ fontSize: 11, color: C.textMuted, paddingHorizontal: 6, paddingBottom: 6, paddingTop: 2 }}>
+          同じ成分の別製品は数えません。<Text style={{ color: C.textSub, fontWeight: "700" }}>使う前にラベルを確認</Text>
         </Text>
       </View>
     </View>
