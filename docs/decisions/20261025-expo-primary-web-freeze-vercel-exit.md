@@ -54,7 +54,9 @@ CLAUDE.md「リリースまでは新機能を追加しない」に合わせる�
 1. **リリース前**：API を Edge Functions へ移し、Expo版の呼び先を切り替える（`lib/ai.ts` の `callApi`、`lib/store.tsx` の農薬登録の2か所。重複している `API_BASE` は無くす）
    - **2026-10-25 デプロイ済み**：Edge Function `api` 1本にまとめ、7本を URL の末尾で振り分ける（`supabase/functions/api/index.ts`）。土台 URL は `expo-prototype/lib/supabase.ts` の `API_BASE`。手順は `docs/supabase-ops.md`
    - 農薬登録情報は今の作り（毎回 FAMIC の CSV を解析）のまま移した。手元の実測で初回 CPU 0.6 秒・2回目以降 8ms。本番ログの `FAMIC load` が上限（約2秒）に近ければ、DB に適用部の表を作る方式へ切り替える
-   - 残り：ログインした状態での実機確認（AI 6機能と農薬の適用情報）。新しいビルドを配るまで、配布中のアプリは Vercel の API を使い続ける
+   - **2026-10-25 シミュレーターで確認済み**：ログインした状態で、次の散布時期・相談・写真で調べる・記録に聞く・日報・農薬の適用情報が Edge Function 経由で答えを返した。音声メモの整理（structure-voice）はマイクが要るので未確認（実機の iPhone で見る）
+   - 確認中に見つかった前からの不具合2件（シートからシートへ切り替えると開かない／記録に聞くの入力欄がキーボードに隠れる）も直した
+   - 残り：新しいビルドを TestFlight で配る。それまで配布中のアプリは Vercel の API を使い続ける
 2. **リリース前**：サポート／プライバシーの2ページを自分のドメインへ移し、アプリ内の直書き2か所（`lib/aiConsent.ts` の `PRIVACY_URL`、`App.tsx` のサポートURL）と App Store Connect の URL を差し替える。`privacy.html` の委託先から Vercel を外す
 3. **0.1.0**：ユーザー管理（#1）。既存の決定どおり
 4. **リリース後**：#2〜#4 を移す（#5 ガント・#6 LINE通知は移さない）
