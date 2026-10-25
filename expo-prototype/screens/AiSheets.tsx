@@ -156,6 +156,7 @@ export function SearchChatSheet({ open, onClose, entryPoint, initialQuestion }: 
   initialQuestion?: string;
 }) {
   const { reports, crops, pesticides, cropName, userName, prefetchAllRegistrations, currentUser } = useStore();
+  const scrollRef = useRef<ScrollView>(null);
   // assistant 行は結論（content）と根拠・注意を分けて持つ。api/search-chat.ts が
   // スキーマで分けて返すので、自由文を目視で切っているわけではない（Web版と同一）
   const [messages, setMessages] = useState<{
@@ -210,9 +211,17 @@ export function SearchChatSheet({ open, onClose, entryPoint, initialQuestion }: 
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose} heightRatio={0.85}>
+    // 入力欄は下に固定し、キーボードが出たらその上に載せる（BottomSheet の fill。相談シートと同じ作り）。
+    // 以前は入力欄が会話と一緒に流れていて、キーボードに隠れた（2026-10-25）
+    <BottomSheet open={open} onClose={onClose} heightRatio={0.85} fill>
       <SheetHeader title="記録に聞く" icon="search" onClose={onClose} />
-      <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1, paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingBottom: 12 }}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+      >
         {messages.length === 0 && (
           <Text style={{ fontSize: 13, color: C.textMuted, lineHeight: 20, marginBottom: 12 }}>
             直近180日の作業記録をもとに答えます。{"\n"}例:「前回A圃場に防除したのはいつ？」「今月の収穫量は？」
@@ -256,6 +265,8 @@ export function SearchChatSheet({ open, onClose, entryPoint, initialQuestion }: 
             </View>
           )}
         </View>
+      </ScrollView>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 }}>
         <ErrorText msg={error} />
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
           <TextInput
