@@ -68,6 +68,7 @@
 - 入力データ蓄積 → 外部展開 → データ価値化の順序を守る
 - 「使い続けてもらえるアプリ」が短期の最優先
 - モバイルアプリ化は React Native/Expo 方向で検討中
+- 2026-10-25：Expo版を正とし、Web版は凍結（更新しない・身内のみ）。Vercel をやめ、API は Supabase Edge Functions へ。Web版にだけある機能の移植一覧と順番は `docs/decisions/20261025-expo-primary-web-freeze-vercel-exit.md`
 
 ## 事業定義（2026-09-28 確定）
 

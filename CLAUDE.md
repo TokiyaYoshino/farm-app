@@ -1,14 +1,17 @@
 # 農場管理アプリ（farm-app）
 
-React + TypeScript + Supabase の農場作業記録アプリ。本番: https://kishu-farm.vercel.app（`kishufarm.com` は農園のホームページで別サイト。アプリのページは無い）
+React Native（Expo）+ TypeScript + Supabase の農場作業記録アプリ。**正は Expo版（`expo-prototype/`）**で、今後の開発は Expo版だけで行う。
+Web版（`src/`。https://kishu-farm.vercel.app）は **2026-10-25 から凍結**：更新しない（不具合修正も含めて手を入れない）・身内の利用のみ。コードは残す。
+Vercel はやめる方針で、`api/*.ts` は Supabase Edge Functions へ移す。移植の一覧と順番は `docs/decisions/20261025-expo-primary-web-freeze-vercel-exit.md`。
+（`kishufarm.com` は農園のホームページで別サイト。アプリのページは無い）
 
 **事業定義**: ベテランの記憶違いも、新人の「分からない」も、畑の記録が答える（経験の違う人で畑を回す農家が対象。`docs/business-definition.md`）。機能・文言・優先順位で迷ったらここに当てる。
 
 ## 構成
-- `src/App.tsx` にほぼ全機能（タブ state 切替、ページルーターなし）
-- `src/components/` CalendarView.tsx, DatePicker.tsx
-- スタイリングはインラインスタイル（Tailwind未使用）、カラー定数 `C`
-- デプロイ: git push で Vercel 自動デプロイ
+- **Expo版（正）**: `expo-prototype/`。`App.tsx`・`screens/`・`lib/`（Supabase 接続 `lib/supabase.ts`、API 呼び出し `lib/ai.ts`）
+- **Web版（凍結）**: `src/App.tsx` にほぼ全機能（タブ state 切替、ページルーターなし）、`src/components/`。スタイリングはインラインスタイル（Tailwind未使用）、カラー定数 `C`
+- サーバー側: `api/*.ts`（Vercel Serverless。Supabase Edge Functions へ移行予定）、`supabase/functions/`（Edge Functions）
+- デプロイ: Expo版は EAS Build → TestFlight／App Store（`docs/testflight-guide.md`）。Web版と `api/` は git push で Vercel 自動デプロイのまま（凍結中。`api/` は移行が済むまで動かし続ける）
 - 画面を確認したいとき: `npm run demo`（`VITE_DEMO_MODE=1`。認証・本番DBを介さず `src/lib/demoData.ts` の偽データで描画。既定 off・「デモデータ」バッジ付き。経緯は `docs/decisions/20260909-demo-mode.md`）
 
 ## 参照ドキュメント（必要な時に読む）
