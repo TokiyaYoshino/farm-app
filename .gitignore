@@ -35,3 +35,6 @@ expo-prototype/qr.html
 
 # Claude Code のローカル作業ディレクトリ（worktrees が数百MBになる）
 .claude/
+
+# Supabase CLI の作業用キャッシュ
+supabase/.temp/

@@ -5,7 +5,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session as AuthSession } from "@supabase/supabase-js";
-import { supabase } from "./supabase";
+import { supabase, API_BASE } from "./supabase";
 import { registerPushToken, unregisterPushToken } from "./push";
 import { fetchCurrentWeather, type CurrentWeather } from "./weather";
 import type {
@@ -14,10 +14,6 @@ import type {
 } from "./types";
 import type { AdviceAction } from "./adviceMatch";
 import type { AdviseResult } from "./ai";
-
-// Web版 /api/pesticide-registration（FAMICのZIPにCORSが無くクライアントから直接取得
-// できないための中継）。アプリからも同じVercel APIを叩く。lib/ai.ts と同じ既定。
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://kishu-farm.vercel.app";
 
 // pesticide_registrations から引く列（Web版 App.tsx の select と同一）
 const REG_COLUMNS = "pesticide_id,registration_no,product_name,crop_name,pest_name,dilution,usage_timing,usage_count,total_count,application";
@@ -544,11 +540,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return grouped;
   }, [pesticides, pRegs]);
 
-  // 登録番号ごとの適用情報を Vercel API 経由で取得して保存（Web版 saveRegistrations と同一）。
+  // 登録番号ごとの適用情報をサーバー（Edge Function api/pesticide-registration）経由で取得して保存（Web版 saveRegistrations と同一）。
   // 取得した値は正規化せず原文のまま保持する。最終的に正しいのは製品ラベルの表示
   const saveRegistrationsFor = useCallback(async (p: Pesticide, registrationNo: string): Promise<string | null> => {
     try {
-      // api/_auth.ts が Authorization を必須にしているため付ける（無認証だと踏み台になる）
+      // サーバーの認証（supabase/functions/_shared/auth.ts）が Authorization を必須にしているため付ける（無認証だと踏み台になる）
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${API_BASE}/api/pesticide-registration`, {
         method: "POST",
@@ -610,7 +606,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (p.registration_no) return saveRegistrationsFor(p, p.registration_no);
     // 登録番号が分からない農薬は、名前から候補を出して選んでもらう
     try {
-      // api/_auth.ts が Authorization を必須にしているため付ける（無認証だと踏み台になる）
+      // サーバーの認証（supabase/functions/_shared/auth.ts）が Authorization を必須にしているため付ける（無認証だと踏み台になる）
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${API_BASE}/api/pesticide-registration`, {
         method: "POST",

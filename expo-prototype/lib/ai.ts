@@ -1,15 +1,12 @@
 // ─── AI機能連携（src/App.tsx のAI呼び出し部の移植）──────────────────────
-// Web版は同一オリジンの /api/* を叩くが、アプリは Vercel 本番のAPIを直接叩く。
-// api/*.ts は入力テキストを受け取るだけの疎結合設計のため、URLを変える以外は同一。
-import { supabase } from "./supabase";
+// アプリは Supabase Edge Function `api` を叩く（土台URLは lib/supabase.ts の API_BASE）。
+// サーバー側は入力テキストを受け取るだけの疎結合設計のため、リクエストの形は Web版の /api/* と同一。
+import { supabase, API_BASE } from "./supabase";
 import { wmoToLabel } from "./weather";
 import type { Report, Pesticide } from "./types";
 import { formatWorkCountsForPrompt } from "./metrics";
 import { todayStr, toDateStr } from "./date";
 import { ensureAiConsent } from "./aiConsent";
-
-// Web版本番（Vercel）。api/ ディレクトリのサーバーレス関数がここに載っている
-export const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://kishu-farm.vercel.app";
 
 // ai_outputs.model に残すモデル名（api/*.ts のモデル指定が正）
 const AI_MODEL = "gpt-4o-mini";
@@ -211,7 +208,7 @@ export async function fetchPestControlForecast(lat: number, lng: number): Promis
 // ── API呼び出し（Web版の fetch("/api/...") と同一ボディ） ──
 async function callApi<T>(path: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   try {
-    // api/_auth.ts が Authorization を必須にしているため、ログイン中のトークンを必ず付ける。
+    // サーバーの認証（supabase/functions/_shared/auth.ts）が Authorization を必須にしているため、ログイン中のトークンを必ず付ける。
     // 無認証だと OpenAI キーの踏み台にされるため（2026-08-23 に塞いだ）。
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;

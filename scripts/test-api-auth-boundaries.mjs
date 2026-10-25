@@ -1,4 +1,4 @@
-// api/notify-line.ts と api/diagnose-image.ts の**認可の境界**の検証。
+// api/notify-line.ts と supabase/functions/_shared/diagnose-image.ts の**認可の境界**の検証。
 //
 //   cd ~/Projects/farm-app && node scripts/test-api-auth-boundaries.mjs
 //
@@ -24,7 +24,8 @@ registerHooks({
 });
 
 process.env.OPENAI_API_KEY = "test-key";
-process.env.VITE_SUPABASE_URL = "https://test.supabase.invalid";
+process.env.VITE_SUPABASE_URL = "https://test.supabase.invalid"; // notify-line（api/、凍結）用
+process.env.SUPABASE_URL = process.env.VITE_SUPABASE_URL; // diagnose-image（supabase/functions/_shared）用
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 process.env.LINE_CHANNEL_ACCESS_TOKEN = "env-token";
 process.env.LINE_GROUP_ID = "env-group";
@@ -102,7 +103,7 @@ console.log("\nnotify-line: 通知先の決定（なりすまし防止）:");
 // ── 2. diagnose-image: 取りに行く先を自分のストレージに限る ──────────────
 console.log("\ndiagnose-image: 取得先の制限（SSRF防止）:");
 {
-  const diag = (await import(pathToFileURL(new URL("../api/diagnose-image.ts", import.meta.url).pathname).href)).default;
+  const diag = (await import(pathToFileURL(new URL("../supabase/functions/_shared/diagnose-image.ts", import.meta.url).pathname).href)).default;
 
   let fetched = [];
   globalThis.fetch = async (u, opts) => {

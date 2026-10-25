@@ -1,4 +1,4 @@
-// api/search-chat.ts の検証（記録検索チャット）。
+// supabase/functions/_shared/search-chat.ts の検証（移す前は api/search-chat.ts）（記録検索チャット）。
 // テストランナーを入れていないので Node の型ストリップ + assert だけで動かす。
 //
 //   cd ~/Projects/farm-app && node scripts/test-search-chat.mjs
@@ -22,11 +22,11 @@ registerHooks({
   },
 });
 
-const handler = (await import(pathToFileURL(new URL("../api/search-chat.ts", import.meta.url).pathname).href)).default;
+const handler = (await import(pathToFileURL(new URL("../supabase/functions/_shared/search-chat.ts", import.meta.url).pathname).href)).default;
 const { formatWorkCountsForPrompt } = await import(pathToFileURL(new URL("../src/lib/metrics.ts", import.meta.url).pathname).href);
 
 process.env.OPENAI_API_KEY = "test-key";
-process.env.VITE_SUPABASE_URL = "https://test.supabase.invalid";
+process.env.SUPABASE_URL = "https://test.supabase.invalid";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 
 const isAuthUrl = url => String(url).includes("/auth/v1/user");

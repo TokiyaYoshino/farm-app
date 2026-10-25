@@ -1,4 +1,4 @@
-// api/advise.ts の検証（作物ごとの相談＝農業エージェント）。
+// supabase/functions/_shared/advise.ts の検証（移す前は api/advise.ts）（作物ごとの相談＝農業エージェント）。
 // テストランナーを入れていないので Node の型ストリップ + assert だけで動かす。
 //
 //   cd ~/Projects/farm-app && node scripts/test-advise.mjs
@@ -23,12 +23,12 @@ registerHooks({
   },
 });
 
-const handler = (await import(pathToFileURL(new URL("../api/advise.ts", import.meta.url).pathname).href)).default;
+const handler = (await import(pathToFileURL(new URL("../supabase/functions/_shared/advise.ts", import.meta.url).pathname).href)).default;
 
 process.env.OPENAI_API_KEY = "test-key";
 // api/_auth.ts が要求する env。実際には下の fetch スタブが /auth/v1/user を横取りするので
 // 値そのものは使われないが、未設定だと 500（サーバー設定不足）で弾かれる
-process.env.VITE_SUPABASE_URL = "https://test.supabase.invalid";
+process.env.SUPABASE_URL = "https://test.supabase.invalid";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 
 // ── 認証のスタブ。requireUser は Supabase の /auth/v1/user に問い合わせるので、

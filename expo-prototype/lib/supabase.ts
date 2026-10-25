@@ -13,6 +13,12 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY as string;
 
 export const hasSupabaseConfig = !!(supabaseUrl && supabaseAnonKey);
 
+// サーバー処理（AI・農薬登録情報）の土台URL。Supabase Edge Function `api`
+// （supabase/functions/api/index.ts）に載っていて、`${API_BASE}/api/generate-report` のように呼ぶ。
+// 2026-10-25 まで Vercel（kishu-farm.vercel.app）だった（docs/decisions/20261025-expo-primary-web-freeze-vercel-exit.md）。
+// EXPO_PUBLIC_API_BASE はローカルの `supabase functions serve` を向けるときだけ使う
+export const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? `${supabaseUrl}/functions/v1`;
+
 export const supabase = createClient(
   supabaseUrl ?? "http://localhost",
   supabaseAnonKey ?? "anon",

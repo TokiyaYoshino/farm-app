@@ -54,3 +54,34 @@ Supabaseダッシュボード → Table Editor → users → Insert row → name
 ### まだ塞いでいないもの
 
 **RLS は `allow_all` のまま。** これは今回のデプロイが作る穴ではなく従来からの状態だが、相談スレッドが入ることで **anon キー経由で読める情報に会話全文が加わる**。**別の農家に配る前には `docs/rls-rollout.md` の適用が必須**で、そのとき `advice_threads` のポリシーも忘れないこと（新規テーブルなので `allow_all` で作られる）。
+
+## Edge Function `api`（AI・農薬登録情報。2026-10-25 に Vercel から移した）
+
+アプリ（Expo版）が呼ぶサーバー処理。入口は `supabase/functions/api/index.ts`、中身は `supabase/functions/_shared/`。
+URL は `https://<プロジェクトref>.supabase.co/functions/v1/api/<名前>`（例 `.../api/generate-report`）。
+経緯と移す順番は `docs/decisions/20261025-expo-primary-web-freeze-vercel-exit.md`。Web版の `api/`（Vercel）は凍結中で、こちらとは別物。
+
+### デプロイ
+Supabase CLI は Homebrew が入らない環境でも `npx supabase` で動く。初回だけ `npx supabase login`（ブラウザで許可）。
+
+```bash
+cd ~/Projects/farm-app && npx supabase functions deploy api --project-ref fgoyqwdwnimvyyuxoymy --no-verify-jwt --use-api
+```
+
+- `--no-verify-jwt`：入口でのトークン検証は切り、各ハンドラの `requireUser`（`_shared/auth.ts`）で確かめる。Supabase の署名方式の移行に左右されないため
+- `--use-api`：Docker が無くてもサーバー側で組み立てる
+- デプロイ前に `npm test`（`scripts/test-api-router.mjs` ほか）を通す
+
+### 秘密の値
+ダッシュボード > Edge Functions > Secrets。**Name は `OPENAI_API_KEY` と完全一致**させる（違う名前だと AI 機能が「missing env」で止まる）。
+`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` は最初から入っているので登録しない。
+名前の確認は `npx supabase secrets list --project-ref fgoyqwdwnimvyyuxoymy`（値はハッシュでしか出ない）。
+
+### デプロイ後の確認
+ログイン無しで叩くと 7 本とも 401、GET は 405、知らない名前は 404 になる（2026-10-25 に確認済み）。
+
+```bash
+curl -s -w " %{http_code}\n" -X POST -d '{}' https://fgoyqwdwnimvyyuxoymy.supabase.co/functions/v1/api/generate-report
+```
+
+ログ: ダッシュボード > Edge Functions > api > Logs。農薬登録情報は `FAMIC load: ◯ms` を出す（CPU 時間の上限に近づいていないかを見る）。
