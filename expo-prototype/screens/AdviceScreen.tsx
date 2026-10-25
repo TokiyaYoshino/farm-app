@@ -13,6 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { useStore } from "../lib/store";
 import { matchActions, countMatches } from "../lib/adviceMatch";
 import { AdviseSheet, SearchChatSheet, PhotoDiagnosisSheet, diagnosisForAdvise } from "./AiSheets";
+import { afterSheetClose } from "../ui/BottomSheet";
 import { C, RADIUS, SHADOW } from "../ui/tokens";
 import { todayStr } from "../lib/date";
 
@@ -104,15 +105,15 @@ export default function AdviceScreen() {
         entryPoint="thread"
         cropId={openCropId ?? null}
         photoDiagnosis={advisePhoto}
-        onAskRecords={q => { setRecordQuery(q); setOpenCropId(undefined); setSheet("chat"); }}
-        onAskPhoto={() => { setOpenCropId(undefined); setSheet("diag"); }}
+        onAskRecords={q => { setRecordQuery(q); setOpenCropId(undefined); afterSheetClose(() => setSheet("chat")); }}
+        onAskPhoto={() => { setOpenCropId(undefined); afterSheetClose(() => setSheet("diag")); }}
       />
       <SearchChatSheet open={sheet === "chat"} onClose={() => setSheet(null)} entryPoint="thread_tool" initialQuestion={recordQuery} />
       <PhotoDiagnosisSheet
         open={sheet === "diag"}
         onClose={() => setSheet(null)}
         entryPoint="thread_tool"
-        onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setSheet(null); setOpenCropId(null); }}
+        onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setSheet(null); afterSheetClose(() => setOpenCropId(null)); }}
       />
     </ScrollView>
   );

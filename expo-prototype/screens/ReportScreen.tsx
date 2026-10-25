@@ -11,6 +11,7 @@ import Picker from "../ui/Picker";
 import { useStore } from "../lib/store";
 import { canUseAiFeature } from "../lib/ai";
 import { DailyReportSheet, SearchChatSheet, PhotoDiagnosisSheet, AdviseSheet, diagnosisForAdvise } from "./AiSheets";
+import { afterSheetClose } from "../ui/BottomSheet";
 import { WORK_TEMPLATES, type Report } from "../lib/types";
 import { todayStr as todayStrFn, shiftDays } from "../lib/date";
 
@@ -398,7 +399,7 @@ export default function ReportScreen() {
           setAdvisePhoto(diagnosisForAdvise(d));
           setAdviseCropId(cropId);
           setSelectedReport(null);
-          setAiSheet("advise");
+          afterSheetClose(() => setAiSheet("advise"));
         }}
       />
       <DailyReportSheet open={aiSheet === "report"} onClose={() => setAiSheet(null)} entryPoint="record_list" />
@@ -407,7 +408,7 @@ export default function ReportScreen() {
         open={aiSheet === "diag"}
         onClose={() => setAiSheet(null)}
         entryPoint="record_list"
-        onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setAiSheet("advise"); }}
+        onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setAiSheet(null); afterSheetClose(() => setAiSheet("advise")); }}
       />
       <AdviseSheet
         open={aiSheet === "advise"}
@@ -415,8 +416,8 @@ export default function ReportScreen() {
         entryPoint="record_list"
         cropId={adviseCropId}
         photoDiagnosis={advisePhoto}
-        onAskRecords={q => { setRecordQuery(q); setAiSheet("chat"); }}
-        onAskPhoto={() => setAiSheet("diag")}
+        onAskRecords={q => { setRecordQuery(q); setAiSheet(null); afterSheetClose(() => setAiSheet("chat")); }}
+        onAskPhoto={() => { setAiSheet(null); afterSheetClose(() => setAiSheet("diag")); }}
       />
 
       {/* フィルタピッカー */}

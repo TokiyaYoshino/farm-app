@@ -17,6 +17,17 @@ interface Props {
 // Modal の animationType="slide" はオーバーレイごと画面全体をスライドさせて
 // しまう（暗幕がシートと一緒に引っ張られて見える）ため、オーバーレイは
 // フェード・シートだけ Animated でスライドさせる。
+// 閉じるアニメーションの長さ（下の Animated.timing の slide と同じ）
+const CLOSE_MS = 200;
+
+/** シートを閉じて別のシートを開くときは、次のシートをこれで開く。
+ *  iOS では閉じかけの Modal の上に次の Modal を重ねると、前の Modal が消えるときに
+ *  上の Modal も一緒に消える（2026-10-25、相談の「写真で調べる」で写真のシートが開かない
+ *  不具合として確認）。前のシートが閉じきるのを待ってから開く */
+export function afterSheetClose(open: () => void): void {
+  setTimeout(open, CLOSE_MS + 100);
+}
+
 export default function BottomSheet({ open, onClose, heightRatio = 0.88, fill = false, children }: Props) {
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
@@ -42,7 +53,7 @@ export default function BottomSheet({ open, onClose, heightRatio = 0.88, fill = 
     } else if (visible) {
       Animated.parallel([
         Animated.timing(fade, { toValue: 0, duration: 180, useNativeDriver: true }),
-        Animated.timing(slide, { toValue: winH, duration: 200, useNativeDriver: true }),
+        Animated.timing(slide, { toValue: winH, duration: CLOSE_MS, useNativeDriver: true }),
       ]).start(() => setVisible(false));
     }
   }, [open]);

@@ -7,6 +7,7 @@ import { useStore } from "../lib/store";
 import { canUseAiFeature } from "../lib/ai";
 import { lastSpray } from "../lib/pesticideUsage";
 import { PestAdviceSheet, AdviseSheet, SearchChatSheet, PhotoDiagnosisSheet, diagnosisForAdvise } from "./AiSheets";
+import { afterSheetClose } from "../ui/BottomSheet";
 import { todayStr, toDateStr, shiftDays } from "../lib/date";
 import { dispName } from "../lib/text";
 
@@ -300,15 +301,15 @@ export default function HomeScreen({ onGoReport, onQuickReport, onOpenEntry }: P
         entryPoint="home"
         cropId={crops.length === 1 ? crops[0].id : null}
         photoDiagnosis={advisePhoto}
-        onAskRecords={q => { setRecordQuery(q); setShowAdvise(false); setHomeSheet("chat"); }}
-        onAskPhoto={() => { setShowAdvise(false); setHomeSheet("diag"); }}
+        onAskRecords={q => { setRecordQuery(q); setShowAdvise(false); afterSheetClose(() => setHomeSheet("chat")); }}
+        onAskPhoto={() => { setShowAdvise(false); afterSheetClose(() => setHomeSheet("diag")); }}
       />
       <SearchChatSheet open={homeSheet === "chat"} onClose={() => setHomeSheet(null)} entryPoint="home" initialQuestion={recordQuery} />
       <PhotoDiagnosisSheet
         open={homeSheet === "diag"}
         onClose={() => setHomeSheet(null)}
         entryPoint="home"
-        onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setHomeSheet(null); setShowAdvise(true); }}
+        onAdvise={d => { setAdvisePhoto(diagnosisForAdvise(d)); setHomeSheet(null); afterSheetClose(() => setShowAdvise(true)); }}
       />
     </ScrollView>
   );
